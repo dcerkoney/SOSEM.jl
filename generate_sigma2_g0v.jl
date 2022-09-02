@@ -1,8 +1,7 @@
-using FeynmanDiagram
 using AbstractTrees
+using FeynmanDiagram
 using Parameters
 using StaticArrays
-# using Combinatorics: with_replacement_combinations
 
 const DiagramF64 = Diagram{Float64}
 
