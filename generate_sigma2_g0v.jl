@@ -3,9 +3,9 @@ using FeynmanDiagram
 
 const DiagramF64 = Diagram{Float64}
 const n_order = 2 # The bare self-energy is O(V^2)
-const plot = false
+const plot = true
 
-function propr_params(type, n_order, firstTauIdx)
+function propr_params(type, n_order, firstTauIdx, filter=[NoHatree,])
     return DiagParaF64(
         type=type,
         hasTau=true,
@@ -14,6 +14,7 @@ function propr_params(type, n_order, firstTauIdx)
         # The bare interaction is instantaneous (interactionTauNum = 1)
         firstTauIdx=firstTauIdx,
         interaction=[Interaction(ChargeCharge, Instant),],
+        filter=filter,
     )
 end
 
@@ -23,7 +24,7 @@ Generates a DiagramTree for the bare O(V^2) exchange self-energy.
 function main()
     DiagTree.uidreset()
 
-    k  = [1, 0, 0]      # external momentum
+    k = [1, 0, 0]      # external momentum
     k1 = [0, 1, 0]      # k1 = k + q1
     k3 = [0, 0, 1]      # k3 = k + q2
     k2 = k1 + k3 - k    # k2 = k + q1 + q2
@@ -32,13 +33,13 @@ function main()
 
     # Bare Green's function labels, times, and momenta
     g_names = [:G0_1, :G0_2, :G0_3]
-    g_taus  = [[1, 2], [2, 1], [1, 2]]
-    g_ks    = [k1, k2, k3]
+    g_taus = [[1, 2], [2, 1], [1, 2]]
+    g_ks = [k1, k2, k3]
 
     # Bare interaction labels and momenta
     v_names = [:V_1, :V_2]
-    v_taus  = [[1, 1], [2, 2]]
-    v_qs    = [q1, q2]
+    v_taus = [[1, 1], [2, 2]]
+    v_qs = [q1, q2]
 
     # Bare Green's function params
     g_params = [propr_params(GreenDiag, n_order, g_taus[i][1]) for i in 1:3]
@@ -84,11 +85,13 @@ function main()
     for node in sigma2_compiled.node
         println(node)
     end
-    
+
     # visualize the DiagTree
-    if plot
-        plot_tree(sigma2)
-    end
+    # if plot
+    #     plot_tree(sigma2)
+    # end
+    return sigma2, sigma2_compiled
 end
 
-main()
+sigma2, sigma2_compiled = main()
+plot_tree(sigma2)
