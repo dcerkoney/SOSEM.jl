@@ -5,7 +5,7 @@ const DiagramF64 = Diagram{Float64}
 const n_order = 2 # The bare self-energy is O(V^2)
 const plot = true
 
-function propr_params(type, n_order, firstTauIdx, filter=[NoHatree,])
+function propr_params(type, n_order, firstTauIdx, filter=[NoHartree,])
     return DiagParaF64(
         type=type,
         hasTau=true,
