@@ -5,7 +5,7 @@ const DiagramF64 = Diagram{Float64}
 const n_order = 2 # The bare self-energy is O(V^2)
 const plot = true
 
-function propr_params(type, n_order, firstTauIdx, filter=[NoHatree,])
+function propr_params(type, n_order, firstTauIdx)
     return DiagParaF64(
         type=type,
         hasTau=true,
@@ -14,7 +14,6 @@ function propr_params(type, n_order, firstTauIdx, filter=[NoHatree,])
         # The bare interaction is instantaneous (interactionTauNum = 1)
         firstTauIdx=firstTauIdx,
         interaction=[Interaction(ChargeCharge, Instant),],
-        filter=filter,
     )
 end
 
@@ -87,11 +86,9 @@ function main()
     end
 
     # visualize the DiagTree
-    # if plot
-    #     plot_tree(sigma2)
-    # end
-    return sigma2, sigma2_compiled
+    if plot
+        plot_tree(sigma2)
+    end
 end
 
-sigma2, sigma2_compiled = main()
-plot_tree(sigma2)
+main()

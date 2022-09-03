@@ -14,7 +14,7 @@ function propr_params(type, n_order, firstTauIdx, filter=[NoHatree,])
         # The bare interaction is instantaneous (interactionTauNum = 1)
         firstTauIdx=firstTauIdx,
         interaction=[Interaction(ChargeCharge, Instant),],
-        filter=filter,
+        filter,
     )
 end
 
@@ -90,8 +90,7 @@ function main()
     # if plot
     #     plot_tree(sigma2)
     # end
-    return sigma2, sigma2_compiled
+    return sigma2
 end
 
-sigma2, sigma2_compiled = main()
-plot_tree(sigma2)
+main()
