@@ -90,7 +90,7 @@ function build_sigma2_gv(; id::DiagramId, n_order=2, expand_bare_intns=false, ve
     count = 1
     sigma2_diags = Vector{Diagram{W}}()
     generic_id = GenericId(propr_params(GreenDiag, 0, 1))
-    for (isfirst, expansion_indices) in flagfirst(multicombinations(1:n_expandables, n_order))
+    for expansion_indices in multicombinations(1:n_expandables, n_order)
         # Get expansion orders (weak compositions) for each line by counting the expansion indices
         expansion_orders = zeros(Int, max_expandables)
         for i in expansion_indices
@@ -139,8 +139,9 @@ function build_sigma2_gv(; id::DiagramId, n_order=2, expand_bare_intns=false, ve
         firstTauIdx=1,
         interaction=[Interaction(ChargeCharge, Instant),],
     )
-    sigma2_id = SigmaId(sigma2_params, Instant, k=k, t=(1, n_order))
-    sigma2 = DiagramF64(generic_id, Sum(), sigma2_diags)
+    # The (dynamic) self-energy has external momentum k and times (1, n)
+    sigma2_id = SigmaId(sigma2_params, Dynamic, k=k, t=(1, n_order))
+    sigma2 = DiagramF64(sigma2_id, Sum(), sigma2_diags)
     return sigma2
 end
 

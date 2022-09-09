@@ -32,12 +32,12 @@ function main()
 
     # Bare Green's function labels, times, and momenta
     g_names = [:G0_1, :G0_2, :G0_3]
-    g_taus = [(1, 2), (2, 1), (1, 2)]
+    g_taus = [(1, n_order), (n_order, 1), (1, n_order)]
     g_ks = [k1, k2, k3]
 
     # Bare interaction labels, times, and momenta
     v_names = [:V_1, :V_2]
-    v_taus = [(1, 1), (2, 2)]
+    v_taus = [(1, 1), (n_order, n_order)]
     v_qs = [q1, q2]
 
     # Bare Green's function params
@@ -74,8 +74,9 @@ function main()
         firstTauIdx=1,
         interaction=[Interaction(ChargeCharge, Instant),],
     )
-    id = GenericId(sigma2_params)
-    sigma2 = DiagramF64(id, Prod(), [g_lines; v_lines], name=:Sigma_2)
+    # The (dynamic) self-energy has external momentum k and times (1, n)
+    sigma2_id = SigmaId(sigma2_params, Dynamic, k=k, t=(1, n_order))
+    sigma2 = DiagramF64(sigma2_id, Prod(), [g_lines; v_lines], name=:Sigma_2)
     print_tree(sigma2)
     println()
 
