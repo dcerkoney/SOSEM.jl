@@ -10,12 +10,12 @@ using .IntegerCompositions
 const DiagramF64 = Diagram{Float64}
 const multicombinations = with_replacement_combinations
 
-# Global settings
-const n_order = 4
-const plot = true
-const debug = true
-const verbose = true
-const expand_bare_interactions = false
+# Settings
+n_order = 4
+plot = true
+debug = false
+verbose = true
+expand_bare_interactions = false
 
 # Verbose print level
 vprint = (verbose ? print : function (args...) end)
@@ -54,7 +54,7 @@ function weak_split(n::Integer)
     return splits
 end
 
-function propr_params(type, n_expand, firstTauIdx, firstLoopIdx, totalLoopNum, filter=[NoHartree,])
+function propr_params(type, n_expand, firstTauIdx, firstLoopIdx, filter=[NoHartree,])
     # The bare interaction is instantaneous (interactionTauNum = 1),
     # so innerLoopNum = totalTauNum = n_expand.
     return DiagParaF64(
@@ -63,7 +63,7 @@ function propr_params(type, n_expand, firstTauIdx, firstLoopIdx, totalLoopNum, f
         innerLoopNum=n_expand,
         firstTauIdx=firstTauIdx,
         firstLoopIdx=firstLoopIdx,
-        totalLoopNum=totalLoopNum,
+        totalLoopNum=n_order + 1, # it seems we need to set this value?
         interaction=[Interaction(ChargeCharge, Instant),],
         filter=filter,
     )
@@ -116,7 +116,7 @@ function build_sigma2_gv()
     # The number of (possibly indistinct) diagram trees to generate is: 
     # ((n_expandables n_expand)) = binomial(n_expandables + n_expand - 1, n_expand)
     n_multicombinations = binomial(n_expandables + n_expand - 1, n_expand)
-    vprint("Generating (($n_expandables $n_expand)) = $n_multicombinations expanded diagram trees...")
+    print("Generating (($n_expandables $n_expand)) = $n_multicombinations expanded diagram trees...")
     dprintln()
 
     # Construct parameters and ID for the self-energy sigma2
@@ -143,7 +143,7 @@ function build_sigma2_gv()
     # Generate a list of all expanded diagrams at fixed order n
     tree_count = 0
     sigma2_diags = Vector{DiagramF64}()
-    generic_id = GenericId(propr_params(GreenDiag, 0, 1, 1, 3))
+    generic_id = GenericId(propr_params(GreenDiag, 0, 1, 1))
     for expansion_orders in rpadded_weak_integer_compositions(n_expand, n_expandables, pad=n_v)
         dprintln("\nTree #$(tree_count+1):")
         dprintln("  • Expansion orders:\t\t\t\t$expansion_orders")
@@ -156,7 +156,7 @@ function build_sigma2_gv()
             FeynmanDiagram.firstTauIdx(GreenDiag),  # leftmost firstTauIdx
             1,                                      # = interactionTauNum
         )
-        dprintln("  • First tau indices for G_i's:\t\t$g_ftis (max = $g_max_fti)")
+        dprintln("  • First tau indices for G_i's:\t\t$g_ftis (maxTauIdx = $g_max_fti)")
 
         # First loop indices for each Green's function
         # NOTE: the default offset for Green's functions is FeynmanDiagram.firstLoopIdx(GreenDiag) = 2
@@ -164,15 +164,16 @@ function build_sigma2_gv()
             expansion_orders[1:n_g],
             FeynmanDiagram.firstLoopIdx(GreenDiag, n_v), # offset = n_v = 2 due to two bare interactions
         )
-        dprintln("  • First momentum loop indices for G_i's:\t$g_flis (max = $g_max_fli)")
+        dprintln("  • First momentum loop indices for G_i's:\t$g_flis (maxLoopIdx = $g_max_fli)")
 
         # TODO: Add counterterms---for n[i] expansion order of line i, spend n_cti
         #       orders on counterterm derivatives in all possible ways (0 < n_cti < n[i]).
         #       E.g., if n[i] = 4, we have: ni_left, n_cti = weak_split(n[i])
 
         # Green's function and bare interaction params
-        g_params = [propr_params(GreenDiag, expansion_orders[i], g_max_fti, g_max_fli, n_order + 1) for i in 1:n_g]
-        v_params = [propr_params(Ver4Diag, expansion_orders[i+n_g], i, i, n_order + 1) for i in 1:n_v]
+        # g_params = [propr_params(GreenDiag, expansion_orders[i], g_max_fti, g_max_fli) for i in 1:n_g]
+        g_params = [propr_params(GreenDiag, expansion_orders[i], g_ftis[i], g_flis[i]) for i in 1:n_g]
+        v_params = [propr_params(Ver4Diag, expansion_orders[i + n_g], i, i) for i in 1:n_v]
 
         # Re-expanded Green's function and bare interaction lines
         g_lines = [Parquet.green(g_params[i], g_ks[i], g_taus[i], name=g_names[i]) for i in 1:n_g]
@@ -193,7 +194,7 @@ function build_sigma2_gv()
     end
     @assert tree_count == n_multicombinations
     dprintln()
-    vprintln("done!\n")
+    println("done!\n")
 
     # Now construct the self-energy diagram tree
     vprint("Merging subtrees...")
