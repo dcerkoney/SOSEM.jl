@@ -11,7 +11,6 @@ function bare_propr_params(type, filter=[NoHartree,])
         type=type,
         hasTau=true,
         innerLoopNum=0,
-        totalTauNum=2,
         interaction=[Interaction(ChargeCharge, Instant),],
         filter=filter,
     )
