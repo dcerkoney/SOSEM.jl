@@ -3,7 +3,10 @@ using FeynmanDiagram
 
 const DiagramF64 = Diagram{Float64}
 const n_order = 2 # The bare self-energy is O(V^2)
-const plot = true
+
+# Settings
+plot = true
+verbose = true
 
 function bare_propr_params(type, filter=[NoHartree,])
     # Leave firstTauIdx unset---it is unused for bare propagators
@@ -76,20 +79,25 @@ function main()
     # The (dynamic) self-energy has external momentum k and times (1, n)
     sigma2_id = SigmaId(sigma2_params, Dynamic, k=k, t=(1, n_order))
     sigma2 = DiagramF64(sigma2_id, Prod(), [g_lines; v_lines], name=:Sigma_2)
-    print_tree(sigma2)
-    println()
 
     # Build expression tree
     sigma2_compiled = ExprTree.build([sigma2])
-    println(sigma2_compiled)
-    for node in sigma2_compiled.node
-        println(node)
-    end
 
     return sigma2, sigma2_compiled
 end
 
 sigma2, sigma2_compiled = main()
+
+if verbose
+    # Print the DiagTree
+    print_tree(sigma2)
+    println()
+    # Print the ExprTree
+    println(sigma2_compiled)
+    for node in sigma2_compiled.node
+        println(node)
+    end
+end
 
 # Visualize the DiagTree
 if plot

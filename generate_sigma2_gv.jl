@@ -13,7 +13,7 @@ const multicombinations = with_replacement_combinations
 # Settings
 n_order = 4
 plot = true
-debug = false
+debug = true
 verbose = true
 expand_bare_interactions = false
 
@@ -173,7 +173,7 @@ function build_sigma2_gv()
         # Green's function and bare interaction params
         # g_params = [propr_params(GreenDiag, expansion_orders[i], g_max_fti, g_max_fli) for i in 1:n_g]
         g_params = [propr_params(GreenDiag, expansion_orders[i], g_ftis[i], g_flis[i]) for i in 1:n_g]
-        v_params = [propr_params(Ver4Diag, expansion_orders[i + n_g], i, i) for i in 1:n_v]
+        v_params = [propr_params(Ver4Diag, expansion_orders[i+n_g], i, i) for i in 1:n_v]
 
         # Re-expanded Green's function and bare interaction lines
         g_lines = [Parquet.green(g_params[i], g_ks[i], g_taus[i], name=g_names[i]) for i in 1:n_g]
@@ -194,7 +194,7 @@ function build_sigma2_gv()
     end
     @assert tree_count == n_multicombinations
     dprintln()
-    println("done!\n")
+    println("done!")
 
     # Now construct the self-energy diagram tree
     vprint("Merging subtrees...")
@@ -206,37 +206,37 @@ end
 
 function main()
     DiagTree.uidreset()
-
-    # Build the diagram tree for all sigma2 diagrams at order n
+    # Build diagram and expression trees for all sigma_2 diagrams at order n
     sigma2 = build_sigma2_gv()
-    if verbose
-        println("DiagTree:")
-        print_tree(sigma2)
-        # Check subtree for one high-order Green's function line(s)
-        for n in sigma2.subdiagram[1].subdiagram
-            if n.name == :G
-                order = n.id.para.innerLoopNum
-                suffix = numerical_suffix(order)
-                println("\n$order$suffix-order Green's function subtree:")
-                print_tree(n)
-                break
-            end
-        end
-    end
-
-    # Build expression tree
     sigma2_compiled = ExprTree.build([sigma2])
-    vprintln()
-    vprintln(sigma2_compiled)
-    for (i, node) in enumerate(sigma2_compiled.node)
-        vprintln("\u001b[32m$i\u001b[0m : $node")
-    end
-    vprintln()
-
     return sigma2, sigma2_compiled
 end
 
 sigma2, sigma2_compiled = main()
+
+if verbose
+    println("DiagTree:")
+    print_tree(sigma2)
+end
+
+if debug
+    # Print subtree for one high-order Green's function line(s)
+    for n in sigma2.subdiagram[1].subdiagram
+        if n.name == :G
+            order = n.id.para.innerLoopNum
+            suffix = numerical_suffix(order)
+            println("$order$suffix-order Green's function subtree:")
+            print_tree(n)
+            println()
+            break
+        end
+    end
+    # Print full expression tree
+    println(sigma2_compiled)
+    for (i, node) in enumerate(sigma2_compiled.node)
+        println("\u001b[32m$i\u001b[0m : $node")
+    end
+end
 
 # Plot the DiagTree
 if plot
