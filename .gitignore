@@ -27,3 +27,8 @@ Manifest.toml
 .vscode/
 *.code-workspace
 .history
+
+# Misc directories
+notes
+old
+results

@@ -1,0 +1,23 @@
+name = "SOSEM"
+uuid = "9c706eed-094c-4a47-bdcf-e1408408eda1"
+authors = ["Daniel Cerkoney <dcerkoney@physics.rutgers.edu>"]
+version = "0.1.0"
+
+[deps]
+AbstractTrees = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"
+Combinatorics = "861a8166-3701-5b0c-9a16-15d98fcdc6aa"
+ElectronGas = "8c98e03e-8755-48b1-a5ef-1e2e7812a7c9"
+ElectronLiquid = "fe3a0b7f-0e79-43cc-aa0f-33de5212abe5"
+FeynmanDiagram = "e424a512-dbd9-41ff-9883-094748823e72"
+IterTools = "c8e1da08-722c-5040-9ed9-7db0dc04731e"
+Lehmann = "95bf888a-8996-4655-9f35-1c0506bdfefe"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
+MCIntegration = "ea1e2de9-7db7-4b42-91ee-0cd1bf6df167"
+Parameters = "d96e819e-fc66-5662-9728-84c9c7592b0a"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
