@@ -133,6 +133,6 @@ function integrand(vars, config)
     # Non-dimensionalized integrand
     # NOTE: C⁽¹⁾ = Σ(τ = 0⁻) - Σ(τ = 0⁺), so there is an additional
     #       overall sign contribution depending on SOSEM observable
-    return obs_sign * weight[expr_tree.root[1]] * factor / (mc_params.kF^2 * mc_params.e0^4)
-    # return obs_sign * weight[expr_tree.root[1]] * factor / mc_params.qTF^4
+    # return obs_sign * weight[expr_tree.root[1]] * factor / (mc_params.kF^2 * mc_params.e0^4)
+    return obs_sign * weight[expr_tree.root[1]] * factor / mc_params.qTF^4
 end

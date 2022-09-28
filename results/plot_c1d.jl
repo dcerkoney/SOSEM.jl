@@ -1,44 +1,50 @@
 using Plots
 using PyCall
+using SOSEM
 
-# Load the vegas result
-sosem_vegas = np.load(
-    "results/c1d_n=$(settings.n_order)_rs=$(params.rs)_" *
-    "beta_ef=$(params.beta)_neval=$(maxeval)_v2.npz"
-)
-kgrid, means, stdev = sosem
+# For saving/loading numpy data
+@pyimport numpy as np
+@pyimport matplotlib.pyplot as plt
 
-# Compare with quadrature
-sosem_exact = np.load("results/soms_rs=2.0_beta_ef=40.0.npz")
-kgrid_exact = np.linspace(0.0, 6.0; num=600)
-# c1d_exact_dimless = sosem_exact.get("bare_d") / (params.EF / 2.0)
-c1d_exact_dimless = sosem_exact.get("bare_d") / params.EF
+function main()
+    rs = 2.0
+    beta = 40.0
+    maxeval = 1.0e6
 
-# Plot the result
-fig, ax = plt.subplots()
-ax.plot(
-    kgrid_exact,
-    c1d_exact_dimless,
-    "k";
-    label=raw"$\widetilde{C}^{(1)d}(\mathbf{k})$ (quad)",
-)
-# ax.plot(k_kf_grid, means, "o-"; label=raw"$C^{(1)d}(\mathbf{k}) / \epsilon_F$")
-# ax.plot(k_kf_grid, means / 2, "o-"; color="C0", label=raw"$C^{(1)d}(\mathbf{k}) / (2\epsilon_F)$ (vegas)")
-# ax.fill_between(k_kf_grid, (means - stdevs) / 2, (means + stdevs) / 2; color="C0", alpha=0.4)
-ax.plot(
-    k_kf_grid,
-    means,
-    "o-";
-    color="C0",
-    label=raw"$C^{(1)d}(\mathbf{k}) / \epsilon_F$ (vegas)",
-)
-ax.fill_between(k_kf_grid, means - stdevs, means + stdevs; color="C0", alpha=0.4)
-ax.legend(; loc="best")
-ax.set_xlabel(raw"$k / k_F$")
-ax.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
-plt.tight_layout()
-fig.savefig(
-    "results/c1d_n=$(settings.n_order)_rs=$(params.rs)_" *
-    "beta_ef=$(params.beta)_neval=$(maxeval)_dimless_v2.pdf",
-)
-plt.close("all")
+    # Load the vegas results
+    sosem_vegas = np.load("data/c1d_rs=$(Float64(rs))_beta_ef=$(beta)_neval=$(maxeval).npz")
+    params = UEG_MC.PlotParams(sosem_vegas.get("params")...)
+    kgrid = sosem_vegas.get("kgrid")
+    means = sosem_vegas.get("means")
+    stdevs = sosem_vegas.get("stdevs")
+
+    # k / kf
+    k_kf_grid = kgrid / params.kF
+    println(k_kf_grid)
+
+    # Compare with quadrature results (stored in Hartree a.u.)
+    sosem_quad = np.load("data/soms_rs=$(Float64(rs))_beta_ef=$(beta).npz")
+    k_kf_grid_quad = np.linspace(0.0, 6.0; num=600)
+    # NOTE: (q_TF a₀) is dimensionless, hence q_TF  is the same in Rydberg
+    #       and Hartree a.u., and no additional conversion factor is needed
+    c1d_quad_dimless = sosem_quad.get("bare_d") / params.qTF^4
+
+    # Plot the result
+    fig, ax = plt.subplots()
+    ax.plot(k_kf_grid_quad, c1d_quad_dimless, "k"; label="\$n=$(params.order)\$ (quad)")
+    ax.plot(k_kf_grid, means, "o-"; color="C0", label="\$n=$(params.order)\$ (vegas)")
+    ax.fill_between(k_kf_grid, means - stdevs, means + stdevs; color="C0", alpha=0.4)
+    ax.legend(; loc="best")
+    ax.set_xlabel("\$k / k_F\$")
+    ax.set_ylabel("\$C^{(1d)}(\\mathbf{k}) / q^{4}_{\\mathrm{TF}}\$")
+    ax.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
+    plt.tight_layout()
+    fig.savefig(
+        "c1d_n=$(params.order)_rs=$(rs)_" *
+        "beta_ef=$(beta)_neval=$(maxeval)_dimless.pdf",
+    )
+    plt.close("all")
+    return
+end
+
+main()

@@ -41,7 +41,7 @@ function main()
     # neval = 1e5
 
     # Plot in post-processing instead
-    plot = false
+    plot = true
 
     # Number of evals below and above kF
     neval_le_kf = 1e6

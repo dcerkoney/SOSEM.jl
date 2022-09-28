@@ -65,7 +65,7 @@ const observable_to_discont_side = Dict(
     c1bL => positive,
     c1bR => positive,
     c1c => negative,
-    c1d => negative,
+    c1d => positive,
 )
 const observable_to_obs_sign = Dict(
     sigma20 => 0,    # Direct measurement not yet implemented
