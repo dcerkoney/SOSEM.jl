@@ -89,34 +89,18 @@ end
 
 """Evaluate a bare Green's function line."""
 function eval(id::BareGreenId, K, siteidx, varT, p::ParaMC)
-    kF, β, me, μ, massratio, extT = p.kF, p.β, p.me, p.μ, p.massratio, p.additional
+    β, me, μ, massratio, extT = p.β, p.me, p.μ, p.massratio, p.additional
 
     # HACK: Swap times into correct indices: extT[2] ↦ 2, 2 ↦ extT[2] (cost: ~ 1 ns)
-    # remapped_taupair = remap_extT(id.extT, extT[2])
-    # τin, τout = varT[remapped_taupair[1]], varT[remapped_taupair[2]]
-    # @debug "Remapped propagator time indices: $(id.extT) ↦ $remapped_taupair" maxlog = 1
-    τin, τout = varT[id.extT[1]], varT[id.extT[2]]
+    remapped_taupair = remap_extT(id.extT, extT[2])
+    τin, τout = varT[remapped_taupair[1]], varT[remapped_taupair[2]]
+    @debug "Remapped propagator time indices: $(id.extT) ↦ $remapped_taupair" maxlog = 1
+    # τin, τout = varT[id.extT[1]], varT[id.extT[2]]
     
     k = norm(K)
-
-    # SOSEM observables are never just Fock diagrams
-    if p.isFock
-        fock =
-            SelfEnergy.Fock0_ZeroTemp(k, p.basic) - SelfEnergy.Fock0_ZeroTemp(kF, p.basic)
-        ϵ = k^2 / (2me * massratio) - μ + fock
-    else
-        ϵ = k^2 / (2me * massratio) - μ
-        # ϵ = kF / me * (k - kF)
-    end
-
     ϵ = k^2 / (2me * massratio) - μ
     # ϵ = kF / me * (k - kF)
     
-    # NOTE: Is this not too restrictive? Try varying the cutoff
-    if k < 0.4 * kF || k > kF * 1.3
-        return 0.0
-    end
-
     # External time
     τ = τout - τin
 
@@ -156,49 +140,14 @@ function eval(id::BareInteractionId, K, siteidx, varT, p::ParaMC)
     # dim, e0, ϵ0, mass2 = p.dim, p.e0, p.ϵ0, p.mass2
     qd = sqrt(dot(K, K))
     if id.order[2] == 0
-        @assert id.type == Instant
+        # @assert id.type == Instant
         # return e0^2 / ϵ0 / (dot(K, K) + mass2)
         return Coulombinstant(qd, p)
-        # if id.type == Instant
-        #     if interactionTauNum(id.para) == 1
-        #         # return e0^2 / ϵ0 / (dot(K, K) + mass2)
-        #         return Coulombinstant(qd, p)
-        #     elseif interactionTauNum(id.para) == 2
-        #         # println(id.extT)
-        #         return interactionStatic(p, qd, varT[id.extT[1]], varT[id.extT[2]])
-        #     else
-        #         error("not implemented!")
-        #     end
-        # elseif id.type == Dynamic
-        #     return interactionDynamic(p, qd, varT[id.extT[1]], varT[id.extT[2]])
-        # else
-        #     error("not implemented!")
-        # end
     else # counterterm for the interaction
         order = id.order[2]
-        @assert id.type == Instant
+        # @assert id.type == Instant
         invK = 1.0 / (qd^2 + mass2)
         return e0^2 / ϵ0 * invK * (mass2 * invK)^order
-        # if id.type == Instant
-        #     if interactionTauNum(id.para) == 1
-        #         if dim == 3
-        #             invK = 1.0 / (qd^2 + mass2)
-        #             return e0^2 / ϵ0 * invK * (mass2 * invK)^order
-        #             # elseif dim == 2
-        #             #     invK = 1.0 / sqrt(qd^2 + mass2)
-        #             #     return e0^2 / ϵ0 * invK * (mass2 * invK)^order
-        #         else
-        #             error("not implemented!")
-        #         end
-        #     else
-        #         # return counterR(qd, varT[id.extT[1]], varT[id.extT[2]], id.order[2])
-        #         return 0.0 #for dynamical interaction, the counter-interaction is always dynamic!
-        #     end
-        # elseif id.type == Dynamic
-        #     return counterR(p, qd, varT[id.extT[1]], varT[id.extT[2]], id.order[2])
-        # else
-        #     error("not implemented!")
-        # end
     end
 end
 

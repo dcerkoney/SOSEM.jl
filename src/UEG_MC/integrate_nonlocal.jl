@@ -10,6 +10,7 @@ function integrate_nonlocal(
     alpha=3.0,
     neval=1e5,
     print=-1,
+    solver=:vegasmc,
     is_main_thread=true,
 )
     # Pass innerLoopNum to integrand
@@ -60,7 +61,7 @@ function integrate_nonlocal(
 
     return integrate(
         integrand;
-        solver=:vegas,
+        solver=solver,
         measure=measure,
         neval=neval,
         print=print,
@@ -78,7 +79,7 @@ function mc_variables(params::UEG.ParaMC, n_kgrid::Int, alpha::Float64)
     Phi = Continuous(0.0, 2π; alpha=alpha)
     K = CompositeVar(R, Theta, Phi)
     # Offset T pool by 2 for fixed external times (τin, τout)
-    T = Continuous(0.0, params.β; offset=2, alpha=alpha)
+    T = Continuous(0.0, params.beta; offset=2, alpha=alpha)
     # Bin in external momentum
     ExtKidx = Discrete(1, n_kgrid; alpha=alpha)
     return (K, T, ExtKidx)
@@ -133,6 +134,5 @@ function integrand(vars, config)
     # Non-dimensionalized integrand
     # NOTE: C⁽¹⁾ = Σ(τ = 0⁻) - Σ(τ = 0⁺), so there is an additional
     #       overall sign contribution depending on SOSEM observable
-    # return obs_sign * weight[expr_tree.root[1]] * factor / (mc_params.kF^2 * mc_params.e0^4)
     return obs_sign * weight[expr_tree.root[1]] * factor / mc_params.qTF^4
 end
