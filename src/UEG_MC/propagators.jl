@@ -102,10 +102,6 @@ function eval(id::BareGreenId, K, siteidx, varT, p::ParaMC)
     # @debug "Remapped propagator time indices: $(id.extT) ↦ $remapped_taupair" maxlog = 1
     τin, τout = varT[id.extT[1]], varT[id.extT[2]]
 
-    k = norm(K)
-    ϵ = k^2 / (2me * massratio) - μ
-    # ϵ = kF / me * (k - kF)
-
     # External time
     τ = τout - τin
 
@@ -113,6 +109,11 @@ function eval(id::BareGreenId, K, siteidx, varT, p::ParaMC)
     if id.order[3] == 1
         return (sign(τ) + 1) / 2.0
     end
+
+    # Get energy
+    k = norm(K)
+    ϵ = k^2 / (2me * massratio) - μ
+    # ϵ = kF / me * (k - kF)
 
     # Check for counterterms
     green = 0.0
@@ -145,7 +146,7 @@ function eval(id::BareInteractionId, K, siteidx, varT, p::ParaMC)
     # dim, e0, ϵ0, mass2 = p.dim, p.e0, p.ϵ0, p.mass2
     qd = sqrt(dot(K, K))
     # Bare Coulomb interaction
-    if id.order[end] == -1
+    if id.order[4] == -1
         @debug "Bare V, T = $(id.extT)" maxlog=5
         return CoulombBareinstant(qd, p)
     elseif id.order[2] == 0
