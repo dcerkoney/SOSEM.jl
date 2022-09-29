@@ -52,11 +52,8 @@ function integrand(vars, config)
     ExprTree.evalKT!(diagram, varK, T.data, para; eval=UEG_MC.Propagators.eval)
     factor = 1.0 / (2π)^(para.dim * loopNum) * phifactor
 
-    # TODO: nondimensionalize all SOSEM plots, switch to this form
-    # return weight[diagram.root[1]] * factor / para.kF^2
-
-    # Dimensionful form
-    return weight[diagram.root[1]] * factor
+    # Dimensionless form
+    return weight[diagram.root[1]] * factor / para.qTF^4
 end
 
 function measure(vars, obs, weights, config)

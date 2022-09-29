@@ -1,4 +1,5 @@
 using ElectronLiquid.UEG: ParaMC
+using Measurements
 using MPI
 using SOSEM
 using Plots
@@ -44,15 +45,15 @@ function main()
         rs=2.0,
         isDynamic=false,
         beta=40.0,
-        mass2=0.0000001,
+        mass2=0.000000001,
     )
     if is_main_thread
         @debug "β / EF = $(params.beta), β = $(params.β), EF = $(params.EF)" maxlog = 1
     end
 
     # K-mesh for measurement
-    # kgrid = [params.kF]
-    k_kf_grid = np.load("results/kgrids/kgrid_vegas_dimless_n=103.npy")
+    k_kf_grid = [0.0]
+    # k_kf_grid = np.load("results/kgrids/kgrid_vegas_dimless_n=103.npy")
     kgrid = params.kF * k_kf_grid
     n_kgrid = length(kgrid)
 
@@ -65,8 +66,8 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval_le_kf = 1e7
-    neval_gt_kf = 1e6
+    neval_le_kf = 1e8
+    neval_gt_kf = 1e7
     maxeval = max(neval_le_kf, neval_gt_kf)
 
     # DiagGen config from settings
@@ -124,7 +125,13 @@ function main()
         end
     end
 
-    if !isempty(means) && plot
+    if length(means) == 1
+        res = measurement(means[1], stdevs[1])
+        exact = pi^2 / 8
+        score = stdscore(res, exact)
+        println("Result - Exact (π²/8): $(res - exact)")
+        println("Standard score: $(score)")
+    elseif length(means) > 1 && plot
         # Save the result
         savename = "results/data/c1d_rs=$(params.rs)_beta_ef=$(params.beta)_neval=$(maxeval)_$(solver)"
         # Remove old data, if it exists
@@ -132,13 +139,7 @@ function main()
         # TODO: kwargs via something like `Dict("kgrid_$solver" => kgrid, "means_$solver" => means, "stdevs_$solver" => stdevs)...`?
         np.savez(
             savename;
-            params=[
-                params.order,
-                params.rs,
-                params.beta,
-                params.kF,
-                params.qTF,
-            ],
+            params=[params.order, params.rs, params.beta, params.kF, params.qTF],
             kgrid=kgrid,
             means=means,
             stdevs=stdevs,
@@ -165,7 +166,7 @@ function main()
         ax.fill_between(k_kf_grid, means - stdevs, means + stdevs; color="C0", alpha=0.4)
         ax.legend(; loc="best")
         ax.set_xlabel("\$k / k_F\$")
-        ax.set_ylabel("\$C^{(1d)}(\\mathbf{k}) / q^{4}_{\\mathrm{TF}}\$")
+        ax.set_ylabel("\$C^{(1d)}(\\mathbf{k}) \\,/\\, q^{4}_{\\mathrm{TF}}\$")
         ax.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
         plt.tight_layout()
         fig.savefig(

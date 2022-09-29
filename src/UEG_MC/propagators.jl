@@ -87,20 +87,25 @@ end
     return (t1, t2)
 end
 
+# Unscreened Coulomb interaction (for outer V lines of non-local SOSEM)
+@inline function CoulombBareinstant(q, p::ParaMC)
+    return KOinstant(q, p.e0, p.dim, 0.0, 0.0, p.kF)
+end
+
 """Evaluate a bare Green's function line."""
 function eval(id::BareGreenId, K, siteidx, varT, p::ParaMC)
     β, me, μ, massratio, extT = p.β, p.me, p.μ, p.massratio, p.additional
 
     # HACK: Swap times into correct indices: extT[2] ↦ 2, 2 ↦ extT[2] (cost: ~ 1 ns)
-    remapped_taupair = remap_extT(id.extT, extT[2])
-    τin, τout = varT[remapped_taupair[1]], varT[remapped_taupair[2]]
-    @debug "Remapped propagator time indices: $(id.extT) ↦ $remapped_taupair" maxlog = 1
-    # τin, τout = varT[id.extT[1]], varT[id.extT[2]]
-    
+    # remapped_taupair = remap_extT(id.extT, extT[2])
+    # τin, τout = varT[remapped_taupair[1]], varT[remapped_taupair[2]]
+    # @debug "Remapped propagator time indices: $(id.extT) ↦ $remapped_taupair" maxlog = 1
+    τin, τout = varT[id.extT[1]], varT[id.extT[2]]
+
     k = norm(K)
     ϵ = k^2 / (2me * massratio) - μ
     # ϵ = kF / me * (k - kF)
-    
+
     # External time
     τ = τout - τin
 
@@ -139,7 +144,11 @@ function eval(id::BareInteractionId, K, siteidx, varT, p::ParaMC)
     e0, ϵ0, mass2 = p.e0, p.ϵ0, p.mass2
     # dim, e0, ϵ0, mass2 = p.dim, p.e0, p.ϵ0, p.mass2
     qd = sqrt(dot(K, K))
-    if id.order[2] == 0
+    # Bare Coulomb interaction
+    if id.order[end] == -1
+        @debug "Bare V, T = $(id.extT)" maxlog=5
+        return CoulombBareinstant(qd, p)
+    elseif id.order[2] == 0
         # @assert id.type == Instant
         # return e0^2 / ϵ0 / (dot(K, K) + mass2)
         return Coulombinstant(qd, p)

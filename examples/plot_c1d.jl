@@ -9,18 +9,16 @@ using SOSEM
 function main()
     rs = 2.0
     beta = 40.0
-    maxeval = 5.0e5
+    maxeval = 5e5
     solver = :vegasmc
 
     # Load the vegas results
-    sosem_vegas = np.load("data/c1c_rs=$(Float64(rs))_beta_ef=$(beta)_neval=$(maxeval)_$(solver).npz")
-    println(sosem_vegas.get("params"))
+    sosem_vegas = np.load("results/data/c1d_rs=$(Float64(rs))_beta_ef=$(beta)_neval=$(maxeval)_$(solver).npz")
     params = UEG_MC.PlotParams(sosem_vegas.get("params")...)
     kgrid = sosem_vegas.get("kgrid")
     means = sosem_vegas.get("means")
     stdevs = sosem_vegas.get("stdevs")
     # TODO: get kwargs implementation working
-    # solver = params.solver
     # kgrid = sosem_vegas.get("kgrid_$solver")
     # means = sosem_vegas.get("means_$solver")
     # stdevs = sosem_vegas.get("stdevs_$solver")
@@ -30,24 +28,24 @@ function main()
     println(k_kf_grid)
 
     # Compare with quadrature results (stored in Hartree a.u.)
-    sosem_quad = np.load("data/soms_rs=$(Float64(rs))_beta_ef=$(beta).npz")
+    sosem_quad = np.load("results/data/soms_rs=$(Float64(rs))_beta_ef=$(beta).npz")
     k_kf_grid_quad = np.linspace(0.0, 6.0; num=600)
     # NOTE: (q_TF a₀) is dimensionless, hence q_TF  is the same in Rydberg
     #       and Hartree a.u., and no additional conversion factor is needed
-    c1c_quad_dimless = 4 * sosem_quad.get("bare_c") / params.qTF^4
+    c1d_quad_dimless = 4 * sosem_quad.get("bare_d") / params.qTF^4
 
     # Plot the result
     fig, ax = plt.subplots()
-    ax.plot(k_kf_grid_quad, c1c_quad_dimless, "k"; label="\$n=$(params.order)\$ (quad)")
-    ax.plot(k_kf_grid, means, "-"; color="C0", label="\$n=$(params.order)\$ ($solver)")
+    ax.plot(k_kf_grid_quad, c1d_quad_dimless, "k"; label="\$n=$(params.order)\$ (quad)")
+    ax.plot(k_kf_grid, means, "o-"; markersize=2, color="C0", label="\$n=$(params.order)\$ ($solver)")
     ax.fill_between(k_kf_grid, means - stdevs, means + stdevs; color="C0", alpha=0.4)
     ax.legend(; loc="best")
     ax.set_xlabel("\$k / k_F\$")
-    ax.set_ylabel("\$C^{(1c)}(\\mathbf{k}) \\,/\\, q^{4}_{\\mathrm{TF}}\$")
+    ax.set_ylabel("\$C^{(1d)}(\\mathbf{k}) \\,/\\, q^{4}_{\\mathrm{TF}}\$")
     ax.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
     plt.tight_layout()
     fig.savefig(
-        "c1c/c1c_n=$(params.order)_rs=$(rs)_" *
+        "results/c1d/c1d_n=$(params.order)_rs=$(rs)_" *
         "beta_ef=$(beta)_neval=$(maxeval)_$(solver).pdf",
     )
     plt.close("all")
