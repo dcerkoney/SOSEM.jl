@@ -1,3 +1,4 @@
+using ElectronGas
 using Plots
 using PyCall
 using SOSEM
@@ -9,43 +10,70 @@ using SOSEM
 function main()
     rs = 2.0
     beta = 40.0
-    maxeval = 5e5
+    maxeval = 5e7
     solver = :vegasmc
+    orders = [2]
+    max_order = maximum(orders)
 
-    # Load the vegas results
-    sosem_vegas = np.load("results/data/c1d_rs=$(Float64(rs))_beta_ef=$(beta)_neval=$(maxeval)_$(solver).npz")
-    params = UEG_MC.PlotParams(sosem_vegas.get("params")...)
-    kgrid = sosem_vegas.get("kgrid")
-    means = sosem_vegas.get("means")
-    stdevs = sosem_vegas.get("stdevs")
-    # TODO: get kwargs implementation working
-    # kgrid = sosem_vegas.get("kgrid_$solver")
-    # means = sosem_vegas.get("means_$solver")
-    # stdevs = sosem_vegas.get("stdevs_$solver")
-
-    # k / kf
-    k_kf_grid = kgrid / params.kF
-    println(k_kf_grid)
-
-    # Compare with quadrature results (stored in Hartree a.u.)
-    sosem_quad = np.load("results/data/soms_rs=$(Float64(rs))_beta_ef=$(beta).npz")
-    k_kf_grid_quad = np.linspace(0.0, 6.0; num=600)
-    # NOTE: (q_TF a₀) is dimensionless, hence q_TF  is the same in Rydberg
-    #       and Hartree a.u., and no additional conversion factor is needed
-    c1d_quad_dimless = 4 * sosem_quad.get("bare_d") / params.qTF^4
-
-    # Plot the result
     fig, ax = plt.subplots()
-    ax.plot(k_kf_grid_quad, c1d_quad_dimless, "k"; label="\$n=$(params.order)\$ (quad)")
-    ax.plot(k_kf_grid, means, "o-"; markersize=2, color="C0", label="\$n=$(params.order)\$ ($solver)")
-    ax.fill_between(k_kf_grid, means - stdevs, means + stdevs; color="C0", alpha=0.4)
+    for (i, order) in enumerate(orders)
+        # Load the vegas results
+        data_path =
+            "results/data/c1d_n=$(order)_rs=$(Float64(rs))_" *
+            "beta_ef=$(beta)_neval=$(maxeval)_$(solver).npz"
+        print("Loading data for n = $order at '$data_path'...")
+        sosem_vegas = np.load(data_path)
+        println("done!")
+        params = UEG_MC.PlotParams(sosem_vegas.get("params")...)
+        println(params)
+        # TODO: kwargs implementation (kgrid_<solver>...)
+        # solver = params.solver
+        kgrid = sosem_vegas.get("kgrid")
+        means = sosem_vegas.get("means")
+        stdevs = sosem_vegas.get("stdevs")
+
+        # k / kf
+        k_kf_grid = kgrid / params.kF
+
+        # Plot numerically exact result for n = 2
+        if i == 1
+            # Compare with quadrature results (stored in Hartree a.u.)
+            rs_quad = 2.0
+            sosem_quad = np.load("results/data/soms_rs=$(rs_quad)_beta_ef=40.0.npz")
+            # np.load("results/data/soms_rs=$(Float64(params.rs))_beta_ef=$(params.beta).npz")
+            k_kf_grid_quad = np.linspace(0.0, 6.0; num=600)
+            # Get Thomas-Fermi screening factor to non-dimensionalize rs = 2 quadrature results
+            qTF_quad = Parameter.rydbergUnit(0, rs_quad).qTF    # (dimensionless T, rs)
+            c1d_quad_dimless = 4 * sosem_quad.get("bare_d") / qTF_quad^4
+            ax.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
+            ax.plot(k_kf_grid_quad, c1d_quad_dimless, "k"; label="\$n=2\$ (quad)")
+        end
+
+        # Plot Monte-Carlo result at this order
+        ax.plot(
+            k_kf_grid,
+            means,
+            "o-";
+            markersize=2,
+            color="C$(i-1)",
+            label="\$n=$(order)\$ ($solver)",
+        )
+        ax.fill_between(
+            k_kf_grid,
+            means - stdevs,
+            means + stdevs;
+            color="C$(i-1)",
+            alpha=0.4,
+        )
+    end
+    # Setup legend and axes
     ax.legend(; loc="best")
     ax.set_xlabel("\$k / k_F\$")
     ax.set_ylabel("\$C^{(1d)}(\\mathbf{k}) \\,/\\, q^{4}_{\\mathrm{TF}}\$")
-    ax.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
     plt.tight_layout()
+    # Save the plot
     fig.savefig(
-        "results/c1d/c1d_n=$(params.order)_rs=$(rs)_" *
+        "results/c1d/c1d_n=$(max_order)_rs=$(rs)_" *
         "beta_ef=$(beta)_neval=$(maxeval)_$(solver).pdf",
     )
     plt.close("all")

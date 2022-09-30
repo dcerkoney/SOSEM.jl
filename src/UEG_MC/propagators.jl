@@ -97,10 +97,10 @@ function eval(id::BareGreenId, K, siteidx, varT, p::ParaMC)
     β, me, μ, massratio, extT = p.β, p.me, p.μ, p.massratio, p.additional
 
     # HACK: Swap times into correct indices: extT[2] ↦ 2, 2 ↦ extT[2] (cost: ~ 1 ns)
-    # remapped_taupair = remap_extT(id.extT, extT[2])
-    # τin, τout = varT[remapped_taupair[1]], varT[remapped_taupair[2]]
-    # @debug "Remapped propagator time indices: $(id.extT) ↦ $remapped_taupair" maxlog = 1
-    τin, τout = varT[id.extT[1]], varT[id.extT[2]]
+    remapped_taupair = remap_extT(id.extT, extT[2])
+    τin, τout = varT[remapped_taupair[1]], varT[remapped_taupair[2]]
+    @debug "Remapped propagator time indices: $(id.extT) ↦ $remapped_taupair" maxlog = 1
+    # τin, τout = varT[id.extT[1]], varT[id.extT[2]]
 
     # External time
     τ = τout - τin
@@ -138,7 +138,7 @@ function eval(id::BareGreenId, K, siteidx, varT, p::ParaMC)
     return -green
 end
 
-"""Evaluate a bare Green's function line."""
+"""Evaluate a statically screened Coulomb interaction line."""
 function eval(id::BareInteractionId, K, siteidx, varT, p::ParaMC)
     # TODO: Implement check for bare interaction using: is_bare = (order[end] = -1)
     # eval(id::InteractionId, K, varT) = e0^2 / ϵ0 / (dot(K, K) + mass2)
