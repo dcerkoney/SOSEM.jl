@@ -164,6 +164,8 @@ end
     observable::Observables = sigma20
     n_order::Int = 2
     n_expand::Int = n_order - 2
+    # Maximum nonzero number of interaction counterterms at this order is: max(0, n_order - 3).
+    n_ct_max = max(0, n_expand - 1)
     verbosity::Verbosity = quiet
     expand_bare_interactions::Bool = false
     name::Symbol = Symbol(string(observable))   # Derive SOSEM name from observable
@@ -238,6 +240,7 @@ end
     names::Tuple{Symbol,Symbol}
     taus::Tuple{ProprTauType,ProprTauType}
     ks::Tuple{VFloat64,VFloat64}
+    orders::Vector{Int}
 end
 
 @with_kw struct Gamma3Data
@@ -307,7 +310,7 @@ function _Config(settings::Settings, g_names, v_names)
     n_g = 3
     n_order = settings.n_order
     n_expand = settings.n_expand
-    n_expandable = n_g
+    n_expandable = n_g # + 2 (with ct)
     # Total size of the SOSEM loop basis dimension (=n_order + 1)
     nk = params.totalLoopNum
     # Biggest tau index (=n_order)
@@ -327,6 +330,12 @@ function _Config(settings::Settings, g_names, v_names)
     g_taus = ((1, nt), (nt, 1), (1, nt))
     v_taus = ((1, 1), (nt, nt))
 
+    # Optionally mark the two V lines as unscreened
+    v_orders = [0, 0, 0, 0]
+    if !settings.expand_bare_interactions
+        v_orders[end] = -1
+    end
+
     # Indices of (dashed) G lines in the expansion order list
     indices_g = collect(1:n_g)
     indices_g_dash = _get_dash_indices(settings.observable)
@@ -338,7 +347,7 @@ function _Config(settings::Settings, g_names, v_names)
 
     # Bundle data for each line/vertex object
     g_data = GData(g_names, g_taus, g_ks, indices_g, indices_g_dash)
-    v_data = VData(v_names, v_taus, v_ks)
+    v_data = VData(v_names, v_taus, v_ks, v_orders)
 
     # Config struct for low-order case
     return Config(;
@@ -362,7 +371,7 @@ function _Config(settings::Settings, g_names, v_names, gamma3_name)
     n_g = 3
     n_order = settings.n_order
     n_expand = settings.n_expand
-    n_expandable = n_g + 1    # ( = n_g + n_gamma3)
+    n_expandable = n_g + 1    # ( = n_g + n_gamma3) # + 2 (with ct)
     # Total size of the SOSEM loop basis dimension (= n_order + 1)
     nk = params.totalLoopNum
     # Biggest tau index
@@ -398,6 +407,12 @@ function _Config(settings::Settings, g_names, v_names, gamma3_name)
     # Using the above conventions, the times for Γⁱ₃ are the same for both insertion sides
     gamma3_taus = (1, 2, nothing)
 
+    # Optionally mark the two V lines as unscreened
+    v_orders = [0, 0, 0, 0]
+    if !settings.expand_bare_interactions
+        v_orders[end] = -1
+    end
+
     # Indices of (dashed) G lines in the expansion order list
     indices_g = collect(1:n_g)
     indices_g_dash = _get_dash_indices(settings.observable)
@@ -411,7 +426,7 @@ function _Config(settings::Settings, g_names, v_names, gamma3_name)
 
     # Bundle data for each line/vertex object
     g_data = GData(g_names, g_taus, g_ks, indices_g, indices_g_dash)
-    v_data = VData(v_names, v_taus, v_ks)
+    v_data = VData(v_names, v_taus, v_ks, v_orders)
     gamma3_data = Gamma3Data(gamma3_name, gamma3_side, gamma3_taus, gamma3_ks, index_gamma3)
 
     # Config struct for high-order case
@@ -458,25 +473,25 @@ end
 """
 Generate weak compositions of size 2 of an integer n,
 (i.e., the cycle (n, 0), (n-1, 1), ..., (0, n)),
-where (n_ct, n_rest) = (i, j) and n_ct <= n_ct_max.
+where (n_order, n_ct) = (i, j) and n_ct <= n - 1.
 """
-function counterterm_split(n::Integer, n_ct_max::Integer)
+function counterterm_split(n::Int)
     splits = []
-    n1::Integer = min(n, n_ct_max)
-    n2::Integer = n - min(n, n_ct_max)
-    while n1 >= 0
+    n1::Int = n > 0 ? 1 : 0
+    n2::Int = n > 0 ? n - 1 : 0
+    while n2 >= 0
         push!(splits, (n1, n2))
-        n1 -= 1
-        n2 += 1
+        n1 += 1
+        n2 -= 1
     end
     return splits
 end
 
-# function counterterm_split(n::Vector{Integer}, n_ct_max::Integer)
+# function counterterm_split(n::Vector{Int}, n_ct_max::Int)
 #     n_ct = []
 #     n_rest = []
-#     n1::Integer = [e > n_ct_max ? n_ct_max : e for e in n]
-#     n2::Integer = n - [e > n_ct_max ? n_ct_max : e for e in n]
+#     n1::Int = [e > n_ct_max ? n_ct_max : e for e in n]
+#     n2::Int = n - [e > n_ct_max ? n_ct_max : e for e in n]
 #     while n1 >= 0
 #         push!(splits, (n1, n2))
 #         n1 -= 1

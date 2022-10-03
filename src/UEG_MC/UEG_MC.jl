@@ -16,6 +16,9 @@ struct PlotParams
     beta::Float64
     kF::Float64
     qTF::Float64
+    mass2::Union{Nothing,Float64}
+    PlotParams(order, rs, beta, kF, qTF) = new(order, rs, beta, kF, qTF, nothing)
+    PlotParams(order, rs, beta, kF, qTF, mass2) = new(order, rs, beta, kF, qTF, mass2)
 end
 export PlotParams
 

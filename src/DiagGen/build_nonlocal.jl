@@ -5,12 +5,6 @@ Construct a DiagramTree for a non-local second-order moment (SOSEM) diagram deri
 function build_nonlocal(s::Settings)
     DiagTree.uidreset()
 
-    # TODO: reexpress bare interaction lines via Parquet.vertex4 to allow for
-    #       optional re-expansion via the statically screened interaction
-    if s.expand_bare_interactions
-        @todo
-    end
-
     # Initialize DiagGen configuration containing diagram parameters propagator
     # and vertex momentum/time data, (expansion) order info, etc.
     cfg = Config(s)
@@ -127,13 +121,13 @@ function build_subdiagram_gamma0(cfg::Config, expansion_orders::Vector{Int}; tre
         i in 1:(cfg.n_g)
     ]
 
-    # We mark the outer two bare interactions as fixed via `order[end] = -1`
+    # We optionally mark the outer two bare interactions as fixed via `order[end] = -1`
     v_ids = [
         BareInteractionId(
             v_params[i],
             ChargeCharge,
             Instant,
-            [0, 0, 0, -1];
+            cfg.V.orders;
             k=cfg.V.ks[i],
             t=cfg.V.taus[i],
             permu=Di,
@@ -271,7 +265,7 @@ function build_subdiagram_gamma(cfg::Config, expansion_orders::Vector{Int}; tree
             v_params[i],
             ChargeCharge,
             Instant,
-            [0, 0, 0, -1];
+            cfg.V.orders;
             k=cfg.V.ks[i],
             t=cfg.V.taus[i],
             permu=Di,

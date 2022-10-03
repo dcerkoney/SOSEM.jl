@@ -149,15 +149,16 @@ function eval(id::BareInteractionId, K, siteidx, varT, p::ParaMC)
     if id.order[4] == -1
         @debug "Bare V, T = $(id.extT)" maxlog=5
         return CoulombBareinstant(qd, p)
+    # Screened Coulomb interaction
     elseif id.order[2] == 0
         # @assert id.type == Instant
         # return e0^2 / ϵ0 / (dot(K, K) + mass2)
         return Coulombinstant(qd, p)
-    else # counterterm for the interaction
-        order = id.order[2]
+    # Counterterms for screened interaction
+    else
         # @assert id.type == Instant
         invK = 1.0 / (qd^2 + mass2)
-        return e0^2 / ϵ0 * invK * (mass2 * invK)^order
+        return e0^2 / ϵ0 * invK * (mass2 * invK)^id.order[2]
     end
 end
 
