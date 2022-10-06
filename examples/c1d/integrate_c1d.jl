@@ -51,7 +51,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 1e9
+    neval = 1e6
 
     # DiagGen config from settings
     cfg = DiagGen.Config(settings)

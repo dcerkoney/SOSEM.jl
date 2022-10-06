@@ -6,6 +6,8 @@ using SOSEM
 @pyimport numpy as np
 @pyimport matplotlib.pyplot as plt
 
+# NOTE: Call from main project directory as: julia examples/c1d/plot_c1d.jl
+
 function main()
     rs = 2.0
     beta = 200.0
@@ -13,10 +15,8 @@ function main()
     solver = :vegasmc
     expand_bare_interactions = true
 
-    # orders = [3, 4]
-    # nevals = [1e7, 1e8]
-    orders = [2, 3, 4]
-    nevals = [1e8, 1e8, 1e8]
+    orders = [2]
+    nevals = [1e7]
     maxeval = maximum(nevals)
     max_order = maximum(orders)
 
@@ -36,7 +36,7 @@ function main()
     for (i, order) in enumerate(orders)
         # Load the vegas results
         data_path =
-            "results/data/c1c_n=$(order)_rs=$(Float64(rs))_" *
+            "results/data/c1d_n=$(order)_rs=$(Float64(rs))_" *
             "beta_ef=$(beta)_lambda=$(mass2)_" *
             "neval=$(nevals[i])_$(intn_str)$(solver).npz"
         print("Loading data for n = $order at '$data_path'...")
@@ -93,7 +93,7 @@ function main()
     ax.set_xlim(0.0, 3.0)
     ax.set_xlabel("\$k / k_F\$")
     ax.set_ylabel(
-        "\$C^{(1c)}_n(\\mathbf{k}) \\,/\\, {\\epsilon}^{\\hspace{0.1em}2}_{\\mathrm{TF}}\$",
+        "\$C^{(1d)}_n(\\mathbf{k}) \\,/\\, {\\epsilon}^{\\hspace{0.1em}2}_{\\mathrm{TF}}\$",
     )
     ax.text(1.75, -0.4, "\$r_s = 2,\\, \\beta = 200 \\epsilon_F,\$"; fontsize=14)
     ax.text(
@@ -102,17 +102,17 @@ function main()
         "\$\\lambda = \\frac{\\epsilon_{\\mathrm{Ry}}}{10},\\, N_{\\mathrm{eval}} = \\mathrm{1e8}\$";
         fontsize=14,
     )
-    # plt.title("Using fixed bare Coulomb interactions \$V_1\$, \$V_2\$")
-    plt.title(
-        "Using re-expanded Coulomb interactions \$V_1[V_\\lambda]\$, \$V_2[V_\\lambda]\$",
-    )
+    plt.title("Using fixed bare Coulomb interactions \$V_1\$, \$V_2\$")
+    # plt.title(
+    #     "Using re-expanded Coulomb interactions \$V_1[V_\\lambda]\$, \$V_2[V_\\lambda]\$",
+    # )
     plt.tight_layout()
     # Save the plot
     fig.savefig(
-        "results/c1c/c1c_n=$(max_order)_rs=$(rs)_" *
+        "results/c1d/c1d_n=$(max_order)_rs=$(rs)_" *
         "beta_ef=$(beta)_lambda=$(mass2)_" *
-        # "neval=$(maxeval)_$(solver).pdf",
-        "neval=$(maxeval)_$(intn_str)$(solver).pdf",
+        "neval=$(maxeval)_$(solver).pdf",
+        # "neval=$(maxeval)_$(intn_str)$(solver).pdf",
     )
     plt.close("all")
     return

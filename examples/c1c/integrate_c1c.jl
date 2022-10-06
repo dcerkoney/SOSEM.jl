@@ -30,7 +30,6 @@ function main()
     )
 
     # UEG parameters for MC integration
-    # NOTE: To match units, we specify (beta / EF) = 2 * (heg_soms.beta)
     params =
         ParaMC(; order=settings.n_order, rs=2.0, beta=200.0, mass2=1e-8, isDynamic=false)
     if is_main_thread
@@ -49,7 +48,7 @@ function main()
     plot = true
     compare_bare = true
     solver = :vegasmc
-    
+
     # Number of evals below and above kF
     neval = 1e6
 
