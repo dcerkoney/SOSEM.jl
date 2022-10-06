@@ -45,6 +45,13 @@ end
     c1c        #                                 + C⁽¹ᶜ⁾
     c1d        #                                 + C⁽¹ᵈ⁾
 end
+const bare_observable_to_exact_k0 = Dict(
+    c1a => Inf,    # The bare local moment is divergent
+    c1bL0 => (1 / 4 - pi^2 / 16),
+    c1bR0 => (1 / 4 - pi^2 / 16),
+    c1c => -1,
+    c1d => pi^2 / 8,
+)
 const observable_to_dash_indices = Dict(
     sigma20 => Int[],
     sigma2 => Int[],
@@ -89,13 +96,34 @@ const observable_to_string = Dict(
     c1c => "C⁽¹ᶜ⁾[G, V, Γⁱ₃ = Γ₀]",
     c1d => "C⁽¹ᵈ⁾[G, V, Γⁱ₃ = Γ₀]",
 )
+const bare_observable_to_string = Dict(
+    c1a => "C₂⁽¹ᵃ⁾",    # Divergent, but we provide a string representation anyway
+    c1bL0 => "C₂⁽¹ᵇ⁾ᴸ",
+    c1bR0 => "C₂⁽¹ᵇ⁾ᴿ",
+    c1c => "C₂⁽¹ᶜ⁾",
+    c1d => "C₂⁽¹ᵈ⁾",
+)
+"""Overload print operator for string representations of observables."""
 Base.print(io::IO, obs::Observables) = print(io, observable_to_string[obs])
+
+"""Print the string representation of a (non-local) bare observable."""
+function bare_string(obs::DiagGen.Observables)
+    @assert obs in [c1a, c1bL0, c1bR0, c1c, c1d]
+    return bare_observable_to_string[obs]
+end
+
+"""
+Returns the exact value of a specified low-order SOSEM observable to O(V²) at k = 0.
+"""
+@inline function get_exact_k0(observable::DiagGen.Observables)
+    return bare_observable_to_exact_k0[observable]
+end
 
 """
 Returns the side of the discontinuity at τ = 0 giving 
 a non-zero contribution for this SOSEM observable.
 """
-function _get_discont_side(observable::Observables)
+@inline function _get_discont_side(observable::Observables)
     return observable_to_discont_side[observable]
 end
 
@@ -103,7 +131,7 @@ end
 Return the sign of the outgoing external time τ for a given SOSEM observable 
 (each observable contributes from one side of the discontinuity at τ = 0 only).
 """
-function _get_obs_sign(observable::Observables)
+@inline function _get_obs_sign(observable::Observables)
     # Direct self-energy measurement not yet implemented
     if observable in [sigma20, sigma2]
         @todo
@@ -115,7 +143,7 @@ end
 Return the sign of the outgoing external time τ for a given SOSEM observable 
 (each observable contributes from one side of the discontinuity at τ = 0 only).
 """
-function _get_extT_sign(side::DiscontSide)
+@inline function _get_extT_sign(side::DiscontSide)
     if side == negative
         # Observable non-zero when τ = 0⁻
         return -1
@@ -129,17 +157,17 @@ function _get_extT_sign(side::DiscontSide)
 end
 
 """Deduce whether this observable has a Γⁱ₃ insertion."""
-function _has_gamma3(observable::Observables)
+@inline function _has_gamma3(observable::Observables)
     return observable in [c1bL, c1bR]
 end
 
 """Returns the indices for dashed Green's function line(s), if any, for the given observable."""
-function _get_dash_indices(observable::Observables)
+@inline function _get_dash_indices(observable::Observables)
     return observable_to_dash_indices[observable]
 end
 
 """Returns the indices for dashed Green's function line(s), if any, for the given observable."""
-# function _get_gamma3_index(observable::Observables)
+# @inline function _get_gamma3_index(observable::Observables)
 #     @assert _has_gamma3(observable)
 #     if observable == c1bL
 #         return 1
@@ -148,7 +176,7 @@ end
 # end
 
 """Deduce the insertion side for observables with Γⁱ₃ insertions."""
-function _get_insertion_side(observable::Observables)
+@inline function _get_insertion_side(observable::Observables)
     # These are the only two observables with Γⁱ₃ insertions
     @assert _has_gamma3(observable)
     # If the dashed line is to the left, the Γⁱ₃ insertion is on the right side (and vice-versa)

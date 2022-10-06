@@ -16,7 +16,14 @@ export Gamma3InsertionSide, left, right
 export DiscontSide, negative, positive
 export Observables, sigma20, sigma2, c1a, c1bL0, c1bR0, c1bL, c1bR, c1c, c1d
 export Settings,
-    Config, getID, propagator_params, checktree, weakintsplit, counterterm_split
+    Config,
+    getID,
+    bare_string,
+    get_exact_k0,
+    propagator_params,
+    checktree,
+    weakintsplit,
+    counterterm_split
 
 # Non-local moment
 include("build_nonlocal.jl")
