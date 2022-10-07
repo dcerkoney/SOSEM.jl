@@ -28,6 +28,20 @@ jobs:
           - x86
     steps:
       - uses: actions/checkout@v2
+      - name: Install unregistered dependencies
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: | 
+          julia --project=. -e '
+            using Pkg
+            Pkg.add(name="FeynmanDiagram", rev="master")
+            Pkg.add(url="https://github.com/kunyuan/EFT_UEG.git", rev="vegasmc")
+            Pkg.update()
+            Pkg.instantiate()
+            using FeynmanDiagram
+            DiagParaF64
+            using ElectronLiquid
+            UEG'
       - uses: julia-actions/setup-julia@v1
         with:
           version: ${{ matrix.version }}
@@ -39,23 +53,3 @@ jobs:
       - uses: codecov/codecov-action@v2
         with:
           files: lcov.info
-  docs:
-    name: Documentation
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v2
-      - uses: julia-actions/setup-julia@v1
-        with:
-          version: '1'
-      - uses: julia-actions/julia-buildpkg@v1
-      - uses: julia-actions/julia-docdeploy@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - run: |
-          julia --project=docs -e '
-            using Documenter: DocMeta, doctest
-            using SOSEM
-            DocMeta.setdocmeta!(SOSEM, :DocTestSetup, :(using SOSEM); recursive=true)
-            doctest(SOSEM)'
