@@ -10,7 +10,7 @@ para = ParaMC(; rs=5.0, isDynamic=false, beta=40.0, mass2=0.0001)
 
 # Generate the diagrams
 settings = DiagGen.Settings(; observable=DiagGen.c1c, n_order=2, verbosity=DiagGen.info)
-const diag, compiled_diag = DiagGen.build_nonlocal(settings);
+const diagparam, diag, compiled_diag = DiagGen.build_nonlocal(settings);
 DiagGen.checktree(diag, settings)
 # DiagGen.checktree(diag, settings; plot=true, maxdepth=10)
 

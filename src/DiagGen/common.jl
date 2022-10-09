@@ -1,23 +1,15 @@
 using FeynmanDiagram
 using Parameters
 
-# Convenience typedefs for Diagram, Settings, and Config
-const OptInt = Union{Nothing,Int}
-const VFloat64 = Vector{Float64}
-const DiagramF64 = Diagram{Float64}
-const ProprTauType = Tuple{Int,Int}
-const ProprOptTauType = Tuple{OptInt,Int}
-const Gamma3OptTauType = Tuple{Int,Int,OptInt}
-
 macro todo()
     return :(error("Not yet implemented!"))
 end
 
 """Verbosity level for printing information to stdout."""
 @enum Verbosity begin
-    quiet     # = 0
-    info      # = 1
-    verbose   # = 2
+    quiet    # = 0
+    info     # = 1
+    verbose  # = 2
 end
 
 """Signifies whether the Γⁱ₃ insertion is to the left or the right of G₂."""
@@ -26,27 +18,30 @@ end
     right
 end
 
-"""Signifies whether the SOSEM observable is non-zero to the left or the right of the discontinuity at τ = 0."""
+"""
+Signifies whether the SOSEM observable is non-zero to 
+the left or the right of the discontinuity at τ = 0.
+"""
 @enum DiscontSide begin
     negative
     positive
-    both    # for direct self-energy measurements
+    both  # for direct self-energy measurements
 end
 
 """Classes of observables for different second-order moment (SOSEM) measurements."""
 @enum Observables begin
-    sigma20    # second-order self-energy
+    sigma20  # second-order self-energy
     sigma2
-    c1a        # local SOSEM class:          C⁽¹⁾ˡ = C⁽¹ᵃ⁾
-    c1bL0      # non-local SOSEM classes:
-    c1bR0      #                           C⁽¹⁾ⁿˡ 
-    c1bL       #                                 = C⁽¹ᵇ⁾ᴸ
-    c1bR       #                                 + C⁽¹ᵇ⁾ᴿ
-    c1c        #                                 + C⁽¹ᶜ⁾
-    c1d        #                                 + C⁽¹ᵈ⁾
+    c1a      # local SOSEM class:          C⁽¹⁾ˡ = C⁽¹ᵃ⁾
+    c1bL0    # non-local SOSEM classes:
+    c1bR0    #                           C⁽¹⁾ⁿˡ 
+    c1bL     #                                 = C⁽¹ᵇ⁾ᴸ
+    c1bR     #                                 + C⁽¹ᵇ⁾ᴿ
+    c1c      #                                 + C⁽¹ᶜ⁾
+    c1d      #                                 + C⁽¹ᵈ⁾
 end
 const bare_observable_to_exact_k0 = Dict(
-    c1a => Inf,    # The bare local moment is divergent
+    c1a => Inf,  # The bare local moment is divergent
     c1bL0 => (1 / 4 - pi^2 / 16),
     c1bR0 => (1 / 4 - pi^2 / 16),
     c1c => -1,
@@ -55,11 +50,11 @@ const bare_observable_to_exact_k0 = Dict(
 const observable_to_dash_indices = Dict(
     sigma20 => Int[],
     sigma2 => Int[],
-    c1a => [3],     # local SOSEM class has only one dash configuration
+    c1a => [3],   # local SOSEM class has only one dash configuration
     c1bL0 => [1],
     c1bR0 => [3],
     c1bL => [1],
-    c1bR => [3],    # crossing-symmetric (non-local) counterpart to c1a => same dash index (3) 
+    c1bR => [3],  # crossing-symmetric (non-local) counterpart to c1a => same dash index (3) 
     c1c => [2],
     c1d => [1, 3],
 )
@@ -75,15 +70,15 @@ const observable_to_discont_side = Dict(
     c1d => positive,
 )
 const observable_to_obs_sign = Dict(
-    sigma20 => 0,    # Direct measurement not yet implemented
-    sigma2 => 0,     # Direct measurement not yet implemented
+    sigma20 => 0,  # Direct measurement not yet implemented
+    sigma2 => 0,   # Direct measurement not yet implemented
     c1a => 1,
     c1bL0 => 1,
     c1bR0 => 1,
     c1bL => 1,
     c1bR => 1,
     c1c => -1,
-    c1d => 1,       # Since (Θ₋₁(τ))² = Θ(-τ)
+    c1d => 1,      # Since (Θ₋₁(τ))² = Θ(-τ)
 )
 const observable_to_string = Dict(
     sigma20 => "Σ₂[G, V, Γⁱ₃ = Γ₀]",
@@ -97,7 +92,7 @@ const observable_to_string = Dict(
     c1d => "C⁽¹ᵈ⁾[G, V, Γⁱ₃ = Γ₀]",
 )
 const bare_observable_to_string = Dict(
-    c1a => "C₂⁽¹ᵃ⁾",    # Divergent, but we provide a string representation anyway
+    c1a => "C₂⁽¹ᵃ⁾",  # Divergent, but we provide a string representation anyway
     c1bL0 => "C₂⁽¹ᵇ⁾ᴸ",
     c1bR0 => "C₂⁽¹ᵇ⁾ᴿ",
     c1c => "C₂⁽¹ᶜ⁾",
@@ -190,13 +185,11 @@ end
 """Settings for diagram generation of Σ₂[G, V, Γⁱ₃] and derived second-order moments."""
 @with_kw struct Settings
     observable::Observables = sigma20
-    n_order::Int = 2
-    n_expand::Int = n_order - 2
-    # Maximum nonzero number of interaction counterterms at this order is: max(0, n_order - 3).
-    n_ct_max = max(0, n_expand - 1)
+    n_order::Int = 2             # Total order (n_v + loop + CTs)
+    n_expand::Int = n_order - 2  # Expansion order ξ (loop + CTs)
     verbosity::Verbosity = quiet
     expand_bare_interactions::Bool = false
-    name::Symbol = Symbol(string(observable))   # Derive SOSEM name from observable
+    name::Symbol = Symbol(string(observable))  # Derive SOSEM name from observable
 end
 
 """Call print on args when above the verbosity threshold v."""
@@ -210,12 +203,12 @@ function vprintln(s::Settings, v::Verbosity, args...)
 end
 
 """Build the DiagramId for a second-order moment."""
-function getID(params::DiagParaF64)
+function getID(param::DiagParaF64)
     return SigmaId(
-        params,
+        param,
         Dynamic;
-        k=DiagTree.getK(params.totalLoopNum, 1),
-        t=(1, params.totalTauNum),
+        k=DiagTree.getK(param.totalLoopNum, 1),
+        t=(1, param.totalTauNum),
     )
 end
 
@@ -224,31 +217,31 @@ Construct diagram parameters for a second-order self-energy moment (SOSEM).
 Each SOSEM is derived from a self-energy diagram with two bare Coulomb (V)
 lines Σ₂[G, V, Γⁱ₃], where Γⁱ₃ is the improper three-point vertex.
 """
-function _getparams(n_order::Int)
+function _getparam(n_loop_tot::Int)
     # Instantaneous bare interaction (interactionTauNum = 1) 
-    # => innerLoopNum = totalTauNum = n_order
+    # => innerLoopNum = totalTauNum = n_loop_tot (total loop number)
     return DiagParaF64(;
         type=SigmaDiag,
         hasTau=true,
         firstTauIdx=1,
-        innerLoopNum=n_order,
-        totalTauNum=n_order,
+        innerLoopNum=n_loop_tot,
+        totalTauNum=n_loop_tot,
         filter=[NoHartree],
         interaction=[FeynmanDiagram.Interaction(ChargeCharge, Instant)],
     )
 end
 
 """Construct diagram parameters for bare propagators."""
-function propagator_params(type, n_expand, firstTauIdx, firstLoopIdx, filter=[NoHartree])
+function propagator_param(type, n_loop, firstTauIdx, firstLoopIdx, filter=[NoHartree])
     # The bare interaction is instantaneous (interactionTauNum = 1),
-    # so innerLoopNum = totalTauNum = n_expand.
+    # so innerLoopNum = totalTauNum = n_loop (inner loop number)
     return DiagParaF64(;
         type=type,
         hasTau=true,
-        innerLoopNum=n_expand,
+        innerLoopNum=n_loop,
         firstTauIdx=firstTauIdx,
         firstLoopIdx=firstLoopIdx,
-        totalLoopNum=n_expand + 3, # = n_order + 1
+        totalLoopNum=n_loop + 3,  # = n_loop_tot + 1
         interaction=[FeynmanDiagram.Interaction(ChargeCharge, Instant)],
         filter=filter,
     )
@@ -260,7 +253,7 @@ end
     # subdiagram and whether the Γⁱ₃ insertion is to the left or the right of G₂)
     taus::Tuple{ProprTauType,ProprOptTauType,ProprOptTauType}
     ks::Tuple{VFloat64,VFloat64,VFloat64}
-    indices::Vector{Int}                     # Expansion order index conventions
+    indices::Vector{Int}  # Expansion order index conventions
     dash_indices::Vector{Int}
 end
 
@@ -268,15 +261,15 @@ end
     names::Tuple{Symbol,Symbol}
     taus::Tuple{ProprTauType,ProprTauType}
     ks::Tuple{VFloat64,VFloat64}
-    orders::Vector{Int}
+    orders::Vector{Int}  # (before differentiations)
 end
 
 @with_kw struct Gamma3Data
     name::Symbol
-    side::Gamma3InsertionSide       # Is the Γⁱ₃ insertion to the left/right?
-    taus::Gamma3OptTauType          # τₒᵤₜ is generally unspecifiable (depends on subdiagram)
-    ks::Tuple{VFloat64,VFloat64}    # Leg (bosonic and incoming fermionic) momenta
-    index::Int                      # Expansion order index convention
+    side::Gamma3InsertionSide     # Is the Γⁱ₃ insertion to the left/right?
+    taus::Gamma3OptTauType        # τₒᵤₜ is generally unspecifiable (depends on subdiagram)
+    ks::Tuple{VFloat64,VFloat64}  # Leg (bosonic and incoming fermionic) momenta
+    index::Int                    # Expansion order index convention
 end
 
 """
@@ -285,10 +278,11 @@ Bundles names and external/internal variables for Σ₂[G, V, Γⁱ₃]
 """
 @with_kw struct Config
     # Diagram parameters for the SOSEM observable
-    params::DiagParaF64
+    param::DiagParaF64
     # Expansion order info
-    n_order::Int
-    n_expand::Int
+    n_order::Int  # Total order (n_v + loop + CTs)
+    n_expand::Int # Expansion order ξ (loop + CTs)
+    n_loop::Int   # Inner loop order
     n_expandable::Int
     # There are 3 G lines and 2 outer V lines in every SOSEM observable
     n_g::Int = 3
@@ -299,50 +293,57 @@ Bundles names and external/internal variables for Σ₂[G, V, Γⁱ₃]
     # Optional data for Γⁱ₃ if this SOSEM diagram contains a vertex insertion
     has_gamma3::Bool = false
     Gamma3::Union{Nothing,Gamma3Data} = nothing
-    # Discontinuity side and overall sign for this observable
+    # Discontinuity side and overall sign
     discont_side::DiscontSide
     obs_sign::Int
-    # Sign of the outgoing external time for this observable
+    # Sign of the outgoing external time
     extT_sign::Int
+    # External time indices
+    extT::Tuple{Int,Int}
     # A generic ID for intermediate diagram construction steps
-    generic_id = GenericId(propagator_params(GreenDiag, 0, 1, 1))
+    generic_id = GenericId(propagator_param(GreenDiag, 0, 1, 1))
 end
 
 """Construct a Config struct via diagram parameters with/without Γⁱ₃ insertion."""
 function Config(
-    settings::Settings;
+    settings::Settings,
+    n_loop=settings.n_expand;
     g_names=(:G₁, :G₂, :G₃),
     v_names=(:V₁, :V₂),
     gamma3_name=:Γ₃,
 )
     if _has_gamma3(settings.observable)
-        if settings.n_order ≤ 2
+        if n_loop ≤ 0
             throw(
                 ArgumentError(
-                    "settings.n_order > 2 required for observable " *
+                    "n_loop > 0 required for observable " *
                     "$(settings.observable) with Γⁱ₃ insertion!",
                 ),
             )
         end
-        return _Config(settings, g_names, v_names, gamma3_name)
+        return _Config(settings, n_loop, g_names, v_names, gamma3_name)
     else
-        return _Config(settings, g_names, v_names)
+        return _Config(settings, n_loop, g_names, v_names)
     end
 end
 
 """Construct a Config struct with trivial Γⁱ₃ insertion (Γⁱ₃ = Γ₀)."""
-function _Config(settings::Settings, g_names, v_names)
-    params = _getparams(settings.n_order)
-
-    # Order and expansion order (inner loop) info
+function _Config(settings::Settings, n_loop, g_names, v_names)
+    # Expansion order info
     n_g = 3
-    n_order = settings.n_order
-    n_expand = settings.n_expand
-    n_expandable = n_g # + 2 (with ct)
-    # Total size of the SOSEM loop basis dimension (=n_order + 1)
-    nk = params.totalLoopNum
-    # Biggest tau index (=n_order)
-    nt = params.totalTauNum
+    n_v = 2
+    n_order = settings.n_order    # Total order (n_v + loop + CTs)
+    n_expand = settings.n_expand  # Expansion order ξ (loop + CTs)
+    n_loop_tot = n_loop + n_v     # Total loop order
+    n_expandable = n_g
+
+    # Get diagram parameters
+    param = _getparam(n_loop_tot)
+
+    # Total size of the SOSEM loop basis dimension (= n_loop + n_v + 1)
+    nk = param.totalLoopNum
+    # Biggest tau index (= n_loop + n_v)
+    nt = param.totalTauNum
 
     # Basis momenta for loops of Σ₂
     k = DiagTree.getK(nk, 1)
@@ -357,11 +358,13 @@ function _Config(settings::Settings, g_names, v_names)
     v_ks = (q1, q2)
     g_taus = ((1, nt), (nt, 1), (1, nt))
     v_taus = ((1, 1), (nt, nt))
+    # External times
+    extT = (1, nt)
 
     # Optionally mark the two V lines as unscreened
     v_orders = [0, 0, 0, 0]
     if !settings.expand_bare_interactions
-        v_orders[end] = -1
+        v_orders[end] = 1
     end
 
     # Indices of (dashed) G lines in the expansion order list
@@ -379,31 +382,37 @@ function _Config(settings::Settings, g_names, v_names)
 
     # Config struct for low-order case
     return Config(;
-        params=params,
+        param=param,
         n_order=n_order,
         n_expand=n_expand,
+        n_loop=n_loop,
         n_expandable=n_expandable,
         G=g_data,
         V=v_data,
         discont_side=discont_side,
         obs_sign=obs_sign,
         extT_sign=extT_sign,
+        extT=extT,
     )
 end
 
 """Construct a Config struct with nontrivial Γⁱ₃ insertion (Γⁱ₃ > Γ₀)."""
-function _Config(settings::Settings, g_names, v_names, gamma3_name)
-    params = _getparams(settings.n_order)
-
-    # Order and expansion order (inner loop) info
+function _Config(settings::Settings, n_loop, g_names, v_names, gamma3_name)
+    # Expansion order info
     n_g = 3
-    n_order = settings.n_order
-    n_expand = settings.n_expand
-    n_expandable = n_g + 1    # ( = n_g + n_gamma3) # + 2 (with ct)
+    n_v = 2
+    n_order = settings.n_order    # Total order (n_v + loop + CTs)
+    n_expand = settings.n_expand  # Expansion order ξ (loop + CTs)
+    n_loop_tot = n_loop + n_v     # Total loop order
+    n_expandable = n_g + 1        # ( = n_g + n_gamma3)
+
+    # Get diagram parameters
+    param = _getparam(n_loop_tot)
+
     # Total size of the SOSEM loop basis dimension (= n_order + 1)
-    nk = params.totalLoopNum
+    nk = param.totalLoopNum
     # Biggest tau index
-    nt = params.totalTauNum
+    nt = param.totalTauNum
 
     # Basis momenta for loops of Σ₂
     k = DiagTree.getK(nk, 1)
@@ -421,16 +430,18 @@ function _Config(settings::Settings, g_names, v_names, gamma3_name)
     # specifiable; they depend on whether the Γⁱ₃ insertion is to the left or the right of G₂.
     # Due to the convention of Parquet.vertex3, the bosonic and incoming fermionic times for
     # Γⁱ₃ and outgoing external time of Σ₂ must depend on the Γⁱ₃ insertion side.
-    local v_taus, g_taus, gamma3_ks
+    local v_taus, g_taus, gamma3_ks, extT
     gamma3_side = _get_insertion_side(settings.observable)
     if gamma3_side == right
         v_taus = ((1, 1), (nt, nt))
         g_taus = ((1, nt), (nt, 2), (nothing, nt))
         gamma3_ks = (-q1, k2)
+        extT = (1, nt)
     else # gamma3_side == left
         v_taus = ((nt, nt), (1, 1))
         g_taus = ((nt, 2), (nothing, nt), (nt, 1))
         gamma3_ks = (q2, k1)
+        extT = (nt, 1)
     end
     # Using the above conventions, the times for Γⁱ₃ are the same for both insertion sides
     gamma3_taus = (1, 2, nothing)
@@ -438,7 +449,7 @@ function _Config(settings::Settings, g_names, v_names, gamma3_name)
     # Optionally mark the two V lines as unscreened
     v_orders = [0, 0, 0, 0]
     if !settings.expand_bare_interactions
-        v_orders[end] = -1
+        v_orders[end] = 1
     end
 
     # Indices of (dashed) G lines in the expansion order list
@@ -459,9 +470,10 @@ function _Config(settings::Settings, g_names, v_names, gamma3_name)
 
     # Config struct for high-order case
     return Config(;
-        params=params,
+        param=param,
         n_order=n_order,
         n_expand=n_expand,
+        n_loop=n_loop,
         n_expandable=n_expandable,
         G=g_data,
         V=v_data,
@@ -470,9 +482,11 @@ function _Config(settings::Settings, g_names, v_names, gamma3_name)
         discont_side=discont_side,
         obs_sign=obs_sign,
         extT_sign=extT_sign,
+        extT=extT,
     )
 end
 
+"""Print and/or plot a diagram tree to the given depth if verbosity is sufficiently high."""
 function checktree(d::Diagram, s::Settings; plot=false, maxdepth=6)
     if s.verbosity > quiet
         print_tree(d)
@@ -483,25 +497,47 @@ function checktree(d::Diagram, s::Settings; plot=false, maxdepth=6)
 end
 
 """
-Generate weak compositions of size 2 of an integer n,
-(i.e., the cycle (n, 0), (n-1, 1), ..., (0, n))
+Get all counterterm partitions (n1, n2, n3) satisfying the following constraints:
+
+    (1) n_min <= n1 + n2 + n3 <= n_max
+    (2) n1 > 0 if either n2 > 0 or n3 > 0
+
+By convention, we interpret: n1 = n_loop, n2 = n_∂μ, n3 = n_∂λ (normal order, G order, W order).
 """
-function weakintsplit(n::Integer)
-    splits = []
-    n1::Integer = n
-    n2::Integer = 0
-    while n1 >= 0
-        push!(splits, (n1, n2))
-        n1 -= 1
-        n2 += 1
+function counterterm_partitions(n_max::Int, n_min::Int=0; renorm_mu=false)
+    if n_max < n_min
+        return Tuple{Int,Int,Int}[]
     end
-    return splits
+    # Include the bare partition, since the integral is non-trivial for SOSEM observables
+    partitions = [(0, 0, 0); partition(n_max; renorm_mu=renorm_mu)]
+    return sort([p for p in partitions if p[1] + p[2] + p[3] >= n_min])
+end
+
+"""
+Get all counterterm partitions (n1, n2, n3) at fixed order n = n1 + n2 + n3.
+"""
+function counterterm_partitions_fixed_order(n::Int; renorm_mu=false)
+    return counterterm_partitions(n, n; renorm_mu=renorm_mu)
+end
+
+"""
+Partition the total expansion order `n` into loop and counterterm orders, 
+n ↦ (n_loop, n_ct_mu, n_ct_lambda). 
+
+If `renorm_mu` is false, then n_ct_mu = 0.
+"""
+function partition(n::Int; renorm_mu=false)
+    if renorm_mu
+        return UEG.partition(n)
+    else
+        return sort([(n1, 0, n3) for (n1, n3) in counterterm_split(n) if n1 + n3 ≤ n])
+    end
 end
 
 """
 Generate weak compositions of size 2 of an integer n,
-(i.e., the cycle (n, 0), (n-1, 1), ..., (0, n)),
-where (n_order, n_ct) = (i, j) and n_ct <= n - 1.
+(i.e., the cycle (n, 0), (n-1, 1), ..., (0, n)), where 
+(n_order, n_ct_lambda) = (i, j) and n_ct_lambda ≤ n - 1.
 """
 function counterterm_split(n::Int)
     splits = []
@@ -515,15 +551,13 @@ function counterterm_split(n::Int)
     return splits
 end
 
-# function counterterm_split(n::Vector{Int}, n_ct_max::Int)
-#     n_ct = []
-#     n_rest = []
-#     n1::Int = [e > n_ct_max ? n_ct_max : e for e in n]
-#     n2::Int = n - [e > n_ct_max ? n_ct_max : e for e in n]
-#     while n1 >= 0
-#         push!(splits, (n1, n2))
-#         n1 -= 1
-#         n2 += 1
-#     end
-#     return n_ct, n_rest
-# end
+"""
+Method overwrite to avoid invalid derivatives on dashed Green's function lines. These lines are
+just theta functions in τ, so they have no chemical potential renormalization counterterms.
+Note that by convention, we take order[3] as the entry indicating a dashed line.
+"""
+function DiagTree.hasOrderHigher(diag::Diagram{W}, ::Type{ID}) where {W,ID<:PropagatorId}
+    # For bare propagators, a derivative of different id vanishes,
+    # and derivatives of dashed or bare Coulomb lines also vanish
+    return diag.id isa ID && all(diag.id.order[[3, 4]] .== 0)
+end

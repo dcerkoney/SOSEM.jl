@@ -1,12 +1,27 @@
-using SOSEM: DiagGen
+using SOSEM
 
-function main()
-    settings = DiagGen.Settings(n_order=4, plot_trees=true, verbosity=2)
-    # Build diagram and expression trees for all sigma_2 diagrams at order n
-    sigma2, sigma2_compiled = DiagGen.build_c1bL_with_ct(settings)
-    # Check the trees
-    DiagGen.checktrees(sigma2, sigma2_compiled, settings)
-    return sigma2, sigma2_compiled
+# Generate debug info
+if isinteractive()
+    ENV["JULIA_DEBUG"] = SOSEM
 end
 
-sigma2, sigma2_compiled = main()
+settings = DiagGen.Settings(;
+    observable=DiagGen.c1bL,
+    n_order=4,
+    verbosity=DiagGen.info,
+    expand_bare_interactions=false,
+)
+
+# Build diagram and expression trees for all sigma_2 diagrams at order n with interaction counterterms
+partitions, diagparams, diagtrees, exprtrees =
+    DiagGen.build_nonlocal_with_ct(settings; renorm_mu=true);
+
+println(partitions)
+println(diagtrees)
+println(exprtrees)
+
+# Check the first diagram tree
+for tree in diagtrees
+    DiagGen.checktree(tree, settings; plot=true, maxdepth=10)
+    # DiagGen.checktree(tree, settings)
+end

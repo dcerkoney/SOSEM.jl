@@ -1,4 +1,5 @@
 module IntegerCompositions
+
 using Combinatorics:
     partitions, permutations, WithReplacementCombinations, with_replacement_combinations
 using IterTools: Iterators.popfirst!, Iterators.Stateful
@@ -62,4 +63,4 @@ function Base.iterate(c::RPaddedWeakIntegerCompositions, s=Stateful(c.it))
     return (weak_comp, s)
 end
 
-end # module WeakCompositions
+end  # module IntegerCompositions

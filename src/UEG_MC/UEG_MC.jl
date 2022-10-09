@@ -2,12 +2,16 @@
 module UEG_MC
 
 using ElectronGas
-using ElectronLiquid
+using ..ElectronLiquid
 using ..FeynmanDiagram
 using Lehmann
 using LinearAlgebra
 using MCIntegration
 using ..Parameters
+
+# Convenience typedefs for diagram and expression trees
+const DiagramF64 = Diagram{Float64}
+const ExprTreeF64 = ElectronLiquid.ExprTreeF64
 
 """UEG MC parameters necessary for plotting in post-processing"""
 struct PlotParams
@@ -27,25 +31,12 @@ include("propagators.jl")
 using .Propagators
 export Propagators
 
-# Low-order moment integration
+# Nonlocal moment integration
 include("integrate_nonlocal.jl")
 export integrate_nonlocal # , integrate_sigma2_nonlocal
 
-# include("build_c1a.jl") # local moment
+# Local moment integration
+# include("integrate_local.jl")
+# export integrate_local # , integrate_sigma2_local
 
-# High-order moment integration
-# include("integrate_c1bL_gamma.jl")
-# include("integrate_c1bR_gamma.jl")
-# export integrate_c1bL_gamma, integrate_c1bR_gamma
-
-# Full SOSEM integration with/without Gamma_3
-# include("integrate_som_gamma0.jl")
-# include("integrate_som_gamma.jl")
-# export integrate_som_gamma0, integrate_som_gamma
-
-# Direct self-energy integration with/without Gamma_3
-# include("integrate_sigma2_gamma0.jl")
-# include("integrate_sigma2_gamma.jl")
-# export integrate_sigma2_gamma0, integrate_sigma2_gamma
-
-end
+end  # module UEG_MC

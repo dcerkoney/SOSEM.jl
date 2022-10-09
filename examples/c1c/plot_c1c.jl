@@ -43,27 +43,33 @@ function main()
         sosem_vegas = np.load(data_path)
         println("done!")
 
-        println(sosem_vegas.get("params"))
-        params = UEG_MC.PlotParams(sosem_vegas.get("params")...)
+        local paramdict
+        try
+            paramdict = sosem_vegas.get("param")
+        catch
+            paramdict = sosem_vegas.get("params")
+        end
+        println(paramdict)
+        param = UEG_MC.PlotParams(paramdict...)
         # TODO: kwargs implementation (kgrid_<solver>...)
-        # solver = params.solver
+        # solver = param.solver
         kgrid = sosem_vegas.get("kgrid")
         means = sosem_vegas.get("means")
         stdevs = sosem_vegas.get("stdevs")
 
         # k / kf
-        k_kf_grid = kgrid / params.kF
+        k_kf_grid = kgrid / param.kF
 
         # Plot numerically exact result for n = 2
         if i == 1
             # Compare with bare quadrature results (stored in Hartree a.u.)
             rs_quad = 2.0
             sosem_quad = np.load("results/data/soms_rs=$(rs_quad)_beta_ef=40.0.npz")
-            # np.load("results/data/soms_rs=$(Float64(params.rs))_beta_ef=$(params.beta).npz")
+            # np.load("results/data/soms_rs=$(Float64(param.rs))_beta_ef=$(param.beta).npz")
             k_kf_grid_quad = np.linspace(0.0, 6.0; num=600)
             # Get Thomas-Fermi screening factor to non-dimensionalize rs = 2 quadrature results
-            params_quad = Parameter.atomicUnit(0, rs_quad)    # (dimensionless T, rs)
-            eTF_quad = params_quad.qTF^2 / (2 * params_quad.me)
+            param_quad = Parameter.atomicUnit(0, rs_quad)    # (dimensionless T, rs)
+            eTF_quad = param_quad.qTF^2 / (2 * param_quad.me)
             c1c_quad_dimless = sosem_quad.get("bare_c") / eTF_quad^2
             # qTF_quad = Parameter.atomicUnit(0, rs_quad).qTF    # (dimensionless T, rs)
             # c1c_quad_dimless = 4 * sosem_quad.get("bare_c") / qTF_quad^4

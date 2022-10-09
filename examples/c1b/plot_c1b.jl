@@ -6,7 +6,7 @@ using SOSEM
 @pyimport numpy as np
 @pyimport matplotlib.pyplot as plt
 
-# NOTE: Call from main project directory as: julia examples/c1d/plot_c1d.jl
+# NOTE: Call from main project directory as: julia examples/c1b/plot_c1b.jl
 
 function main()
     rs = 2.0
@@ -15,8 +15,8 @@ function main()
     solver = :vegasmc
     expand_bare_interactions = true
 
-    orders = [2]
-    nevals = [1e7]
+    orders = [2, 3, 4]
+    nevals = [1e8, 1e8, 1e8]
     maxeval = maximum(nevals)
     max_order = maximum(orders)
 
@@ -36,7 +36,7 @@ function main()
     for (i, order) in enumerate(orders)
         # Load the vegas results
         data_path =
-            "results/data/c1d_n=$(order)_rs=$(Float64(rs))_" *
+            "results/data/c1b_n=$(order)_rs=$(Float64(rs))_" *
             "beta_ef=$(beta)_lambda=$(mass2)_" *
             "neval=$(nevals[i])_$(intn_str)$(solver).npz"
         print("Loading data for n = $order at '$data_path'...")
@@ -70,11 +70,11 @@ function main()
             # Get Thomas-Fermi screening factor to non-dimensionalize rs = 2 quadrature results
             param_quad = Parameter.atomicUnit(0, rs_quad)    # (dimensionless T, rs)
             eTF_quad = param_quad.qTF^2 / (2 * param_quad.me)
-            c1c_quad_dimless = sosem_quad.get("bare_c") / eTF_quad^2
+            c1b_quad_dimless = sosem_quad.get("bare_b") / eTF_quad^2
             # qTF_quad = Parameter.atomicUnit(0, rs_quad).qTF    # (dimensionless T, rs)
-            # c1c_quad_dimless = 4 * sosem_quad.get("bare_c") / qTF_quad^4
+            # c1b_quad_dimless = 4 * sosem_quad.get("bare_c") / qTF_quad^4
             ax.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
-            ax.plot(k_kf_grid_quad, c1c_quad_dimless, "k"; label="\$n=2\$ (bare, quad)")
+            ax.plot(k_kf_grid_quad, c1b_quad_dimless, "k"; label="\$n=2\$ (bare, quad)")
         end
 
         # Plot Monte-Carlo result at this order
@@ -99,7 +99,7 @@ function main()
     ax.set_xlim(0.0, 3.0)
     ax.set_xlabel("\$k / k_F\$")
     ax.set_ylabel(
-        "\$C^{(1d)}_n(\\mathbf{k}) \\,/\\, {\\epsilon}^{\\hspace{0.1em}2}_{\\mathrm{TF}}\$",
+        "\$C^{(1b)}_n(\\mathbf{k}) \\,/\\, {\\epsilon}^{\\hspace{0.1em}2}_{\\mathrm{TF}}\$",
     )
     ax.text(1.75, -0.4, "\$r_s = 2,\\, \\beta = 200 \\epsilon_F,\$"; fontsize=14)
     ax.text(
@@ -108,17 +108,17 @@ function main()
         "\$\\lambda = \\frac{\\epsilon_{\\mathrm{Ry}}}{10},\\, N_{\\mathrm{eval}} = \\mathrm{1e8}\$";
         fontsize=14,
     )
-    plt.title("Using fixed bare Coulomb interactions \$V_1\$, \$V_2\$")
-    # plt.title(
-    #     "Using re-expanded Coulomb interactions \$V_1[V_\\lambda]\$, \$V_2[V_\\lambda]\$",
-    # )
+    # plt.title("Using fixed bare Coulomb interactions \$V_1\$, \$V_2\$")
+    plt.title(
+        "Using re-expanded Coulomb interactions \$V_1[V_\\lambda]\$, \$V_2[V_\\lambda]\$",
+    )
     plt.tight_layout()
     # Save the plot
     fig.savefig(
-        "results/c1d/c1d_n=$(max_order)_rs=$(rs)_" *
+        "results/c1b/c1b_n=$(max_order)_rs=$(rs)_" *
         "beta_ef=$(beta)_lambda=$(mass2)_" *
-        "neval=$(maxeval)_$(solver).pdf",
-        # "neval=$(maxeval)_$(intn_str)$(solver).pdf",
+        # "neval=$(maxeval)_$(solver).pdf",
+        "neval=$(maxeval)_$(intn_str)$(solver).pdf",
     )
     plt.close("all")
     return

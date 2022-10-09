@@ -2,7 +2,7 @@
 Construct a DiagramTree for the local second-order moment (SOSEM) diagram derived from the Hubbard-like
 Σ₂[G, V, Γⁱ₃ = Γ₀] (or Σ₂ itself), re-expanded to O(Vⁿ) in a statically-screened interaction V[λ].
 """
-function build_nonlocal(s::Settings)
+function build_local(s::Settings)
     DiagTree.uidreset()
 
     # TODO: reexpress bare interaction lines via Parquet.vertex4 to allow for
@@ -26,20 +26,19 @@ function build_susceptibility(cfg::Config)
 end
 
 function build_poln_subdiagram(cfg::Config)
-
     @todo
 
     generalized_poln = Parquet.polarization()
     charge_poln = mergeby(generalized_poln.diagram) # 2(Π↑↑ + Π↑↓)
 
     # Now construct the self-energy diagram tree
-    diagram_tree =
-        DiagramF64(getID(cfg.params), Prod(), [g_line; v_lines; charge_poln]; name=s.name)
+    diagtree =
+        DiagramF64(getID(cfg.param), Prod(), [g_line; v_lines; charge_poln]; name=s.name)
 
     # Compile to expression tree
-    expression_tree = ExprTree.build([diagram_tree])
+    exprtree = ExprTree.build([diagtree])
 
-    return diagram_tree, expression_tree
+    return diagtree, exprtree
 end
 
 """

@@ -1,7 +1,6 @@
 using ElectronGas
 using ElectronLiquid.UEG: ParaMC
 using Measurements
-using MPI
 using SOSEM
 using PyCall
 
@@ -10,12 +9,6 @@ using PyCall
 @pyimport matplotlib.pyplot as plt
 
 function main()
-    MPI.Init()
-    mpi_comm = MPI.COMM_WORLD
-    mpi_rank = MPI.Comm_rank(mpi_comm)
-    # mpi_size = MPI.Comm_size(mpi_comm)
-    is_main_thread = (mpi_rank == 0)
-
     # Debug mode
     if isinteractive()
         ENV["JULIA_DEBUG"] = SOSEM
@@ -30,17 +23,15 @@ function main()
     )
 
     # UEG parameters for MC integration
-    params =
+    param =
         ParaMC(; order=settings.n_order, rs=2.0, beta=200.0, mass2=1e-8, isDynamic=false)
-    if is_main_thread
-        @debug "β / EF = $(params.beta), β = $(params.β), EF = $(params.EF)" maxlog = 1
-    end
+    @debug "β / EF = $(param.beta), β = $(param.β), EF = $(param.EF)" maxlog = 1
 
     # K-mesh for measurement
     # k_kf_grid = [0.0]
     k_kf_grid = np.load("results/kgrids/kgrid_vegas_dimless_n=77_small.npy")
     # k_kf_grid = np.load("results/kgrids/kgrid_vegas_dimless_n=25_small.npy")
-    kgrid = params.kF * k_kf_grid
+    kgrid = param.kF * k_kf_grid
 
     # Settings
     alpha = 2.0
@@ -56,15 +47,13 @@ function main()
     cfg = DiagGen.Config(settings)
 
     # Generate the diagrams
-    diag_tree, expr_tree = DiagGen.build_nonlocal(settings)
+    diagparam, diagtree, exprtree = DiagGen.build_nonlocal(settings)
 
     # Check the diagram tree
-    if is_main_thread
-        DiagGen.checktree(diag_tree, settings)
-    end
+    DiagGen.checktree(diagtree, settings)
 
     # NOTE: We assume there is only a single root in the ExpressionTree
-    @assert length(expr_tree.root) == 1
+    @assert length(exprtree.root) == 1
 
     # Loop over external momenta and integrate
     means = Vector{Float64}()
@@ -72,14 +61,13 @@ function main()
     # Bin external momenta, performing a single integration
     res = UEG_MC.integrate_nonlocal(
         cfg,
-        params,
-        diag_tree,
-        expr_tree;
+        param,
+        diagparam,
+        exprtree;
         kgrid=kgrid,
         alpha=alpha,
         neval=neval,
         print=print,
-        is_main_thread=is_main_thread,
     )
     # Extract the result on the main thread
     if !isnothing(res)
@@ -87,7 +75,7 @@ function main()
         stdevs = res.stdev
     end
 
-    if length(means) == 1 && params.order == 2
+    if length(means) == 1 && param.order == 2
         # Check result at single k-point
         res = measurement(means[1], stdevs[1])
         exact = -1
@@ -96,7 +84,7 @@ function main()
         println("Result - Exact (π²/8): $(res - exact)")
         println("Standard score: $(score)")
     elseif length(means) > 1 && plot
-        if params.order == 2
+        if param.order == 2
             # Check result at k = 0
             res_k0 = measurement(means[1], stdevs[1])
             exact = -1
@@ -112,22 +100,15 @@ function main()
         end
         # Save the result
         savename =
-            "results/data/c1c_n=$(params.order)_rs=$(params.rs)_" *
-            "beta_ef=$(params.beta)_lambda=$(params.mass2)_" *
+            "results/data/c1c_n=$(param.order)_rs=$(param.rs)_" *
+            "beta_ef=$(param.beta)_lambda=$(param.mass2)_" *
             "neval=$(maxeval)_$(intn_str)$(solver)"
         # Remove old data, if it exists
         rm(savename; force=true)
         # TODO: kwargs implementation (kgrid_<solver>...)
         np.savez(
             savename;
-            params=[
-                params.order,
-                params.rs,
-                params.beta,
-                params.kF,
-                params.qTF,
-                params.mass2,
-            ],
+            param=[param.order, param.rs, param.beta, param.kF, param.qTF, param.mass2],
             kgrid=kgrid,
             means=means,
             stdevs=stdevs,
@@ -141,17 +122,17 @@ function main()
             # Similarly, the bare results were calculated at zero temperature (beta is arb.)
             rs_quad = 2.0
             sosem_quad = np.load("results/data/soms_rs=$(rs_quad)_beta_ef=40.0.npz")
-            # np.load("results/data/soms_rs=$(Float64(params.rs))_beta_ef=$(params.beta).npz")
+            # np.load("results/data/soms_rs=$(Float64(param.rs))_beta_ef=$(param.beta).npz")
             k_kf_grid_quad = np.linspace(0.0, 6.0; num=600)
             # Non-dimensionalize rs = 2 quadrature results by Thomas-Fermi energy
-            params_quad = Parameter.atomicUnit(0, rs_quad)    # (dimensionless T, rs)
-            eTF_quad = params_quad.qTF^2 / (2 * params_quad.me)
+            param_quad = Parameter.atomicUnit(0, rs_quad)    # (dimensionless T, rs)
+            eTF_quad = param_quad.qTF^2 / (2 * param_quad.me)
             c1c_quad_dimless = sosem_quad.get("bare_c") / eTF_quad^2
             ax.plot(
                 k_kf_grid_quad,
                 c1c_quad_dimless,
                 "k";
-                label="\$n=$(params.order)\$ (quad)",
+                label="\$n=$(param.order)\$ (quad)",
             )
         end
         ax.plot(
@@ -160,17 +141,17 @@ function main()
             "o-";
             markersize=2,
             color="C0",
-            label="\$n=$(params.order)\$ ($solver)",
+            label="\$n=$(param.order)\$ ($solver)",
         )
         ax.fill_between(k_kf_grid, means - stdevs, means + stdevs; color="C0", alpha=0.4)
         ax.legend(; loc="best")
         ax.set_xlabel("\$k / k_F\$")
-        ax.set_ylabel("\$C^{(1c)}(\\mathbf{k}) \\,/\\, q^{4}_{\\mathrm{TF}}\$")
+        ax.set_ylabel("\$C^{(1c)}(\\mathbf{k}) \\,/\\, E^{2}_{\\mathrm{TF}}\$")
         ax.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
         plt.tight_layout()
         fig.savefig(
-            "results/c1c/n=$(params.order)/c1c_n=$(params.order)_rs=$(params.rs)_" *
-            "beta_ef=$(params.beta)_lambda=$(params.mass2)_" *
+            "results/c1c/n=$(param.order)/c1c_n=$(param.order)_rs=$(param.rs)_" *
+            "beta_ef=$(param.beta)_lambda=$(param.mass2)_" *
             "neval=$(maxeval)_$(intn_str)$(solver).pdf",
         )
         plt.close("all")

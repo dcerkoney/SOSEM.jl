@@ -30,10 +30,6 @@ function green2(Ek, τ, beta)
     end
 
     return green *= s
-    #   if (isfinite(green) == false)
-    #     ABORT("Step:" << Para.Counter << ", Green is too large! Tau=" << Tau
-    #                   << ", Ek=" << Ek << ", Green=" << green << ", Mom"
-    #                   << ToString(Mom));
 end
 
 """Second/third-order counter-term for G"""
@@ -140,26 +136,21 @@ end
 
 """Evaluate a statically screened Coulomb interaction line."""
 function eval(id::BareInteractionId, K, siteidx, varT, p::ParaMC)
-    # TODO: Implement check for bare interaction using: is_bare = (order[end] = -1)
-    # eval(id::InteractionId, K, varT) = e0^2 / ϵ0 / (dot(K, K) + mass2)
+    # TODO: Implement check for bare interaction using: is_bare = (order[end] = 1)
     e0, ϵ0, mass2 = p.e0, p.ϵ0, p.mass2
-    # dim, e0, ϵ0, mass2 = p.dim, p.e0, p.ϵ0, p.mass2
     qd = sqrt(dot(K, K))
     # Bare Coulomb interaction
-    if id.order[4] == -1
+    if id.order[4] == 1
         @debug "Bare V, T = $(id.extT)" maxlog=5
         return CoulombBareinstant(qd, p)
     # Screened Coulomb interaction
     elseif id.order[2] == 0
-        # @assert id.type == Instant
-        # return e0^2 / ϵ0 / (dot(K, K) + mass2)
         return Coulombinstant(qd, p)
     # Counterterms for screened interaction
     else
-        # @assert id.type == Instant
         invK = 1.0 / (qd^2 + mass2)
         return e0^2 / ϵ0 * invK * (mass2 * invK)^id.order[2]
     end
 end
 
-end # module Propagators
+end  # module Propagators

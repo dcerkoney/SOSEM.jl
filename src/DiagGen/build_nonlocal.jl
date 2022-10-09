@@ -1,61 +1,112 @@
 """
-Construct a DiagramTree for a non-local second-order moment (SOSEM) diagram derived from
-Σ₂[G, V, Γⁱ₃ = Γ₀] (or Σ₂ itself), re-expanded to O(Vⁿ) in a statically-screened interaction V[λ].
+Construct diagram and expression trees for a non-local second-order moment (SOSEM) diagram derived 
+from Σ₂[G, V, Γⁱ₃ = Γ₀] (or Σ₂ itself) to O(Vⁿ) for a statically-screened interaction V[λ].
 """
 function build_nonlocal(s::Settings)
     DiagTree.uidreset()
+    # Construct the self-energy diagram tree without counterterms
+    diagparam, diagtree = build_diagtree(s)
+    # Compile to expression tree
+    exprtree = ExprTree.build([diagtree])
+    return diagparam, diagtree, exprtree
+end
 
-    # Initialize DiagGen configuration containing diagram parameters propagator
-    # and vertex momentum/time data, (expansion) order info, etc.
-    cfg = Config(s)
+"""
+Construct a list of all expression trees for non-local second-order moment (SOSEM) diagrams derived from
+Σ₂[G, V, Γⁱ₃ = Γ₀] (or Σ₂ itself) to O(ξⁿ) for a statically-screened interaction V[λ] with counterterms.
+"""
+function build_nonlocal_with_ct(s::Settings; renorm_mu=false)
+    DiagTree.uidreset()
+    # Generate expression trees for each partition
+    partitions = Tuple{Int,Int,Int}[]
+    diagparams = Vector{DiagParaF64}()
+    diagtrees = Vector{DiagramF64}()
+    exprtrees = Vector{ExprTreeF64}()
+    for p in counterterm_partitions_fixed_order(s.n_expand; renorm_mu=renorm_mu)
+        # Build diagram tree for this partition
+        @debug "Partition (n_loop, n_ct_mu, n_ct_lambda): $p"
+        diagparam, diagtree = build_diagtree(s; n_loop=p[1])
+
+        # Build tree with counterterms (∂λ(∂μ(DT))) via automatic differentiation
+        dμ_diagtree = DiagTree.derivative([diagtree], BareGreenId, p[2]; index=1)
+        dλ_dμ_diagtree = DiagTree.derivative(dμ_diagtree, BareInteractionId, p[3]; index=2)
+        if isempty(dλ_dμ_diagtree)
+            @warn("Ignoring partition $p with no diagrams")
+            continue
+        end
+
+        # Compile to expression tree and save results for this partition
+        exprtree = ExprTree.build(dλ_dμ_diagtree)
+        push!(partitions, p)
+        push!(diagparams, diagparam)
+        push!(exprtrees, exprtree)
+        append!(diagtrees, dλ_dμ_diagtree)
+    end
+    return partitions, diagparams, diagtrees, exprtrees
+end
+
+"""
+Generate a diagram tree for the one-crossing Σ₂[G, V, Γⁱ₃ = Γ₀] diagram
+(without dashed G-lines) to O(Vⁿ) for a statically-screened interaction V[λ].
+"""
+function build_sigma2_nonlocal(s::Settings)
+    @assert isempty(s.indices_g_dash) && return build_nonlocal(s)
+end
+
+"""
+Construct a diagram tree for a non-local second-order 
+moment (SOSEM) observable at the given loop order.
+"""
+function build_diagtree(s::Settings; n_loop::Int=s.n_expand)
+    # Initialize DiagGen configuration containing diagram parameters, partition,
+    # propagator and vertex momentum/time data, (expansion) order info, etc.
+    cfg = Config(s, n_loop)
 
     # The number of (possibly indistinct) diagram trees to generate is: 
-    # ((n_expandable n_expand)) = binomial(n_expandable + n_expand - 1, n_expand)
-    n_trees_naive = binomial(cfg.n_expandable + cfg.n_expand - 1, cfg.n_expand)
+    # ((n_expandable n_loop)) = binomial(n_expandable + n_loop - 1, n_loop)
+    n_trees_naive = binomial(cfg.n_expandable + cfg.n_loop - 1, cfg.n_loop)
     vprintln(
         s,
         info,
-        "Generating (($(cfg.n_expandable) $(cfg.n_expand))) = $n_trees_naive expanded trees...",
+        "Generating (($(cfg.n_expandable) $(cfg.n_loop))) = $n_trees_naive expanded subtrees...",
     )
     # Generate a list of all expanded diagrams at fixed order n
     tree_count = 0
     som_diags = Vector{DiagramF64}()
-    for expansion_orders in weak_integer_compositions(cfg.n_expand, cfg.n_expandable)
+    for expansion_orders in weak_integer_compositions(cfg.n_loop, cfg.n_expandable)
         # Filter out invalid expansions due to dashed lines and/or subdiagram properties
-        if is_invalid_expansion(cfg, expansion_orders)
+        if _is_invalid_expansion(cfg, expansion_orders)
             continue
         end
         # Build the subdiagram corresponding to the current expansion orders
-        this_diag, tree_count = build_subdiagram(cfg, expansion_orders, tree_count)
+        this_diag, tree_count = _build_subdiagram(cfg, expansion_orders, tree_count)
         push!(som_diags, this_diag)
         tree_count += 1
     end
     vprintln(s, info, "Done! (discarded $(n_trees_naive - tree_count) invalid expansions)")
 
-    # Now construct the self-energy diagram tree
-    diagram_tree = DiagramF64(getID(cfg.params), Sum(), som_diags; name=s.name)
-
-    # Compile to expression tree
-    expression_tree = ExprTree.build([diagram_tree])
-
-    return diagram_tree, expression_tree
+    # Now construct the self-energy diagram tree and parameters
+    diagparam = cfg.param
+    diagtree = DiagramF64(getID(diagparam), Sum(), som_diags; name=s.name)
+    @debug "\nDiagTree:\n" * repr_tree(diagtree)
+    return diagparam, diagtree
 end
 
 """Check if a (weak) composition of expansion orders is valid for a given observable/settings."""
-function is_invalid_expansion(cfg::Config, expansion_orders::Vector{Int})
+@inline function _is_invalid_expansion(cfg::Config, expansion_orders::Vector{Int})
     # We can't spend any orders on dashed line(s), if any exist
     is_invalid =
         !isempty(cfg.G.dash_indices) && any(expansion_orders[cfg.G.dash_indices] .!= 0)
     if cfg.has_gamma3
-        # Beyond bare order we must spend at least one order on a 3-point vertex insertion
+        # We must spend at least one order on the 3-point vertex insertion
         is_invalid = is_invalid || expansion_orders[cfg.Gamma3.index] == 0
     end
     return is_invalid
 end
 
 """Construct a second-order self-energy (moment) subdiagram"""
-function build_subdiagram(cfg::Config, expansion_orders::Vector{Int}, tree_count)
-    subdiag = cfg.has_gamma3 ? build_subdiagram_gamma : build_subdiagram_gamma0
+function _build_subdiagram(cfg::Config, expansion_orders::Vector{Int}, tree_count)
+    subdiag = cfg.has_gamma3 ? _build_subdiagram_gamma : _build_subdiagram_gamma0
     return subdiag(cfg, expansion_orders; tree_count)
 end
 
@@ -64,15 +115,15 @@ Construct a second-order self-energy (moment) subdiagram with bare Γⁱ₃ inse
 
 D = (G₁ ∘ G₂ ∘ G₃ ∘ V₁ ∘ V₂)
 """
-function build_subdiagram_gamma0(cfg::Config, expansion_orders::Vector{Int}; tree_count)
-    # The first available tau index for G(1,n) is 2 when n > 2, 
+function _build_subdiagram_gamma0(cfg::Config, expansion_orders::Vector{Int}; tree_count)
+    # The first available tau index for G(1,n) is 2 when n_loop > 0, 
     # and FeynmanDiagram.firstTauIdx(Ver3Diag) = 3 otherwise
-    first_fti = cfg.n_order > 2 ? 2 : FeynmanDiagram.firstTauIdx(Ver3Diag)
+    first_fti = cfg.n_loop > 0 ? 2 : FeynmanDiagram.firstTauIdx(Ver3Diag)
     # The firstTauIdx for each G line depends on the expansion order of the previous G.
     g_ftis, g_max_ti = Parquet.findFirstTauIdx(
         expansion_orders,
         repeat([GreenDiag], cfg.n_g),
-        first_fti, # = 2 when n > 2, otherwise = 3
+        first_fti,  # = 2 when n > 2, otherwise = 3
         1,
     )
 
@@ -84,7 +135,7 @@ function build_subdiagram_gamma0(cfg::Config, expansion_orders::Vector{Int}; tre
     g_flis, g_max_li = Parquet.findFirstLoopIdx(expansion_orders, first_fli)
 
     @debug """
-    \nTree #$(tree_count+1):
+    \nSubtree #$(tree_count+1):
         • Expansion orders:\t\t\t$expansion_orders
         • First tau indices for G_i's:\t\t$g_ftis (maxTauIdx = $g_max_ti)
         • First momentum loop indices for G_i's:\t$g_flis (maxLoopIdx = $g_max_li)
@@ -97,7 +148,7 @@ function build_subdiagram_gamma0(cfg::Config, expansion_orders::Vector{Int}; tre
     # Green's function and bare interaction params
     g_params = [
         reconstruct(
-            cfg.params;
+            cfg.param;
             type=GreenDiag,
             innerLoopNum=expansion_orders[i],
             firstLoopIdx=g_flis[i],
@@ -107,10 +158,10 @@ function build_subdiagram_gamma0(cfg::Config, expansion_orders::Vector{Int}; tre
     # v_ftis = [taupair[1] for taupair in cfg.V.taus]
     v_params = [
         reconstruct(
-            cfg.params;
+            cfg.param;
             type=Ver4Diag,
             innerLoopNum=0,
-            firstLoopIdx=1, # =0
+            firstLoopIdx=1,  # =0
             firstTauIdx=cfg.V.taus[i][1],
         ) for i in 1:(cfg.n_v)
     ]
@@ -121,7 +172,7 @@ function build_subdiagram_gamma0(cfg::Config, expansion_orders::Vector{Int}; tre
         i in 1:(cfg.n_g)
     ]
 
-    # We optionally mark the outer two bare interactions as fixed via `order[end] = -1`
+    # We optionally mark the outer two bare interactions as fixed via `order[end] = 1`
     v_ids = [
         BareInteractionId(
             v_params[i],
@@ -152,20 +203,20 @@ For (1) left and (2) right Γⁱ₃ insertions, we have:
 (1) D = (G₁ ∘ G₃ ∘ V₁ ∘ V₂) ∘ (Γⁱ₃ ∘ G₂),
 (2) D = (G₁ ∘ G₂ ∘ V₁ ∘ V₂) ∘ (Γⁱ₃ ∘ G₃).
 """
-function build_subdiagram_gamma(cfg::Config, expansion_orders::Vector{Int}; tree_count)
+function _build_subdiagram_gamma(cfg::Config, expansion_orders::Vector{Int}; tree_count)
     # The firstTauIdx for each expandable item depends on the expansion order of the previous item.
     # We must expand and group by Γⁱ₃ subdiagram first, so it comes first in the expansion order list.
     g_ftis, max_ti = Parquet.findFirstTauIdx(
         expansion_orders,
         [Ver3Diag; repeat([GreenDiag], cfg.n_g)],
-        FeynmanDiagram.firstTauIdx(Ver3Diag), # = 1
+        FeynmanDiagram.firstTauIdx(Ver3Diag),  # = 1
         1,
     )
 
     # First loop indices for each Green's function
     # NOTE: The default value for a self-energy observable is FeynmanDiagram.firstLoopIdx(SigmaDiag) = 2.
     #       Here we add an offset of n_v = 2 due to the outer two bare interactions.
-    first_fli = FeynmanDiagram.firstLoopIdx(SigmaDiag, cfg.n_v) # = 4
+    first_fli = FeynmanDiagram.firstLoopIdx(SigmaDiag, cfg.n_v)  # = 4
     @assert first_fli == 4
     g_flis, max_li = Parquet.findFirstLoopIdx(expansion_orders, first_fli)
 
@@ -175,7 +226,7 @@ function build_subdiagram_gamma(cfg::Config, expansion_orders::Vector{Int}; tree
     gamma3_fli = popfirst!(g_flis)
 
     @debug """
-    \nTree #$(tree_count+1):
+    \nSubtree #$(tree_count+1):
         • Expansion orders:\t\t\t$expansion_orders
         • G expansion orders:\t\t\t$(expansion_orders[1:(cfg.n_g)])
         • First tau indices for G_i's:\t\t$g_ftis (maxTauIdx = $max_ti)
@@ -183,7 +234,7 @@ function build_subdiagram_gamma(cfg::Config, expansion_orders::Vector{Int}; tree
         • Gamma_3 expansion order:\t\t$(expansion_orders[cfg.Gamma3.index])
         • First tau index for Gamma_3:\t\t$gamma3_fti
         • First momentum loop index for Gamma_3:\t$gamma3_fli
-    """ maxlog = 10
+    """
 
     # TODO: Add counterterms---for n[i] expansion order of line i, spend n_cti
     #       orders on counterterm derivatives in all possible ways (0 < n_cti < n[i]).
@@ -192,7 +243,7 @@ function build_subdiagram_gamma(cfg::Config, expansion_orders::Vector{Int}; tree
     # Green's function and bare interaction params
     g_params = [
         reconstruct(
-            cfg.params;
+            cfg.param;
             type=GreenDiag,
             innerLoopNum=expansion_orders[i],
             firstLoopIdx=g_flis[i],
@@ -201,7 +252,7 @@ function build_subdiagram_gamma(cfg::Config, expansion_orders::Vector{Int}; tree
     ]
     v_params = [
         reconstruct(
-            cfg.params;
+            cfg.param;
             type=Ver4Diag,
             innerLoopNum=0,
             firstLoopIdx=1,
@@ -209,7 +260,7 @@ function build_subdiagram_gamma(cfg::Config, expansion_orders::Vector{Int}; tree
         ) for i in 1:(cfg.n_v)
     ]
     gamma3_params = reconstruct(
-        cfg.params;
+        cfg.param;
         type=Ver3Diag,
         innerLoopNum=expansion_orders[cfg.Gamma3.index],
         firstLoopIdx=gamma3_fli,
@@ -251,7 +302,7 @@ function build_subdiagram_gamma(cfg::Config, expansion_orders::Vector{Int}; tree
 
     # Construct the diagram tree for Gamma_3 * G_3
     gamma3_gi =
-        DiagramF64(GenericId(gamma3_params), Sum(), gamma3_gi_diags; name=cfg.Gamma3.name)
+        DiagramF64(GenericId(gamma3_params), Sum(), gamma3_gi_diags; name=gamma3_gi_name)
 
     # Re-expanded Green's function and bare interaction lines
     g_lines_rest = [
@@ -259,7 +310,7 @@ function build_subdiagram_gamma(cfg::Config, expansion_orders::Vector{Int}; tree
         i in idx_rest
     ]
 
-    # Mark the outer two bare interactions as fixed via `order[end] = -1`
+    # Mark the outer two bare interactions as fixed via `order[end] = 1`
     v_ids = [
         BareInteractionId(
             v_params[i],
@@ -285,12 +336,4 @@ function build_subdiagram_gamma(cfg::Config, expansion_orders::Vector{Int}; tree
     # Build the full subdiagram
     subdiagram = DiagramF64(cfg.generic_id, Prod(), [gamma3_gi; g_lines_rest; v_lines])
     return subdiagram, tree_count
-end
-
-"""
-Generate a DiagramTree for the one-crossing Σ₂[G, V, Γⁱ₃ = Γ₀] diagram (without
-dashed G-lines), re-expanded to O(Vⁿ) in a statically-screened interaction V[λ].
-"""
-function build_sigma2_nonlocal(s::Settings)
-    @assert isempty(s.indices_g_dash) && return build_nonlocal(s)
 end
