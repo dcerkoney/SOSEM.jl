@@ -13,7 +13,7 @@ function integrate_nonlocal_with_ct(
     print=-1,
     solver=:vegasmc,
 )
-    @todo
+    # TODO
 end
 
 function integrate_nonlocal(
