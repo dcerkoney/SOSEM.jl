@@ -1,8 +1,23 @@
 using ..DiagGen
 using ..UEG_MC
 
+function integrate_nonlocal_with_ct(
+    settings::DiagGen.Settings,
+    param::UEG.ParaMC,
+    partitions::Tuple{Int,Int,Int},
+    diagparams::Vector{DiagParaF64},
+    exprtrees::Vector{ExprTreeF64};
+    kgrid=[0.0],
+    alpha=3.0,
+    neval=1e5,
+    print=-1,
+    solver=:vegasmc,
+)
+    @todo
+end
+
 function integrate_nonlocal(
-    cfg::DiagGen.Config,
+    settings::DiagGen.Settings,
     param::UEG.ParaMC,
     diagparam::DiagParaF64,
     exprtree::ExprTreeF64;
@@ -12,6 +27,9 @@ function integrate_nonlocal(
     print=-1,
     solver=:vegasmc,
 )
+    # DiagGen config from settings
+    cfg = DiagGen.Config(settings)
+
     # Pass innerLoopNum to integrand
     innerLoopNum = diagparam.innerLoopNum
 

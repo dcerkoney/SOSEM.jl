@@ -19,9 +19,6 @@ function bare_integral_k0(;
     # UEG parameters for MC integration
     param = ParaMC(; order=settings.n_order, rs=2.0, beta=beta, isDynamic=false)
 
-    # DiagGen config from settings
-    cfg = DiagGen.Config(settings)
-
     # Generate the diagrams
     diagparam, diagtree, exprtree = DiagGen.build_nonlocal(settings)
     DiagGen.checktree(diagtree, settings)
@@ -29,7 +26,7 @@ function bare_integral_k0(;
 
     # Loop over external momenta and integrate
     res = UEG_MC.integrate_nonlocal(
-        cfg,
+        settings,
         param,
         diagparam,
         exprtree;

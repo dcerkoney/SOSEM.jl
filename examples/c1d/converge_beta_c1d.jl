@@ -10,7 +10,7 @@ using PyCall
 
 @enum MeshType begin
     linear
-    log2
+    logarithmic
 end
 
 function main()
@@ -37,11 +37,12 @@ function main()
     solver = :vegas
 
     # Number of evals below and above kF
-    neval = 1e6
+    neval = 1e8
 
-    # Either use a linear or log2 mesh
-    mesh_type = linear::MeshType
-    # mesh_type = log2::MeshType
+    # Either use a linear or logarithmic mesh
+    # mesh_type = linear::MeshType
+    mesh_type = logarithmic::MeshType
+    meshtypestr = (mesh_type == linear) ? "linear_" : "log2_"
 
     local param
     means = Vector{Float64}()
@@ -60,9 +61,6 @@ function main()
             ParaMC(; order=settings.n_order, rs=2.0, isDynamic=false, beta=beta, mass2=0.1)
         @debug "β / EF = $(param.beta), β = $(param.β), EF = $(param.EF)" maxlog = 1
 
-        # DiagGen config from settings
-        cfg = DiagGen.Config(settings)
-
         # Generate the diagrams
         diagparam, diagtree, exprtree = DiagGen.build_nonlocal(settings)
 
@@ -74,7 +72,7 @@ function main()
 
         # Bin external momenta, performing a single integration
         res = UEG_MC.integrate_nonlocal(
-            cfg,
+            settings,
             param,
             diagparam,
             exprtree;
@@ -117,8 +115,8 @@ function main()
         end
         # Save the result
         savename =
-            "results/data/converge_beta_c1d_n=$(param.order)_" *
-            "rs=$(param.rs)_lambda=$(param.mass2)_" *
+            "results/data/converge_beta_$(meshtypestr)c1d_" *
+            "n=$(param.order)_rs=$(param.rs)_lambda=$(param.mass2)_" *
             "neval=$(neval)_$(intn_str)$(solver)"
         # Remove old data, if it exists
         rm(savename; force=true)
@@ -151,8 +149,8 @@ function main()
             param_quad = Parameter.atomicUnit(0, rs_quad)    # (dimensionless T, rs)
             eTF_quad = param_quad.qTF^2 / (2 * param_quad.me)
             c1d_quad_unif_dimless = sosem_quad.get("bare_d")[1] / eTF_quad^2
-            # Either linear or log2 grid
-            beta_plot = (mesh_type == linear) ? beta_grid : log2.beta_grid
+            # Either linear or logarithmic grid
+            beta_plot = (mesh_type == linear) ? beta_grid : log2.(beta_grid)
             ax.axhline(
                 DiagGen.get_exact_k0(settings.observable);
                 color="k",
@@ -188,7 +186,6 @@ function main()
             ax.set_ylabel("\$C^{(1d)}(\\mathbf{k}) \\,/\\, E^{2}_{\\mathrm{TF}}\$")
             ax.set_xlim(minimum(beta_plot), maximum(beta_plot))
             # ax.set_xticks(collect(range(1, stop=14, step=2)), minor=true)
-            meshtypestr = (mesh_type == linear) ? "linear_" : "log2_"
             plt.tight_layout()
             fig.savefig(
                 "results/c1d/n=$(param.order)/converge_beta_$(meshtypestr)c1d_n=$(param.order)_" *

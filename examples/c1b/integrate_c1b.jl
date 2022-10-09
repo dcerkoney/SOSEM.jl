@@ -43,9 +43,6 @@ function main()
     # Number of evals below and above kF
     neval = 1e6
 
-    # DiagGen config from settings
-    cfg = DiagGen.Config(settings)
-
     # Generate the diagrams
     diagparam, diagtree, exprtree = DiagGen.build_nonlocal(settings)
 
@@ -60,7 +57,7 @@ function main()
     stdevs = Vector{Float64}()
     # Bin external momenta, performing a single integration
     res = UEG_MC.integrate_nonlocal(
-        cfg,
+        settings,
         mcparam,
         diagparam,
         exprtree;
