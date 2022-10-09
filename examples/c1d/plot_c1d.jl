@@ -70,11 +70,11 @@ function main()
             # Get Thomas-Fermi screening factor to non-dimensionalize rs = 2 quadrature results
             param_quad = Parameter.atomicUnit(0, rs_quad)    # (dimensionless T, rs)
             eTF_quad = param_quad.qTF^2 / (2 * param_quad.me)
-            c1c_quad_dimless = sosem_quad.get("bare_c") / eTF_quad^2
+            c1d_quad_dimless = sosem_quad.get("bare_c") / eTF_quad^2
             # qTF_quad = Parameter.atomicUnit(0, rs_quad).qTF    # (dimensionless T, rs)
-            # c1c_quad_dimless = 4 * sosem_quad.get("bare_c") / qTF_quad^4
+            # c1d_quad_dimless = 4 * sosem_quad.get("bare_c") / qTF_quad^4
             ax.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
-            ax.plot(k_kf_grid_quad, c1c_quad_dimless, "k"; label="\$n=2\$ (bare, quad)")
+            ax.plot(k_kf_grid_quad, c1d_quad_dimless, "k"; label="\$n=2\$ (bare, quad)")
         end
 
         # Plot Monte-Carlo result at this order
