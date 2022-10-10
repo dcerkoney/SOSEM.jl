@@ -185,8 +185,7 @@ end
 """Settings for diagram generation of Σ₂[G, V, Γⁱ₃] and derived second-order moments."""
 @with_kw struct Settings
     observable::Observables = sigma20
-    n_order::Int = 2             # Total order (n_v + loop + CTs)
-    n_expand::Int = n_order - 2  # Expansion order ξ (loop + CTs)
+    n_order::Int = 2  # Total order ξ (loops + CTs)
     verbosity::Verbosity = quiet
     expand_bare_interactions::Bool = false
     name::Symbol = Symbol(string(observable))  # Derive SOSEM name from observable
@@ -219,7 +218,7 @@ lines Σ₂[G, V, Γⁱ₃], where Γⁱ₃ is the improper three-point vertex.
 """
 function _getparam(n_loop_tot::Int)
     # Instantaneous bare interaction (interactionTauNum = 1) 
-    # => innerLoopNum = totalTauNum = n_loop_tot (total loop number)
+    # => innerLoopNum = totalTauNum = n_loop_tot
     return DiagParaF64(;
         type=SigmaDiag,
         hasTau=true,
@@ -232,16 +231,16 @@ function _getparam(n_loop_tot::Int)
 end
 
 """Construct diagram parameters for bare propagators."""
-function propagator_param(type, n_loop, firstTauIdx, firstLoopIdx, filter=[NoHartree])
+function propagator_param(type, n_loop_inner, firstTauIdx, firstLoopIdx, filter=[NoHartree])
     # The bare interaction is instantaneous (interactionTauNum = 1),
-    # so innerLoopNum = totalTauNum = n_loop (inner loop number)
+    # so innerLoopNum = totalTauNum = n_loop_inner
     return DiagParaF64(;
         type=type,
         hasTau=true,
-        innerLoopNum=n_loop,
+        innerLoopNum=n_loop_inner,
         firstTauIdx=firstTauIdx,
         firstLoopIdx=firstLoopIdx,
-        totalLoopNum=n_loop + 3,  # = n_loop_tot + 1
+        totalLoopNum=n_loop_inner + 3,  # = n_loop_tot + 1
         interaction=[FeynmanDiagram.Interaction(ChargeCharge, Instant)],
         filter=filter,
     )
@@ -279,14 +278,14 @@ Bundles names and external/internal variables for Σ₂[G, V, Γⁱ₃]
 @with_kw struct Config
     # Diagram parameters for the SOSEM observable
     param::DiagParaF64
-    # Expansion order info
-    n_order::Int  # Total order (n_v + loop + CTs)
-    n_expand::Int # Expansion order ξ (loop + CTs)
-    n_loop::Int   # Inner loop order
-    n_expandable::Int
     # There are 3 G lines and 2 outer V lines in every SOSEM observable
     n_g::Int = 3
     n_v::Int = 2
+    # Expansion order info
+    n_order::Int                      # Total order ξ (loops + CTs)
+    n_loop::Int                       # Loop order
+    n_expand::Int = n_loop - n_v      # Expansion order for internal lines/vertices
+    n_expandable::Int
     # Data (names, variables, and indices) for G and V lines
     G::GData
     V::VData
@@ -307,7 +306,7 @@ end
 """Construct a Config struct via diagram parameters with/without Γⁱ₃ insertion."""
 function Config(
     settings::Settings,
-    n_loop=settings.n_expand;
+    n_loop=settings.n_order;
     g_names=(:G₁, :G₂, :G₃),
     v_names=(:V₁, :V₂),
     gamma3_name=:Γ₃,
@@ -332,13 +331,11 @@ function _Config(settings::Settings, n_loop, g_names, v_names)
     # Expansion order info
     n_g = 3
     n_v = 2
-    n_order = settings.n_order    # Total order (n_v + loop + CTs)
-    n_expand = settings.n_expand  # Expansion order ξ (loop + CTs)
-    n_loop_tot = n_loop + n_v     # Total loop order
+    n_expand = n_loop - n_v  # Expansion order for internal lines/vertices
     n_expandable = n_g
 
     # Get diagram parameters
-    param = _getparam(n_loop_tot)
+    param = _getparam(n_loop)
 
     # Total size of the SOSEM loop basis dimension (= n_loop + n_v + 1)
     nk = param.totalLoopNum
@@ -383,9 +380,9 @@ function _Config(settings::Settings, n_loop, g_names, v_names)
     # Config struct for low-order case
     return Config(;
         param=param,
-        n_order=n_order,
-        n_expand=n_expand,
+        n_order=settings.n_order,
         n_loop=n_loop,
+        n_expand=n_expand,
         n_expandable=n_expandable,
         G=g_data,
         V=v_data,
@@ -401,13 +398,11 @@ function _Config(settings::Settings, n_loop, g_names, v_names, gamma3_name)
     # Expansion order info
     n_g = 3
     n_v = 2
-    n_order = settings.n_order    # Total order (n_v + loop + CTs)
-    n_expand = settings.n_expand  # Expansion order ξ (loop + CTs)
-    n_loop_tot = n_loop + n_v     # Total loop order
-    n_expandable = n_g + 1        # ( = n_g + n_gamma3)
+    n_expand = n_loop - n_v     # Expansion order for internal lines/vertices
+    n_expandable = n_g + 1      # ( = n_g + n_gamma3)
 
     # Get diagram parameters
-    param = _getparam(n_loop_tot)
+    param = _getparam(n_loop)
 
     # Total size of the SOSEM loop basis dimension (= n_order + 1)
     nk = param.totalLoopNum
@@ -471,9 +466,9 @@ function _Config(settings::Settings, n_loop, g_names, v_names, gamma3_name)
     # Config struct for high-order case
     return Config(;
         param=param,
-        n_order=n_order,
-        n_expand=n_expand,
+        n_order=settings.n_order,
         n_loop=n_loop,
+        n_expand=n_expand,
         n_expandable=n_expandable,
         G=g_data,
         V=v_data,
@@ -502,53 +497,57 @@ Get all counterterm partitions (n1, n2, n3) satisfying the following constraints
     (1) n_min <= n1 + n2 + n3 <= n_max
     (2) n1 > 0 if either n2 > 0 or n3 > 0
 
-By convention, we interpret: n1 = n_loop, n2 = n_∂μ, n3 = n_∂λ (normal order, G order, W order).
+By convention, we interpret: n1 = n_loop, n2 = n_∂μ, n3 = n_∂λ 
+(normal order, G order, W order), where n_loop ≥ 2 is the total loop number.
+If `renorm_mu` is false, then n_ct_mu = 0.
 """
-function counterterm_partitions(n_max::Int, n_min::Int=0; renorm_mu=false)
+function counterterm_partitions(n_max::Int, n_min::Int=2; renorm_mu=false)
+    partitions = Tuple{Int,Int,Int}[]
     if n_max < n_min
-        return Tuple{Int,Int,Int}[]
+        return partitions
+    elseif renorm_mu
+        partitions = [p for p in UEG.partition(n_max) if p[1] ≥ 2 && p[1] + p[2] + p[3] ≥ n_min]
+    else
+        partitions = [(n1, 0, n3) for (n1, n3) in counterterm_split(n_max) if n1 + n3 ≥ n_min]
     end
-    # Include the bare partition, since the integral is non-trivial for SOSEM observables
-    partitions = [(0, 0, 0); partition(n_max; renorm_mu=renorm_mu)]
-    return sort([p for p in partitions if p[1] + p[2] + p[3] >= n_min])
+    return partitions
 end
 
 """
 Get all counterterm partitions (n1, n2, n3) at fixed order n = n1 + n2 + n3.
 """
 function counterterm_partitions_fixed_order(n::Int; renorm_mu=false)
+    if n < 2
+        return Tuple{Int,Int,Int}[]
+    end
     return counterterm_partitions(n, n; renorm_mu=renorm_mu)
 end
 
 """
-Partition the total expansion order `n` into loop and counterterm orders, 
-n ↦ (n_loop, n_ct_mu, n_ct_lambda). 
-
-If `renorm_mu` is false, then n_ct_mu = 0.
-"""
-function partition(n::Int; renorm_mu=false)
-    if renorm_mu
-        return UEG.partition(n)
-    else
-        return sort([(n1, 0, n3) for (n1, n3) in counterterm_split(n) if n1 + n3 ≤ n])
-    end
-end
-
-"""
-Generate weak compositions of size 2 of an integer n,
-(i.e., the cycle (n, 0), (n-1, 1), ..., (0, n)), where 
-(n_order, n_ct_lambda) = (i, j) and n_ct_lambda ≤ n - 1.
+Generate weak compositions of size 2 of an integer n
+(i.e., the cycle (n, 0), (n-1, 1), ..., (0, n)), where
+(n_order, n_ct_lambda) = (i, j) with an additional constraint
+that n_order ≥ 2 (the minimum order for SOSEM observables).
 """
 function counterterm_split(n::Int)
-    splits = []
-    n1::Int = n > 0 ? 1 : 0
-    n2::Int = n > 0 ? n - 1 : 0
-    while n2 >= 0
+    if n < 2
+        return Tuple{Int,Int}[]
+    end
+    splits = Tuple{Int,Int}[]
+    max = 2
+    n1 = 2
+    n2 = max - 2
+    while max <= n
         push!(splits, (n1, n2))
         n1 += 1
         n2 -= 1
+        if n2 < 0
+            max += 1
+            n1 = 2
+            n2 = max - 2
+        end
     end
-    return splits
+    return sort(splits)
 end
 
 """
