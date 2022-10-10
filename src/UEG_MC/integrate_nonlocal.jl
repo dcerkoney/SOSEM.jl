@@ -14,6 +14,9 @@ function integrate_nonlocal_with_ct(
     solver=:vegasmc,
 )
     @todo
+    # DiagGen config from settings
+    cfg = Config(settings)
+
 end
 
 function integrate_nonlocal(

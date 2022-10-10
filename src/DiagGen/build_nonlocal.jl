@@ -27,8 +27,6 @@ function build_nonlocal_with_ct(s::Settings; renorm_mu=false)
         # Build diagram tree for this partition
         @debug "Partition (n_loop, n_ct_mu, n_ct_lambda): $p"
         diagparam, diagtree = build_diagtree(s; n_loop=p[1])
-        @debug "\nDiagTree:\n" * repr_tree(diagtree)
-        println("\n\n")
 
         # Build tree with counterterms (∂λ(∂μ(DT))) via automatic differentiation
         dμ_diagtree = DiagTree.derivative([diagtree], BareGreenId, p[2]; index=1)
@@ -37,6 +35,7 @@ function build_nonlocal_with_ct(s::Settings; renorm_mu=false)
             @warn("Ignoring partition $p with no diagrams")
             continue
         end
+        @debug "\nDiagTree:\n" * repr_tree(dλ_dμ_diagtree)
 
         # Compile to expression tree and save results for this partition
         exprtree = ExprTree.build(dλ_dμ_diagtree)

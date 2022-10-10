@@ -278,18 +278,21 @@ Get all counterterm partitions (n1, n2, n3) satisfying the following constraints
 By convention, we interpret: n1 = n_loop, n2 = n_∂μ, n3 = n_∂λ 
 (normal order, G order, W order), where n_loop ≥ 2 is the total loop number.
 If `renorm_mu` is false, then n_ct_mu = 0. 
-Here, n_lowest is the lowest valid loop order for the given observable.
+`n_lowest` is the lowest valid loop order for the given observable.
 """
 function counterterm_partitions(n_max::Int, n_min::Int=2; n_lowest::Int=2, renorm_mu=false)
     partitions = Tuple{Int,Int,Int}[]
     if n_max < n_min
         return partitions
     elseif renorm_mu
-        partitions =
-            [p for p in UEG.partition(n_max) if p[1] ≥ 2 && p[1] + p[2] + p[3] ≥ n_min]
+        partitions = [
+            p for p in UEG.partition(n_max) if p[1] ≥ n_lowest && p[1] + p[2] + p[3] ≥ n_min
+        ]
     else
-        partitions =
-            [(n1, 0, n3) for (n1, n3) in counterterm_split(n_max) if n1 + n3 ≥ n_min]
+        partitions = [
+            (n1, 0, n3) for
+            (n1, n3) in counterterm_split(n_max, n_lowest) if n1 + n3 ≥ n_min
+        ]
     end
     return partitions
 end
@@ -316,23 +319,24 @@ Generate weak compositions of size 2 of an integer n
 (i.e., the cycle (n, 0), (n-1, 1), ..., (0, n)), where
 (n_order, n_ct_lambda) = (i, j) with an additional constraint
 that n_order ≥ 2 (the minimum order for SOSEM observables).
+`n_lowest` is the lowest valid loop order for the given observable.
 """
-function counterterm_split(n::Int)
-    if n < 2
+function counterterm_split(n::Int, n_lowest::Int=2)
+    if n < n_lowest
         return Tuple{Int,Int}[]
     end
     splits = Tuple{Int,Int}[]
-    max = 2
-    n1 = 2
-    n2 = max - 2
+    max = n_lowest
+    n1 = n_lowest
+    n2 = 0
     while max <= n
         push!(splits, (n1, n2))
         n1 += 1
         n2 -= 1
         if n2 < 0
             max += 1
-            n1 = 2
-            n2 = max - 2
+            n1 = n_lowest
+            n2 = max - n_lowest
         end
     end
     return sort(splits)

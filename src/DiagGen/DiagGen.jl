@@ -6,6 +6,7 @@ using ..ElectronLiquid
 using ..FeynmanDiagram
 using ..Logging
 using ..Parameters
+using ..SOSEM: @todo
 
 # Convenience typedefs for diagram and expression trees
 const DiagramF64 = Diagram{Float64}
@@ -17,10 +18,6 @@ const OptInt = Union{Nothing,Int}
 const ProprTauType = Tuple{Int,Int}
 const ProprOptTauType = Tuple{OptInt,Int}
 const Gamma3OptTauType = Tuple{Int,Int,OptInt}
-
-macro todo()
-    return :(error("Not yet implemented!"))
-end
 
 include("IntegerCompositions/weak_integer_compositions.jl")
 using .IntegerCompositions
