@@ -43,7 +43,7 @@ function bare_integral_k0(;
     # Test standard score (z-score) of the measurement
     meas = measurement(res.mean[1], res.stdev[1])
     score = stdscore(meas, exact)
-    obsstring = DiagGen.bare_string(observable)
+    obsstring = DiagGen.get_bare_string(observable)
 
     # Result should be accurate to within the specified standard score (by default, 5σ)
     println("""

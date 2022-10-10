@@ -6,6 +6,7 @@ function build_nonlocal(s::Settings)
     DiagTree.uidreset()
     # Construct the self-energy diagram tree without counterterms
     diagparam, diagtree = build_diagtree(s)
+    @debug "\nDiagTree:\n" * repr_tree(diagtree)
     # Compile to expression tree
     exprtree = ExprTree.build([diagtree])
     return diagparam, diagtree, exprtree
@@ -22,10 +23,12 @@ function build_nonlocal_with_ct(s::Settings; renorm_mu=false)
     diagparams = Vector{DiagParaF64}()
     diagtrees = Vector{DiagramF64}()
     exprtrees = Vector{ExprTreeF64}()
-    for p in counterterm_partitions_fixed_order(s.n_expand; renorm_mu=renorm_mu)
+    for p in counterterm_partitions_fixed_order(s; renorm_mu=renorm_mu)
         # Build diagram tree for this partition
         @debug "Partition (n_loop, n_ct_mu, n_ct_lambda): $p"
         diagparam, diagtree = build_diagtree(s; n_loop=p[1])
+        @debug "\nDiagTree:\n" * repr_tree(diagtree)
+        println("\n\n")
 
         # Build tree with counterterms (∂λ(∂μ(DT))) via automatic differentiation
         dμ_diagtree = DiagTree.derivative([diagtree], BareGreenId, p[2]; index=1)
@@ -57,23 +60,23 @@ end
 Construct a diagram tree for a non-local second-order 
 moment (SOSEM) observable at the given loop order.
 """
-function build_diagtree(s::Settings; n_loop::Int=s.n_expand)
+function build_diagtree(s::Settings; n_loop::Int=s.n_order)
     # Initialize DiagGen configuration containing diagram parameters, partition,
     # propagator and vertex momentum/time data, (expansion) order info, etc.
     cfg = Config(s, n_loop)
 
     # The number of (possibly indistinct) diagram trees to generate is: 
-    # ((n_expandable n_loop)) = binomial(n_expandable + n_loop - 1, n_loop)
-    n_trees_naive = binomial(cfg.n_expandable + cfg.n_loop - 1, cfg.n_loop)
+    # ((n_expandable n_expand)) = binomial(n_expandable + n_expand - 1, n_expand)
+    n_trees_naive = binomial(cfg.n_expandable + cfg.n_expand - 1, cfg.n_expand)
     vprintln(
         s,
         info,
-        "Generating (($(cfg.n_expandable) $(cfg.n_loop))) = $n_trees_naive expanded subtrees...",
+        "Generating (($(cfg.n_expandable) $(cfg.n_expand))) = $n_trees_naive expanded subtrees...",
     )
     # Generate a list of all expanded diagrams at fixed order n
     tree_count = 0
     som_diags = Vector{DiagramF64}()
-    for expansion_orders in weak_integer_compositions(cfg.n_loop, cfg.n_expandable)
+    for expansion_orders in weak_integer_compositions(cfg.n_expand, cfg.n_expandable)
         # Filter out invalid expansions due to dashed lines and/or subdiagram properties
         if _is_invalid_expansion(cfg, expansion_orders)
             continue
@@ -88,7 +91,6 @@ function build_diagtree(s::Settings; n_loop::Int=s.n_expand)
     # Now construct the self-energy diagram tree and parameters
     diagparam = cfg.param
     diagtree = DiagramF64(getID(diagparam), Sum(), som_diags; name=s.name)
-    @debug "\nDiagTree:\n" * repr_tree(diagtree)
     return diagparam, diagtree
 end
 
@@ -116,9 +118,9 @@ Construct a second-order self-energy (moment) subdiagram with bare Γⁱ₃ inse
 D = (G₁ ∘ G₂ ∘ G₃ ∘ V₁ ∘ V₂)
 """
 function _build_subdiagram_gamma0(cfg::Config, expansion_orders::Vector{Int}; tree_count)
-    # The first available tau index for G(1,n) is 2 when n_loop > 0, 
+    # The first available tau index for G(1,n) is 2 when n_expand > 0, 
     # and FeynmanDiagram.firstTauIdx(Ver3Diag) = 3 otherwise
-    first_fti = cfg.n_loop > 0 ? 2 : FeynmanDiagram.firstTauIdx(Ver3Diag)
+    first_fti = cfg.n_expand > 0 ? 2 : FeynmanDiagram.firstTauIdx(Ver3Diag)
     # The firstTauIdx for each G line depends on the expansion order of the previous G.
     g_ftis, g_max_ti = Parquet.findFirstTauIdx(
         expansion_orders,

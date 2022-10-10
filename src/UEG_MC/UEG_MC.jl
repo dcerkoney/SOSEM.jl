@@ -13,6 +13,10 @@ using ..Parameters
 const DiagramF64 = Diagram{Float64}
 const ExprTreeF64 = ElectronLiquid.ExprTreeF64
 
+macro todo()
+    return :(error("Not yet implemented!"))
+end
+
 """UEG MC parameters necessary for plotting in post-processing"""
 struct PlotParams
     order::Int

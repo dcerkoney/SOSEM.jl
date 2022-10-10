@@ -81,7 +81,7 @@ function main()
         # Test standard score (z-score) of the measurement
         meas = measurement(means[1], stdevs[1])
         score = stdscore(meas, exact)
-        obsstring = DiagGen.bare_string(settings.observable)
+        obsstring = DiagGen.get_bare_string(settings.observable)
         # Result should be accurate to within the specified standard score (by default, 5σ)
         println("""
                 $obsstring ($solver):

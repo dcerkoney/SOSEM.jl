@@ -18,25 +18,24 @@ const ProprTauType = Tuple{Int,Int}
 const ProprOptTauType = Tuple{OptInt,Int}
 const Gamma3OptTauType = Tuple{Int,Int,OptInt}
 
+macro todo()
+    return :(error("Not yet implemented!"))
+end
+
 include("IntegerCompositions/weak_integer_compositions.jl")
 using .IntegerCompositions
 export IntegerCompositions
 
+include("properties.jl")
+export Gamma3InsertionSide, left, right
+export DiscontSide, negative, positive, both
+export Observables, sigma20, sigma2, c1a, c1bL0, c1bR0, c1bL, c1bR, c1c, c1d
+export get_bare_string, get_exact_k0, getID, propagator_param
+
 include("common.jl")
 export Verbosity, quiet, info, verbose
-export Gamma3InsertionSide, left, right
-export DiscontSide, negative, positive
-export Observables, sigma20, sigma2, c1a, c1bL0, c1bR0, c1bL, c1bR, c1c, c1d
-export todo,
-    Settings,
-    Config,
-    getID,
-    bare_string,
-    get_exact_k0,
-    propagator_param,
-    checktree,
-    counterterm_partitions,
-    counterterm_partitions_fixed_order
+export Settings,
+    Config, checktree, counterterm_partitions, counterterm_partitions_fixed_order
 
 # Non-local moment
 include("build_nonlocal.jl")

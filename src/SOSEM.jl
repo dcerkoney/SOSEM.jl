@@ -11,6 +11,10 @@ const DiagramF64 = Diagram{Float64}
 const ExprTreeF64 = ElectronLiquid.ExprTreeF64
 export DiagramF64, ExprTreeF64
 
+macro todo()
+    return :(error("Not yet implemented!"))
+end
+
 # SOSEM diagram generation
 include("DiagGen/DiagGen.jl")
 using .DiagGen
