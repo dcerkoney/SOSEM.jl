@@ -6,11 +6,7 @@ using ..ElectronLiquid
 using ..FeynmanDiagram
 using ..Logging
 using ..Parameters
-using ..SOSEM: @todo
-
-# Convenience typedefs for diagram and expression trees
-const DiagramF64 = Diagram{Float64}
-const ExprTreeF64 = ElectronLiquid.ExprTreeF64
+using ..SOSEM: @todo, DiagramF64, ExprTreeF64
 
 # Convenience typedefs for Settings and Config
 const VFloat64 = Vector{Float64}
