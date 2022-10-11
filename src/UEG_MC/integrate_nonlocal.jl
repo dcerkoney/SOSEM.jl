@@ -183,12 +183,14 @@ function integrand(vars, config)
     # @assert innerLoopNum == config.dof[1][1]
     phifactor = 1.0
     for i in 1:innerLoopNum
+        # r = tan(π * R[i] / 2)  # a similar mapping with smaller tail
         r = R[i] / (1 - R[i])
         θ = Theta[i]
         ϕ = Phi[i]
         varK[1, i + 1] = r * sin(θ) * cos(ϕ)
         varK[2, i + 1] = r * sin(θ) * sin(ϕ)
         varK[3, i + 1] = r * cos(θ)
+        # phifactor *= r^2 * sin(θ) * (π / 2) * sec(π * R[i] / 2)^2
         phifactor *= r^2 * sin(θ) / (1 - R[i])^2
     end
     # @assert (T.data[1] == 0) && (abs(T.data[2]) == 1e-6)
