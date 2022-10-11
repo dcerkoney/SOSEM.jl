@@ -25,7 +25,7 @@ function main()
     # UEG parameters for MC integration
     mcparam =
         ParaMC(; order=settings.n_order, rs=2.0, beta=40.0, mass2=1e-8, isDynamic=false)
-    @debug "β / EF = $(mcparam.beta), β = $(mcparam.β), EF = $(mcparam.EF)" maxlog = 1
+    @debug "β * EF = $(mcparam.beta), β = $(mcparam.β), EF = $(mcparam.EF)" maxlog = 1
 
     # K-mesh for measurement
     # k_kf_grid = [0.0]

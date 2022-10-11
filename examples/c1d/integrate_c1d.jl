@@ -26,7 +26,7 @@ function main()
     # NOTE: To match units, we specify (beta / EF) = 2 * (heg_soms.beta)
     param =
         ParaMC(; order=settings.n_order, rs=0.5, isDynamic=false, beta=600.0, mass2=0.1)
-    @debug "β / EF = $(param.beta), β = $(param.β), EF = $(param.EF)" maxlog = 1
+    @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)" maxlog = 1
 
     # K-mesh for measurement
     k_kf_grid = [0.0]

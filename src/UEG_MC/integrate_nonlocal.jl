@@ -92,7 +92,7 @@ function mc_variables(param::UEG.ParaMC, n_kgrid::Int, alpha::Float64)
     Phi = Continuous(0.0, 2π; alpha=alpha)
     K = CompositeVar(R, Theta, Phi)
     # Offset T pool by 2 for fixed external times (τin, τout)
-    T = Continuous(0.0, param.beta; offset=2, alpha=alpha)
+    T = Continuous(0.0, param.β; offset=2, alpha=alpha)
     # Bin in external momentum
     ExtKidx = Discrete(1, n_kgrid; alpha=alpha)
     return (K, T, ExtKidx)
