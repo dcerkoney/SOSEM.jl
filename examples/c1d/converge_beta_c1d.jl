@@ -37,7 +37,7 @@ function main()
     solver = :vegas
 
     # Number of evals below and above kF
-    neval = 1e8
+    neval = 1e7
 
     # Either use a linear or logarithmic mesh
     # mesh_type = linear::MeshType
@@ -56,7 +56,6 @@ function main()
     end
     for beta in beta_grid
         # UEG parameters for MC integration
-        # NOTE: To match units, we specify (beta / EF) = 2 * (heg_soms.beta)
         param =
             ParaMC(; order=settings.n_order, rs=2.0, isDynamic=false, beta=beta, mass2=0.1)
         @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)" maxlog = 1

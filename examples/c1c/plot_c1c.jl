@@ -43,10 +43,8 @@ function main()
         sosem_vegas = np.load(data_path)
         println("done!")
 
-        local paramdict
-        try
-            paramdict = sosem_vegas.get("param")
-        catch
+        paramdict = sosem_vegas.get("param")
+        if isnothing(paramdict)
             paramdict = sosem_vegas.get("params")
         end
         println(paramdict)
@@ -101,12 +99,18 @@ function main()
     ax.set_ylabel(
         "\$C^{(1c)}_n(\\mathbf{k}) \\,/\\, {\\epsilon}^{\\hspace{0.1em}2}_{\\mathrm{TF}}\$",
     )
-    ax.text(1.75, -0.4, "\$r_s = 2,\\, \\beta = 200 \\epsilon_F,\$"; fontsize=14)
+    ax.text(1.75, -0.425, "\$r_s = 2,\\, \\beta \\hspace{0.1em} \\epsilon_F = 200,\$"; fontsize=14)
     ax.text(
         1.75,
-        -0.5,
-        "\$\\lambda = \\frac{\\epsilon_{\\mathrm{Ry}}}{10},\\, N_{\\mathrm{eval}} = \\mathrm{1e8}\$";
+        -0.525,
+        "\$\\lambda = \\frac{\\epsilon_{\\mathrm{Ry}}}{10},\\, N_{\\mathrm{eval}} = \\mathrm{1e8},\$";
         fontsize=14,
+    )
+    ax.text(
+        1.75,
+        -0.625,
+        "\${\\epsilon}_{\\mathrm{TF}}\\equiv\\frac{\\hbar^2 q^2_{\\mathrm{TF}}}{2 m_e}=2\\pi\\mathcal{N}_F\$ (a.u.)";
+        fontsize=12,
     )
     # plt.title("Using fixed bare Coulomb interactions \$V_1\$, \$V_2\$")
     plt.title(
@@ -117,7 +121,6 @@ function main()
     fig.savefig(
         "results/c1c/c1c_n=$(max_order)_rs=$(rs)_" *
         "beta_ef=$(beta)_lambda=$(mass2)_" *
-        # "neval=$(maxeval)_$(solver).pdf",
         "neval=$(maxeval)_$(intn_str)$(solver).pdf",
     )
     plt.close("all")

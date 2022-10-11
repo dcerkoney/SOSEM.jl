@@ -17,15 +17,15 @@ function main()
     # Settings for diagram generation
     settings = DiagGen.Settings(;
         observable=DiagGen.c1c,
-        n_order=3,
-        verbosity=DiagGen.info,
-        expand_bare_interactions=true,
+        n_order=2,
+        verbosity=DiagGen.quiet,
+        expand_bare_interactions=false,
     )
 
     # UEG parameters for MC integration
     param =
-        ParaMC(; order=settings.n_order, rs=2.0, beta=200.0, mass2=1e-8, isDynamic=false)
-    @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)" maxlog = 1
+        ParaMC(; order=settings.n_order, rs=2.0, beta=200.0, mass2=0.1, isDynamic=false)
+    @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)"
 
     # K-mesh for measurement
     # k_kf_grid = [0.0]
@@ -41,7 +41,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 1e6
+    neval = 1e8
 
     # Generate the diagrams
     diagparam, diagtree, exprtree = DiagGen.build_nonlocal(settings)
@@ -99,7 +99,7 @@ function main()
         savename =
             "results/data/c1c_n=$(param.order)_rs=$(param.rs)_" *
             "beta_ef=$(param.beta)_lambda=$(param.mass2)_" *
-            "neval=$(maxeval)_$(intn_str)$(solver)"
+            "neval=$(neval)_$(intn_str)$(solver)"
         # Remove old data, if it exists
         rm(savename; force=true)
         # TODO: kwargs implementation (kgrid_<solver>...)
@@ -149,7 +149,7 @@ function main()
         fig.savefig(
             "results/c1c/n=$(param.order)/c1c_n=$(param.order)_rs=$(param.rs)_" *
             "beta_ef=$(param.beta)_lambda=$(param.mass2)_" *
-            "neval=$(maxeval)_$(intn_str)$(solver).pdf",
+            "neval=$(neval)_$(intn_str)$(solver).pdf",
         )
         plt.close("all")
     end

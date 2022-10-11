@@ -115,10 +115,20 @@ function eval(id::BareGreenId, K, siteidx, varT, p::ParaMC)
     green = 0.0
     order = id.order[1]
     if order == 0
+        # Since τout = -δ for some SOSEM observables, it is possible to generate 
+        # out-of-bounds time differences => use anti-periodicity on [0, β)
+        s = 1.0
+        if τ < 0.0
+            τ += β
+            s = -s
+        elseif τ >= β
+            τ -= β
+            s = -s
+        end
         if τ ≈ 0.0
-            green = Spectral.kernelFermiT(-1e-8, ϵ, β)
+            green = s * Spectral.kernelFermiT(-1e-8, ϵ, β)
         else
-            green = Spectral.kernelFermiT(τ, ϵ, β)
+            green = s * Spectral.kernelFermiT(τ, ϵ, β)
         end
     elseif order == 1
         green = green2(ϵ, τ, β)
@@ -141,12 +151,12 @@ function eval(id::BareInteractionId, K, siteidx, varT, p::ParaMC)
     qd = sqrt(dot(K, K))
     # Bare Coulomb interaction
     if id.order[4] == 1
-        @debug "Bare V, T = $(id.extT)" maxlog=5
+        @debug "Bare V, T = $(id.extT)" maxlog = 5
         return CoulombBareinstant(qd, p)
-    # Screened Coulomb interaction
+        # Screened Coulomb interaction
     elseif id.order[2] == 0
         return Coulombinstant(qd, p)
-    # Counterterms for screened interaction
+        # Counterterms for screened interaction
     else
         invK = 1.0 / (qd^2 + mass2)
         return e0^2 / ϵ0 * invK * (mass2 * invK)^id.order[2]

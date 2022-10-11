@@ -43,10 +43,8 @@ function main()
         sosem_vegas = np.load(data_path)
         println("done!")
 
-        local paramdict
-        try
-            paramdict = sosem_vegas.get("param")
-        catch
+        paramdict = sosem_vegas.get("param")
+        if isnothing(paramdict)
             paramdict = sosem_vegas.get("params")
         end
         println(paramdict)
