@@ -55,7 +55,71 @@ function bare_integral_k0(;
     return abs(score) <= zscore_window
 end
 
-@testset verbose = true "Integration" begin
+"""
+Integration test for bare (O(V²)), uniform (k = 0) SOSEM observable using
+the multi-partition integrator intended for evaluation with counterterms.
+"""
+function bare_integral_k0_multipartition(;
+    observable::DiagGen.Observables,
+    beta=200.0,
+    alpha=2.0,
+    neval=5e5,
+    print=-1,
+    zscore_window=5,
+    solver=:vegasmc,
+)
+    # Settings for diagram generation
+    settings = DiagGen.Settings(;
+        observable=observable,
+        n_order=2,
+        verbosity=DiagGen.quiet,
+        expand_bare_interactions=false,
+    )
+
+    # UEG parameters for MC integration
+    param = ParaMC(; order=settings.n_order, rs=2.0, beta=beta, isDynamic=false)
+
+    # Build diagram and expression trees for all loop and counterterm partitions
+    partitions, diagparams, diagtrees, exprtrees =
+        DiagGen.build_nonlocal_with_ct(settings; renorm_mu=false)
+
+    @test partitions == [(2, 0, 0)]
+    @test all(length(et.root) == 1 for et in exprtrees)
+
+    # Bin external momenta, performing a single integration
+    res = UEG_MC.integrate_nonlocal_with_ct(
+        settings,
+        param,
+        diagparams,
+        exprtrees;
+        kgrid=[0.0],
+        alpha=alpha,
+        neval=neval,
+        print=print,
+        solver=solver,
+    )
+
+    # Get exact uniform value for this SOSEM observable
+    exact = DiagGen.get_exact_k0(observable)
+
+    # Test standard score (z-score) of the measurement
+    meas = measurement(res.mean[1], res.stdev[1])
+    score = stdscore(meas, exact)
+    obsstring = DiagGen.get_bare_string(observable)
+
+    # Result should be accurate to within the specified standard score (by default, 5σ)
+    if print > -2
+        println("""
+                $obsstring ($solver):
+                 • Exact: $exact
+                 • Measured: $meas
+                 • Standard score: $score
+                """)
+    end
+    return abs(score) <= zscore_window
+end
+
+@testset verbose = true "Single partition integration" begin
     test_solvers = [:vegas]
     # test_solvers = [:vegas, :vegasmc]
     @testset "C₂⁽¹ᵇ⁾ᴸ" begin
@@ -71,6 +135,38 @@ end
     @testset "C₂⁽¹ᵈ⁾" begin
         for solver in test_solvers
             @test_broken bare_integral_k0(observable=DiagGen.c1d, solver=solver)
+        end
+    end
+end
+
+@testset verbose = true "Multi-partition integration" begin
+    test_solvers = [:vegas]
+    # test_solvers = [:vegas, :vegasmc]
+    @testset "C₂⁽¹ᵇ⁾ᴸ" begin
+        for solver in test_solvers
+            @test_broken bare_integral_k0_multipartition(
+                observable=DiagGen.c1bL0,
+                solver=solver,
+                print=-2,
+            )
+        end
+    end
+    @testset "C₂⁽¹ᶜ⁾" begin
+        for solver in test_solvers
+            @test bare_integral_k0_multipartition(
+                observable=DiagGen.c1c,
+                solver=solver,
+                print=-2,
+            )
+        end
+    end
+    @testset "C₂⁽¹ᵈ⁾" begin
+        for solver in test_solvers
+            @test_broken bare_integral_k0_multipartition(
+                observable=DiagGen.c1d,
+                solver=solver,
+                print=-2,
+            )
         end
     end
 end

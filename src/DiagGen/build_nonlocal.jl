@@ -15,15 +15,26 @@ end
 """
 Construct a list of all expression trees for non-local second-order moment (SOSEM) diagrams derived from
 Σ₂[G, V, Γⁱ₃ = Γ₀] (or Σ₂ itself) to O(ξⁿ) for a statically-screened interaction V[λ] with counterterms.
+
+If `fixed_order` is true, generate partitions at fixed order N = `s.n_order`.
+Otherwise, generate all counterterm partitions up to max order N.
 """
-function build_nonlocal_with_ct(s::Settings; renorm_mu=false)
+function build_nonlocal_with_ct(
+    s::Settings;
+    fixed_order=true,
+    renorm_mu=false,
+    renorm_lambda=true,
+)
     DiagTree.uidreset()
-    # Generate expression trees for each partition
-    partitions = Tuple{Int,Int,Int}[]
+    valid_partitions = Tuple{Int,Int,Int}[]
     diagparams = Vector{DiagParaF64}()
     diagtrees = Vector{DiagramF64}()
     exprtrees = Vector{ExprTreeF64}()
-    for p in counterterm_partitions_fixed_order(s; renorm_mu=renorm_mu)
+
+    # Either generate all counterterm partitions up to max order N
+    # or generate partitions at fixed order N, where N = s.n_order.
+    partitions = fixed_order ? counterterm_partitions_fixed_order : counterterm_partitions
+    for p in partitions(s; renorm_mu=renorm_mu, renorm_lambda=renorm_lambda)
         # Build diagram tree for this partition
         @debug "Partition (n_loop, n_ct_mu, n_ct_lambda): $p"
         diagparam, diagtree = build_diagtree(s; n_loop=p[1])
@@ -39,12 +50,12 @@ function build_nonlocal_with_ct(s::Settings; renorm_mu=false)
 
         # Compile to expression tree and save results for this partition
         exprtree = ExprTree.build(dλ_dμ_diagtree)
-        push!(partitions, p)
+        push!(valid_partitions, p)
         push!(diagparams, diagparam)
         push!(exprtrees, exprtree)
         append!(diagtrees, dλ_dμ_diagtree)
     end
-    return partitions, diagparams, diagtrees, exprtrees
+    return valid_partitions, diagparams, diagtrees, exprtrees
 end
 
 """
