@@ -81,7 +81,7 @@ function main()
     # Save to JLD2 on main thread
     if !isnothing(res)
         savename =
-            "c1c_n=$(param.order)_rs=$(param.rs)_" *
+            "results/data/c1c_n=$(param.order)_rs=$(param.rs)_" *
             "beta_ef=$(param.beta)_lambda=$(param.mass2)_" *
             "neval=$(neval)_$(intn_str)$(solver)_with_ct"
         jldopen("$savename.jld2", "a+") do f

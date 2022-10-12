@@ -105,7 +105,8 @@ Base.print(io::IO, obs::Observables) = print(io, observable_to_string[obs])
 end
 
 """
-Returns the exact value of a specified low-order SOSEM observable to O(V²) at k = 0.
+Returns the exact value of a specified low-order SOSEM observable to O(V²) at k = 0
+(after nondimensionalization by E²_{TF})).
 """
 @inline function get_exact_k0(observable::DiagGen.Observables)
     return bare_observable_to_exact_k0[observable]

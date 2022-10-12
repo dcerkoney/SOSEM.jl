@@ -223,7 +223,7 @@ function integrand(vars, config)
         # Non-dimensionalized integrand
         # NOTE: C⁽¹⁾ = Σ(τ = 0⁻) - Σ(τ = 0⁺), so there is an additional
         #       overall sign contribution depending on SOSEM observable
-        eTF = mcparam.qTF^2 / (2 * mcparam.me) # Thomas-Fermi energy
+        eTF = mcparam.qTF^2 / (2 * mcparam.me)  # Thomas-Fermi energy
         # return obs_sign * factor * weight[exprtrees[i].root[1]] / eTF^2
         integrand[i] = sum(obs_sign * factor * weight[r] / eTF^2 for r in exprtrees[i].root)
     end
