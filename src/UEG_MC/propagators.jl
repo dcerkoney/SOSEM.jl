@@ -5,6 +5,7 @@ using ...FeynmanDiagram
 using ..Lehmann
 using LinearAlgebra
 using ..UEG
+using ..UEG_MC: @todo
 
 """First-order counter-term for G"""
 function green2(Ek, τ, beta)
@@ -131,16 +132,16 @@ function eval(id::BareGreenId, K, _, varT, additional::Tuple{ParaMC,W}) where {W
         else
             green = s * Spectral.kernelFermiT(τ, ϵ, β)
         end
+    # \partial^(n)_\mu g(Ek - \mu, \tau) = (-1)^n * Spectral.kernelFermiT_dωn
     elseif order == 1
-        green = green2(ϵ, τ, β)
+        green = -Spectral.kernelFermiT_dω(τ, ϵ, β)
     elseif order == 2
-        green = green3(ϵ, τ, β)
+        green = Spectral.kernelFermiT_dω2(τ, ϵ, β)
     elseif order == 3
-        green = green3(ϵ, τ, β)
+        green = -Spectral.kernelFermiT_dω3(τ, ϵ, β)
     else
-        error("not implemented!")
+        @todo
     end
-
     # We have an overall sign difference relative to the Negle & Orland convention
     return -green
 end
