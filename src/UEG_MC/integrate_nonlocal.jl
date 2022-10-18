@@ -18,7 +18,6 @@ function integrate_nonlocal_with_ct(
     discont_side, obs_sign, extT_sign =
         dummy_cfg.discont_side, dummy_cfg.obs_sign, dummy_cfg.extT_sign
 
-
     # We assume that each partition expression tree has a single root
     @assert all(length(et.root) == 1 for et in exprtrees)
 

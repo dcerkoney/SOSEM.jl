@@ -1,11 +1,16 @@
-using Test
-using SOSEM
 using ElectronGas
+using ElectronLiquid.UEG: ParaMC, KOinstant
+using FeynmanDiagram
+using Lehmann
+using LinearAlgebra
+using MCIntegration
 using Measurements
-using ElectronLiquid.UEG: ParaMC
+using SOSEM
+using Test
 
 if isempty(ARGS)
-    include("integrate.jl")
+    include("integrate_fock.jl")
+    include("integrate_sosem.jl")
 else
     include(ARGS[1])
 end

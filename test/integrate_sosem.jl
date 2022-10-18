@@ -4,15 +4,16 @@ function bare_integral_k0(;
     beta=200.0,
     alpha=2.0,
     neval=5e5,
-    print=-1,
+    mcprint=-1,
     zscore_window=5,
     solver=:vegasmc,
+    verbosity=DiagGen.quiet,
 )
     # Settings for diagram generation
     settings = DiagGen.Settings(;
         observable=observable,
         n_order=2,
-        verbosity=DiagGen.quiet,
+        verbosity=verbosity,
         expand_bare_interactions=false,
     )
 
@@ -24,7 +25,7 @@ function bare_integral_k0(;
     DiagGen.checktree(diagtree, settings)
     @test length(exprtree.root) == 1
 
-    # Loop over external momenta and integrate
+    # Integrate the non-local moment
     res = UEG_MC.integrate_nonlocal(
         settings,
         param,
@@ -33,7 +34,7 @@ function bare_integral_k0(;
         kgrid=[0.0],
         alpha=alpha,
         neval=neval,
-        print=print,
+        print=mcprint,
         solver=solver,
     )
 
@@ -46,13 +47,13 @@ function bare_integral_k0(;
     obsstring = DiagGen.get_bare_string(observable)
 
     # Result should be accurate to within the specified standard score (by default, 5σ)
-    println("""
-            $obsstring ($solver):
-             • Exact: $exact
-             • Measured: $meas
-             • Standard score: $score
-            """)
-    return abs(score) <= zscore_window
+    print("""
+          $obsstring ($solver):
+           • Exact: $exact
+           • Measured: $meas
+           • Standard score: $score
+          """)
+    return abs(score) ≤ zscore_window
 end
 
 """
@@ -64,15 +65,16 @@ function bare_integral_k0_multipartition(;
     beta=200.0,
     alpha=2.0,
     neval=5e5,
-    print=-1,
+    mcprint=-1,
     zscore_window=5,
     solver=:vegasmc,
+    verbosity=DiagGen.quiet,
 )
     # Settings for diagram generation
     settings = DiagGen.Settings(;
         observable=observable,
         n_order=2,
-        verbosity=DiagGen.quiet,
+        verbosity=verbosity,
         expand_bare_interactions=false,
     )
 
@@ -86,7 +88,7 @@ function bare_integral_k0_multipartition(;
     @test partitions == [(2, 0, 0)]
     @test all(length(et.root) == 1 for et in exprtrees)
 
-    # Bin external momenta, performing a single integration
+    # Integrate the non-local moment
     res = UEG_MC.integrate_nonlocal_with_ct(
         settings,
         param,
@@ -95,7 +97,7 @@ function bare_integral_k0_multipartition(;
         kgrid=[0.0],
         alpha=alpha,
         neval=neval,
-        print=print,
+        print=mcprint,
         solver=solver,
     )
 
@@ -108,64 +110,62 @@ function bare_integral_k0_multipartition(;
     obsstring = DiagGen.get_bare_string(observable)
 
     # Result should be accurate to within the specified standard score (by default, 5σ)
-    if print > -2
-        println("""
-                $obsstring ($solver):
-                 • Exact: $exact
-                 • Measured: $meas
-                 • Standard score: $score
-                """)
+    if mcprint > -2
+        print("""
+              $obsstring ($solver):
+               • Exact: $exact
+               • Measured: $meas
+               • Standard score: $score
+              """)
     end
-    return abs(score) <= zscore_window
+    return abs(score) ≤ zscore_window
 end
 
 @testset verbose = true "Single partition integration" begin
     test_solvers = [:vegas]
-    # test_solvers = [:vegas, :vegasmc]
     @testset "C₂⁽¹ᵇ⁾ᴸ" begin
         for solver in test_solvers
-            @test_broken bare_integral_k0(observable=DiagGen.c1bL0, solver=solver)
+            @test_broken bare_integral_k0(; observable=DiagGen.c1bL0, solver=solver)
         end
     end
     @testset "C₂⁽¹ᶜ⁾" begin
         for solver in test_solvers
-            @test bare_integral_k0(observable=DiagGen.c1c, solver=solver)
+            @test bare_integral_k0(; observable=DiagGen.c1c, solver=solver)
         end
     end
     @testset "C₂⁽¹ᵈ⁾" begin
         for solver in test_solvers
-            @test_broken bare_integral_k0(observable=DiagGen.c1d, solver=solver)
+            bare_integral_k0(; observable=DiagGen.c1d, solver=solver)
         end
     end
 end
 
 @testset verbose = true "Multi-partition integration" begin
     test_solvers = [:vegas]
-    # test_solvers = [:vegas, :vegasmc]
     @testset "C₂⁽¹ᵇ⁾ᴸ" begin
         for solver in test_solvers
-            @test_broken bare_integral_k0_multipartition(
+            @test_broken bare_integral_k0_multipartition(;
                 observable=DiagGen.c1bL0,
                 solver=solver,
-                print=-2,
+                mcprint=-2,
             )
         end
     end
     @testset "C₂⁽¹ᶜ⁾" begin
         for solver in test_solvers
-            @test bare_integral_k0_multipartition(
+            @test bare_integral_k0_multipartition(;
                 observable=DiagGen.c1c,
                 solver=solver,
-                print=-2,
+                mcprint=-2,
             )
         end
     end
     @testset "C₂⁽¹ᵈ⁾" begin
         for solver in test_solvers
-            @test_broken bare_integral_k0_multipartition(
+            @test_broken bare_integral_k0_multipartition(;
                 observable=DiagGen.c1d,
                 solver=solver,
-                print=-2,
+                mcprint=-2,
             )
         end
     end

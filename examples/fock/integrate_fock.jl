@@ -154,6 +154,7 @@ function main()
     # k_kf_grid = [0.0]
     k_kf_grid = np.load("results/kgrids/kgrid_vegas_dimless_n=77_small.npy")
     kgrid = param.kF * k_kf_grid
+    @assert 0 in kgrid
 
     # Settings
     alpha = 2.0
@@ -170,7 +171,7 @@ function main()
     exprtree = ExprTree.build([fock_diagram])
 
     # Check the diagram tree
-    # print_tree(fock_diagram)
+    print_tree(fock_diagram)
 
     # NOTE: We assume there is only a single root in the ExpressionTree
     @assert length(exprtree.root) == 1
@@ -207,18 +208,24 @@ function main()
         return
     end
 
+    # The nondimensionalized Fock self-energy is the negative Lindhard function
+    exact = -lindhard.(kgrid / param.kF)
+
     # Check the MC result at k = 0 against the exact (non-dimensionalized)
     # Fock (exhange) self-energy: Σx(0) / E²_{TF} = -F(0) = -1
     means, stdevs = res.mean, res.stdev
-    meas = measurement(means[1], stdevs[1])
-    exact = -lindhard(0)
-    score = stdscore(meas, exact)
-    println("""
-            Σx ($solver):
-             • Exact: $exact
-             • Measured: $meas
-             • Standard score: $score
-            """)
+    meas = measurement.(means, stdevs)
+    score_k0 = scores[1]
+    worst_score = argmax(abs, scores)
+
+    # Summarize results
+    print("""
+          Σₓ(k) ($solver):
+           • Exact value    (k = 0): $(exact[1])
+           • Measured value (k = 0): $(meas[1])
+           • Standard score (k = 0): $score_k0
+           • Worst standard score: $worst_score
+          """)
 
     # Plot the result
     if plot

@@ -99,7 +99,12 @@ function main()
     ax.set_ylabel(
         "\$C^{(1c)}_n(\\mathbf{k}) \\,/\\, {\\epsilon}^{\\hspace{0.1em}2}_{\\mathrm{TF}}\$",
     )
-    ax.text(1.75, -0.425, "\$r_s = 2,\\, \\beta \\hspace{0.1em} \\epsilon_F = 200,\$"; fontsize=14)
+    ax.text(
+        1.75,
+        -0.425,
+        "\$r_s = 2,\\, \\beta \\hspace{0.1em} \\epsilon_F = 200,\$";
+        fontsize=14,
+    )
     ax.text(
         1.75,
         -0.525,

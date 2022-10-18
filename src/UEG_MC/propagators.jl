@@ -7,63 +7,6 @@ using LinearAlgebra
 using ..UEG
 using ..UEG_MC: @todo
 
-"""First-order counter-term for G"""
-function green2(Ek, τ, beta)
-    if τ ≈ 0.0
-        τ = -1.0e-10
-    end
-
-    s = 1.0
-    if τ < 0.0
-        τ += beta
-        s = -s
-    elseif τ >= beta
-        τ -= beta
-        s = -s
-    end
-
-    if Ek > 0.0
-        c = exp(-beta * Ek)
-        green = exp(-Ek * τ) / (1.0 + c)^2 * (τ - (beta - τ) * c)
-    else
-        c = exp(beta * Ek)
-        green = exp(Ek * (beta - τ)) / (1.0 + c)^2 * (τ * c - (beta - τ))
-    end
-
-    return green *= s
-end
-
-"""Second/third-order counter-term for G"""
-function green3(Ek, τ, beta=β)
-    if τ ≈ 0.0
-        τ = -1.0e-10
-    end
-
-    s = 1.0
-    if τ < 0.0
-        τ += beta
-        s = -s
-    elseif τ >= beta
-        τ -= beta
-        s = -s
-    end
-
-    if (Ek > 0.0)
-        c = exp(-beta * Ek)
-        green =
-            exp(-Ek * τ) / (1.0 + c)^3.0 *
-            (τ^2 / 2 - (beta^2 / 2 + beta * τ - τ^2) * c + (beta - τ)^2 * c^2 / 2.0)
-    else
-        c = exp(beta * Ek)
-        green =
-            exp(Ek * (beta - τ)) / (1.0 + c)^3 *
-            (τ^2 * c^2 / 2.0 - (beta^2 / 2.0 + beta * τ - τ^2) * c + (beta - τ)^2 / 2.0)
-    end
-
-    green *= s
-    return green
-end
-
 ####################################################
 # Bare Green's function and interaction evaluation #
 ####################################################
@@ -113,7 +56,8 @@ function eval(id::BareGreenId, K, _, varT, additional::Tuple{ParaMC,W}) where {W
     ϵ = k^2 / (2me * massratio) - μ
     # ϵ = kF / me * (k - kF)
 
-    # Check for counterterms
+    # Check for counterterms; note that we have:
+    # \partial^(n)_\mu g(Ek - \mu, \tau) = (-1)^n * Spectral.kernelFermiT_dωn
     green = 0.0
     order = id.order[1]
     if order == 0
@@ -132,7 +76,6 @@ function eval(id::BareGreenId, K, _, varT, additional::Tuple{ParaMC,W}) where {W
         else
             green = s * Spectral.kernelFermiT(τ, ϵ, β)
         end
-    # \partial^(n)_\mu g(Ek - \mu, \tau) = (-1)^n * Spectral.kernelFermiT_dωn
     elseif order == 1
         green = -Spectral.kernelFermiT_dω(τ, ϵ, β)
     elseif order == 2
