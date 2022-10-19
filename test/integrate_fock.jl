@@ -169,13 +169,15 @@ function fock_integral(;
     worst_score = argmax(abs, scores)
 
     # Result should be accurate to within the specified standard score (by default, 5σ)
-    print("""
-          Σₓ(k) ($solver):
-           • Exact value    (k = 0): $(exact[1])
-           • Measured value (k = 0): $(meas[1])
-           • Standard score (k = 0): $score_k0
-           • Worst standard score: $worst_score
-          """)
+    if mcprint > -2
+        print("""
+              Σₓ(k) ($solver):
+               • Exact value    (k = 0): $(exact[1])
+               • Measured value (k = 0): $(meas[1])
+               • Standard score (k = 0): $score_k0
+               • Worst standard score: $worst_score
+              """)
+    end
     return abs(worst_score) ≤ zscore_window
 end
 
@@ -183,6 +185,7 @@ end
     test_solvers = [:vegas, :vegasmc]
     kgrid = collect(LinRange(0, 3, 49))
     for solver in test_solvers
-        @test fock_integral(; kgrid=kgrid, solver=solver)
+        mcprint = (solver == :vegasmc) ? -1 : -2
+        @test fock_integral(; kgrid=kgrid, mcprint=mcprint, solver=solver)
     end
 end

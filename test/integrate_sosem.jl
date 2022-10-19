@@ -47,12 +47,14 @@ function bare_integral_k0(;
     obsstring = DiagGen.get_bare_string(observable)
 
     # Result should be accurate to within the specified standard score (by default, 5σ)
-    print("""
-          $obsstring ($solver):
-           • Exact: $exact
-           • Measured: $meas
-           • Standard score: $score
-          """)
+    if mcprint > -2
+        print("""
+              $obsstring ($solver):
+               • Exact: $exact
+               • Measured: $meas
+               • Standard score: $score
+              """)
+    end
     return abs(score) ≤ zscore_window
 end
 
@@ -122,7 +124,7 @@ function bare_integral_k0_multipartition(;
 end
 
 @testset verbose = true "Single partition integration" begin
-    test_solvers = [:vegas, :vegasmc]
+    test_solvers = [:vegasmc]
     @testset "C₂⁽¹ᵇ⁾ᴸ" begin
         for solver in test_solvers
             @test_broken bare_integral_k0(; observable=DiagGen.c1bL0, solver=solver)
@@ -141,7 +143,7 @@ end
 end
 
 @testset verbose = true "Multi-partition integration" begin
-    test_solvers = [:vegas, :vegasmc]
+    test_solvers = [:vegasmc]
     @testset "C₂⁽¹ᵇ⁾ᴸ" begin
         for solver in test_solvers
             @test_broken bare_integral_k0_multipartition(;

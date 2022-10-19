@@ -72,8 +72,8 @@ end
         # vegas/vegasmc solvers break down due to tail round-off error
         @test_throws str -> any(
             occursin(s, str) for s in [
-                "AssertionError: histogram should be all finite",
                 r"normalization of block \d+ is NaN, which is not positively defined!",
+                "AssertionError: histogram should be all finite",
             ]
         ) integrate_lindhard(taylor_expand=false, mcprint=-2, solver=solver)
 
