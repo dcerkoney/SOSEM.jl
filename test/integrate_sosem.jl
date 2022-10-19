@@ -122,7 +122,7 @@ function bare_integral_k0_multipartition(;
 end
 
 @testset verbose = true "Single partition integration" begin
-    test_solvers = [:vegas]
+    test_solvers = [:vegas, :vegasmc]
     @testset "C₂⁽¹ᵇ⁾ᴸ" begin
         for solver in test_solvers
             @test_broken bare_integral_k0(; observable=DiagGen.c1bL0, solver=solver)
@@ -141,7 +141,7 @@ end
 end
 
 @testset verbose = true "Multi-partition integration" begin
-    test_solvers = [:vegas]
+    test_solvers = [:vegas, :vegasmc]
     @testset "C₂⁽¹ᵇ⁾ᴸ" begin
         for solver in test_solvers
             @test_broken bare_integral_k0_multipartition(;

@@ -9,6 +9,7 @@ using SOSEM
 using Test
 
 if isempty(ARGS)
+    include("integrate_lindhard.jl")
     include("integrate_fock.jl")
     include("integrate_sosem.jl")
 else

@@ -8,7 +8,8 @@ function lindhard(x, epsilon=1e-5)
     end
     if x > 1.0 / epsilon
         # Taylor expansion for large x
-        return x^2 / 6 + x^4 / 30 + x^6 / 70
+        r = 1 / x
+        return r^2 / 6 + r^4 / 30 + r^6 / 70
     else
         return 1 / 2 + ((1 - x^2) / (4x)) * log(abs((1 + x) / (1 - x)))
     end
@@ -179,7 +180,7 @@ function fock_integral(;
 end
 
 @testset "Fock self-energy integration" begin
-    test_solvers = [:vegas]
+    test_solvers = [:vegas, :vegasmc]
     kgrid = collect(LinRange(0, 3, 49))
     for solver in test_solvers
         @test fock_integral(; kgrid=kgrid, solver=solver)
