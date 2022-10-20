@@ -40,7 +40,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 1e8
+    neval = 1e7
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true

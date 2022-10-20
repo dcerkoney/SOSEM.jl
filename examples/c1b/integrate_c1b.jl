@@ -160,7 +160,7 @@ function main()
             )
             ax.legend(; loc="best")
             ax.set_xlabel("\$k / k_F\$")
-            ax.set_ylabel("\$C^{(1b)}(\\mathbf{k}) \\,/\\, E^{2}_{\\mathrm{TF}}\$")
+            ax.set_ylabel("\$C^{(1b)L0}(\\mathbf{k}) \\,/\\, E^{2}_{\\mathrm{TF}}\$")
             ax.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
             plt.tight_layout()
             fig.savefig(
