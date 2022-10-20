@@ -36,9 +36,9 @@ end
 """Dimensionless Lindhard function F(x)."""
 function lindhard(x, epsilon=1e-5)
     # Exact limits at 0 and 1
-    if x == 0
+    if x ≈ 0
         return 1
-    elseif x == 1
+    elseif x ≈ 1
         return 1 / 2
     end
     if x > 1.0 / epsilon
