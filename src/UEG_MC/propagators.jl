@@ -56,32 +56,33 @@ function eval(id::BareGreenId, K, _, varT, additional::Tuple{ParaMC,W}) where {W
     ϵ = k^2 / (2me * massratio) - μ
     # ϵ = kF / me * (k - kF)
 
+    # Since τout = -δ for some SOSEM observables, it is possible to generate 
+    # out-of-bounds time differences => use anti-periodicity on [0, β)
+    s = 1.0
+    if τ < 0.0
+        τ += β
+        s = -s
+    elseif τ >= β
+        τ -= β
+        s = -s
+    end
+
     # Check for counterterms; note that we have:
     # \partial^(n)_\mu g(Ek - \mu, \tau) = (-1)^n * Spectral.kernelFermiT_dωn
     green = 0.0
     order = id.order[1]
     if order == 0
-        # Since τout = -δ for some SOSEM observables, it is possible to generate 
-        # out-of-bounds time differences => use anti-periodicity on [0, β)
-        s = 1.0
-        if τ < 0.0
-            τ += β
-            s = -s
-        elseif τ >= β
-            τ -= β
-            s = -s
-        end
         if τ ≈ 0.0
             green = s * Spectral.kernelFermiT(-1e-8, ϵ, β)
         else
             green = s * Spectral.kernelFermiT(τ, ϵ, β)
         end
     elseif order == 1
-        green = -Spectral.kernelFermiT_dω(τ, ϵ, β)
+        green = -s * Spectral.kernelFermiT_dω(τ, ϵ, β)
     elseif order == 2
-        green = Spectral.kernelFermiT_dω2(τ, ϵ, β)
+        green = s * Spectral.kernelFermiT_dω2(τ, ϵ, β)
     elseif order == 3
-        green = -Spectral.kernelFermiT_dω3(τ, ϵ, β)
+        green = -s * Spectral.kernelFermiT_dω3(τ, ϵ, β)
     else
         @todo
     end
