@@ -18,7 +18,7 @@ function main()
     settings = DiagGen.Settings(;
         observable=DiagGen.c1c,
         n_order=4,
-        verbosity=DiagGen.info,
+        verbosity=DiagGen.quiet,
         expand_bare_interactions=true,
     )
 
@@ -40,14 +40,18 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 5e8
+    neval = 1e8
+
+    # Enable/disable interaction and chemical potential counterterms
+    renorm_mu = true
+    renorm_lambda = true
 
     # Build diagram and expression trees for all loop and counterterm partitions
     partitions, diagparams, diagtrees, exprtrees = DiagGen.build_nonlocal_with_ct(
         settings;
         fixed_order=false,
-        renorm_mu=false,
-        renorm_lambda=true,
+        renorm_mu=renorm_mu,
+        renorm_lambda=renorm_lambda,
     )
 
     println("Integrating partitions: $partitions")
@@ -78,12 +82,21 @@ function main()
         intn_str = "no_bare_"
     end
 
+    # Distinguish results with different counterterm schemes
+    ct_string = (renorm_mu || renorm_lambda) ? "with_ct" : ""
+    if renorm_mu
+        ct_string *= "_mu"
+    end
+    if renorm_lambda
+        ct_string *= "_lambda"
+    end
+
     # Save to JLD2 on main thread
     if !isnothing(res)
         savename =
             "results/data/c1c_n=$(param.order)_rs=$(param.rs)_" *
             "beta_ef=$(param.beta)_lambda=$(param.mass2)_" *
-            "neval=$(neval)_$(intn_str)$(solver)_with_ct"
+            "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)"
         jldopen("$savename.jld2", "a+") do f
             key = "$(short(param))"
             if haskey(f, key)
@@ -154,7 +167,7 @@ function main()
         fig.savefig(
             "results/c1c/n=$(param.order)/c1c_n=$(param.order)_rs=$(param.rs)_" *
             "beta_ef=$(param.beta)_lambda=$(param.mass2)_" *
-            "neval=$(neval)_$(intn_str)$(solver)_with_ct.pdf",
+            "neval=$(neval)_$(intn_str)$(solver)_$(ct_string).pdf",
         )
         plt.close("all")
     end
