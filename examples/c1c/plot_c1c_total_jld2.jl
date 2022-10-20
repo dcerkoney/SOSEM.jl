@@ -31,7 +31,9 @@ function aggregate_results_c1cN(merged_data; nmax, nmin=2)
         c1cN[n] = zero(merged_data[(n, 0)])
         println(n)
         for (p, meas) in merged_data
-            if p[1] <= n
+            # if p[1] <= n
+            if sum(p) <= n
+                println("adding partition $p to $n-order aggregate")
                 c1cN[n] += meas
             end
         end
@@ -46,9 +48,14 @@ function main()
     solver = :vegasmc
     expand_bare_interactions = true
 
-    neval = 5e8
+    neval = 1e7
     min_order = 2
     max_order = 4
+    max_order_plot = 3
+    
+    # Enable/disable interaction and chemical potential counterterms
+    renorm_mu = true
+    renorm_lambda = true
 
     plotparam =
         UEG.ParaMC(; order=max_order, rs=rs, beta=beta, mass2=mass2, isDynamic=false)
@@ -57,6 +64,15 @@ function main()
     intn_str = ""
     if expand_bare_interactions
         intn_str = "no_bare_"
+    end
+
+    # Distinguish results with different counterterm schemes
+    ct_string = (renorm_mu || renorm_lambda) ? "with_ct" : ""
+    if renorm_mu
+        ct_string *= "_mu"
+    end
+    if renorm_lambda
+        ct_string *= "_lambda"
     end
 
     # Use LaTex fonts for plots
@@ -70,7 +86,7 @@ function main()
     savename =
         "results/data/c1c_n=$(max_order)_rs=$(rs)_" *
         "beta_ef=$(beta)_lambda=$(mass2)_" *
-        "neval=$(neval)_$(intn_str)$(solver)_with_ct"
+        "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)"
     settings, param, kgrid, partitions, res = jldopen("$savename.jld2", "a+") do f
         key = "$(UEG.short(plotparam))"
         return f[key]
@@ -83,7 +99,7 @@ function main()
     merged_data = CounterTerm.mergeInteraction(data)
 
     # Aggregate the full results for C⁽¹ᶜ⁾
-    c1cN = aggregate_results_c1cN(merged_data, nmax=max_order, nmin=min_order)
+    c1cN = aggregate_results_c1cN(merged_data; nmax=max_order_plot, nmin=min_order)
 
     println(settings)
     println(UEG.paraid(param))
@@ -92,21 +108,29 @@ function main()
 
     # Plot the results
     fig, ax = plt.subplots()
-    # Compare with the bare quadrature results (stored in Hartree a.u.)
-    # Since the bare result is independent of rs after non-dimensionalization, we
-    # are free to mix rs of the current MC calculation with this result at rs = 2.
-    # Similarly, the bare results were calculated at zero temperature (beta is arb.)
+
+    # Non-dimensionalize bare and RPA+FL non-local moments
     rs_quad = 2.0
-    sosem_quad = np.load("results/data/soms_rs=$(rs_quad)_beta_ef=40.0.npz")
-    # np.load("results/data/soms_rs=$(Float64(param.rs))_beta_ef=$(param.beta).npz")
-    k_kf_grid_quad = np.linspace(0.0, 6.0; num=600)
-    # Non-dimensionalize rs = 2 quadrature results by Thomas-Fermi energy
+    k_kf_grid_quad = np.linspace(0.0, 3.0; num=600)
+    # Get Thomas-Fermi screening factor to non-dimensionalize rs = 2 quadrature results
     param_quad = Parameter.atomicUnit(0, rs_quad)    # (dimensionless T, rs)
     eTF_quad = param_quad.qTF^2 / (2 * param_quad.me)
-    c1c_quad_dimless = sosem_quad.get("bare_c") / eTF_quad^2
-    ax.plot(k_kf_grid_quad, c1c_quad_dimless, "k"; label="\$N = 2\$ (bare, quad)")
+
+    data = np.load("results/data/soms_rs=$(rs_quad)_beta_ef=200.0.npz")
+
+    # Bare results (stored in Hartree a.u.)
+    c1c_bare_quad = data.get("bare_c") / eTF_quad^2
+    ax.plot(
+        k_kf_grid_quad,
+        c1c_bare_quad,
+        "k";
+        label="\$LO = \\mathrm{RPA}+\\mathrm{FL}\$ (quad)",
+    )
+
+    # No additional RPA+FL results for class (c) moment!
+
     # Plot for each aggregate order
-    for N in min_order:max_order
+    for N in min_order:max_order_plot
         # Get means and error bars from the result up to this order
         means = Measurements.value.(c1cN[N])
         stdevs = Measurements.uncertainty.(c1cN[N])
@@ -161,7 +185,7 @@ function main()
     fig.savefig(
         "results/c1c/c1c_N=$(param.order)_rs=$(param.rs)_" *
         "beta_ef=$(param.beta)_lambda=$(param.mass2)_" *
-        "neval=$(neval)_$(intn_str)$(solver)_total_jld2.pdf",
+        "neval=$(neval)_$(intn_str)$(solver)_total_$(ct_string)_jld2.pdf",
     )
     plt.close("all")
     return

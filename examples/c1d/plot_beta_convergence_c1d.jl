@@ -50,13 +50,13 @@ function main()
     means = sosem_vegas.get("means")
     stdevs = sosem_vegas.get("stdevs")
 
-    # Plot numerically exact result for n = 2
+    # Plot bare and RPA+FL non-local moments
     # Compare with zero-temperature quadrature result for the uniform value.
     # Since the bare result is independent of rs after non-dimensionalization, we
     # are free to mix rs of the current MC calculation with this result at rs = 2.
     # Similarly, the bare results were calculated at zero temperature (beta is arb.)
     rs_quad = 2.0
-    sosem_quad = np.load("results/data/soms_rs=$(rs_quad)_beta_ef=40.0.npz")
+    sosem_quad = np.load("results/data/soms_rs=$(rs_quad)_beta_ef=200.0.npz")
     # Non-dimensionalize rs = 2 quadrature results by Thomas-Fermi energy
     param_quad = Parameter.atomicUnit(0, rs_quad)    # (dimensionless T, rs)
     eTF_quad = param_quad.qTF^2 / (2 * param_quad.me)

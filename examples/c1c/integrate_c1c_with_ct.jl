@@ -17,7 +17,7 @@ function main()
 
     settings = DiagGen.Settings(;
         observable=DiagGen.c1c,
-        n_order=4,
+        n_order=3,
         verbosity=DiagGen.quiet,
         expand_bare_interactions=true,
     )
@@ -40,7 +40,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 1e7
+    neval = 1e8
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -116,9 +116,9 @@ function main()
             # are free to mix rs of the current MC calculation with this result at rs = 2.
             # Similarly, the bare results were calculated at zero temperature (beta is arb.)
             rs_quad = 2.0
-            sosem_quad = np.load("results/data/soms_rs=$(rs_quad)_beta_ef=40.0.npz")
+            sosem_quad = np.load("results/data/soms_rs=$(rs_quad)_beta_ef=200.0.npz")
             # np.load("results/data/soms_rs=$(Float64(param.rs))_beta_ef=$(param.beta).npz")
-            k_kf_grid_quad = np.linspace(0.0, 6.0; num=600)
+            k_kf_grid_quad = np.linspace(0.0, 3.0; num=600)
             # Non-dimensionalize rs = 2 quadrature results by Thomas-Fermi energy
             param_quad = Parameter.atomicUnit(0, rs_quad)    # (dimensionless T, rs)
             eTF_quad = param_quad.qTF^2 / (2 * param_quad.me)
