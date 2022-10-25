@@ -17,7 +17,7 @@ function main()
 
     settings = DiagGen.Settings(;
         observable=DiagGen.c1c,
-        n_order=4,
+        n_order=3,
         verbosity=DiagGen.quiet,
         expand_bare_interactions=true,
     )

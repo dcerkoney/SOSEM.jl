@@ -23,6 +23,10 @@ struct PlotParams
 end
 export PlotParams
 
+# Chemical potential renormalization for Monte-Carlo with counterterms
+include("renormalization.jl")
+export chemicalpotential_renormalization
+
 # Propagator evaluation for Monte-Carlo
 include("propagators.jl")
 using .Propagators

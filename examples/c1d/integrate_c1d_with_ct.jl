@@ -122,7 +122,7 @@ function main()
             # Non-dimensionalize rs = 2 quadrature results by Thomas-Fermi energy
             param_quad = Parameter.atomicUnit(0, rs_quad)    # (dimensionless T, rs)
             eTF_quad = param_quad.qTF^2 / (2 * param_quad.me)
-            c1d_quad_dimless = sosem_quad.get("bare_c") / eTF_quad^2
+            c1d_quad_dimless = sosem_quad.get("bare_d") / eTF_quad^2
             ax.plot(
                 k_kf_grid_quad,
                 c1d_quad_dimless,

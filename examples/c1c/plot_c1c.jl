@@ -58,7 +58,7 @@ function main()
         # k / kf
         k_kf_grid = kgrid / param.kF
 
-        # Plot numerically exact result for n = 2
+        # Plot bare and RPA+FL non-local moments
         if i == 1
             # Compare with bare quadrature results (stored in Hartree a.u.)
             rs_quad = 2.0

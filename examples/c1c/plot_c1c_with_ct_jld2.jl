@@ -19,6 +19,11 @@ function main()
     expand_bare_interactions = true
     neval = 5e8
     max_order = 4
+    max_order_plot = 3
+
+    # Enable/disable interaction and chemical potential counterterms
+    renorm_mu = true
+    renorm_lambda = true
 
     # Enable/disable interaction and chemical potential counterterms
     # renorm_mu = true
@@ -72,10 +77,8 @@ function main()
 
     # Plot the results
     fig, ax = plt.subplots()
-    # Compare with the bare quadrature results (stored in Hartree a.u.)
-    # Since the bare result is independent of rs after non-dimensionalization, we
-    # are free to mix rs of the current MC calculation with this result at rs = 2.
-    # Similarly, the bare results were calculated at zero temperature (beta is arb.)
+
+    # Non-dimensionalize bare and RPA+FL non-local moments
     rs_quad = 2.0
     sosem_quad = np.load("results/data/soms_rs=$(rs_quad)_beta_ef=200.0.npz")
     # np.load("results/data/soms_rs=$(Float64(param.rs))_beta_ef=$(param.beta).npz")
@@ -93,6 +96,9 @@ function main()
         )
     end
     for o in eachindex(partitions)
+        if sum(partitions[o]) > max_order_plot
+            continue
+        end
         # Get means and error bars from the result for this partition
         local means, stdevs
         if res.config.N == 1
