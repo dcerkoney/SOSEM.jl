@@ -3,6 +3,7 @@ using ElectronGas
 using ElectronLiquid
 using ElectronLiquid.UEG: ParaMC, KOinstant
 using FeynmanDiagram
+using JLD2
 using Measurements
 using MCIntegration
 using Lehmann
@@ -124,8 +125,6 @@ function integrand(vars, config)
     @debug "ik = $ik" maxlog = 3
     @debug "ExtK = $(kgrid[ik])" maxlog = 3
 
-    T = [0.0]
-
     # Evaluate the expression tree (additional = mcparam)
     weight = exprtree.node.current
     ExprTree.evalKT!(exprtree, varK, [], mcparam)
@@ -228,23 +227,23 @@ function main()
            • Worst standard score: $worst_score
           """)
 
-    # Plot the result
-    if plot
+    # Save to JLD2 on main thread
+    if !isnothing(res)
         savename =
             "results/data/sigma_fock_rs=$(param.rs)_" *
             "beta_ef=$(param.beta)_neval=$(neval)_$(solver)"
-        # Remove old data, if it exists
-        rm(savename; force=true)
-        # Save the result
-        # TODO: kwargs implementation (kgrid_<solver>...)
-        np.savez(
-            savename;
-            param=[param.order, param.rs, param.beta, param.kF, param.qTF, param.mass2],
-            kgrid=kgrid,
-            means=means,
-            stdevs=stdevs,
-        )
-        # Plot the result
+        jldopen("$savename.jld2", "a+") do f
+            key = "$(short(param))"
+            if haskey(f, key)
+                @warn("replacing existing data for $key")
+                delete!(f, key)
+            end
+            return f[key] = (settings, param, kgrid, res)
+        end
+    end
+
+    # Plot the result
+    if plot
         fig, ax = plt.subplots()
         # Compare with exact non-dimensionalized function (-F(k / kF))
         ax.plot(k_kf_grid, -lindhard.(k_kf_grid), "k"; label="(exact)")

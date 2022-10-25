@@ -70,7 +70,7 @@ function integrate_nonlocal_with_ct(
         measure=measure,
         neval=neval,
         print=print,
-        # Config kwargs
+        # MC config kwargs
         # userdata=(updated_mcparam, exprtrees, innerLoopNums, extTs, varK, kgrid, obs_sign),
         userdata=(mcparam, exprtrees, innerLoopNums, extTs, varK, kgrid, obs_sign),
         var=(K, T, ExtKidx),
@@ -137,7 +137,7 @@ function integrate_nonlocal(
         measure=measure_single,
         neval=neval,
         print=print,
-        # Config kwargs
+        # MC config kwargs
         userdata=(mcparam, [exprtree], [innerLoopNum], [cfg.extT], varK, kgrid, obs_sign),
         var=(K, T, ExtKidx),
         dof=dof,

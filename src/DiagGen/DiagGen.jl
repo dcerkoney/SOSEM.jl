@@ -27,8 +27,10 @@ export get_bare_string, get_exact_k0, getID, propagator_param
 
 include("common.jl")
 export Verbosity, quiet, info, verbose
-export Settings,
-    Config, checktree, counterterm_partitions, counterterm_partitions_fixed_order
+export Settings, Config, checktree
+
+include("partitions.jl")
+export counterterm_partitions, counterterm_partitions_fixed_order, counterterm_single_split
 
 # Non-local moment
 include("build_nonlocal.jl")

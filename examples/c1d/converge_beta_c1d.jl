@@ -1,5 +1,6 @@
 using ElectronGas
 using ElectronLiquid.UEG: ParaMC
+using JLD2
 using Measurements
 using SOSEM
 using PyCall
@@ -45,6 +46,7 @@ function main()
     meshtypestr = (mesh_type == linear) ? "linear_" : "log2_"
 
     local param
+    params = Vector{Float64}()
     means = Vector{Float64}()
     stdevs = Vector{Float64}()
     # Grid of dimensionless cooling param (beta / EF)
@@ -85,6 +87,7 @@ function main()
             # means = res.mean
             # stdevs = res.stdev
             @assert length(res.mean) == length(res.stdev) == 1
+            push!(params, param)
             push!(means, res.mean[1])
             push!(stdevs, res.stdev[1])
             # z-score test for uniform value for this SOSEM observable
@@ -105,36 +108,30 @@ function main()
         end
     end
 
+    # Distinguish results with fixed vs re-expanded bare interactions
+    intn_str = ""
+    if settings.expand_bare_interactions
+        intn_str = "no_bare_"
+    end
+
     # Save the results of a uniform calculation at multiple beta
     if length(means) > 1
-        # Distinguish results with fixed vs re-expanded bare interactions
-        intn_str = ""
-        if settings.expand_bare_interactions
-            intn_str = "no_bare_"
-        end
-        # Save the result
         savename =
             "results/data/converge_beta_$(meshtypestr)c1d_" *
-            "n=$(param.order)_rs=$(param.rs)_lambda=$(param.mass2)_" *
+            "n=$(params[1].order)_rs=$(params[1].rs)_lambda=$(params[1].mass2)_" *
             "neval=$(neval)_$(intn_str)$(solver)"
-        # Remove old data, if it exists
-        rm(savename; force=true)
-        # TODO: kwargs implementation (kgrid_<solver>...)
-        np.savez(
-            savename;
-            param=[
-                param.order,
-                param.rs,
-                param.beta,
-                param.kF,
-                param.qTF,
-                param.mass2,
-            ],
-            beta_grid=beta_grid,
-            kgrid=kgrid,
-            means=means,
-            stdevs=stdevs,
-        )
+        jldopen("$savename.jld2", "a+") do f
+            # UEG.short without beta
+            short_no_beta =
+                join(["$(k)_$(v)" for (k, v) in sort(delete!(paraid(p), "beta"))], "_")
+            key = "$(short_no_beta(params[1]))"
+            if haskey(f, key)
+                @warn("replacing existing data for $key")
+                delete!(f, key)
+            end
+            return f[key] = (settings, param, kgrid, means, stdevs)
+        end
+
         if plot
             # Plot the result
             fig, ax = plt.subplots()
@@ -143,7 +140,7 @@ function main()
             # are free to mix rs of the current MC calculation with this result at rs = 2.
             # Similarly, the bare results were calculated at zero temperature (beta is arb.)
             rs_quad = 2.0
-            sosem_quad = np.load("results/data/soms_rs=$(rs_quad)_beta_ef=40.0.npz")
+            sosem_quad = np.load("results/data/soms_rs=$(rs_quad)_beta_ef=200.0.npz")
             # Non-dimensionalize rs = 2 quadrature results by Thomas-Fermi energy
             param_quad = Parameter.atomicUnit(0, rs_quad)    # (dimensionless T, rs)
             eTF_quad = param_quad.qTF^2 / (2 * param_quad.me)

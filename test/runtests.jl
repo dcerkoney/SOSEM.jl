@@ -9,9 +9,10 @@ using SOSEM
 using Test
 
 if isempty(ARGS)
-    include("integrate_lindhard.jl")
-    include("integrate_fock.jl")
-    include("integrate_sosem.jl")
+    include("test_lindhard_integration.jl")
+    include("test_fock_integration.jl")
+    include("test_sosem_integration.jl")
+    include("test_counterterm.jl")
 else
     include(ARGS[1])
 end

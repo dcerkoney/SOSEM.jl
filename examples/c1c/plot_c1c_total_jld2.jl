@@ -42,13 +42,17 @@ end
 function main()
     rs = 2.0
     beta = 200.0
-    mass2 = 0.1
+    mass2 = 2.0
     solver = :vegasmc
     expand_bare_interactions = true
 
     neval = 5e8
     min_order = 2
-    max_order = 4
+    max_order = 3
+
+    # Enable/disable interaction and chemical potential counterterms
+    renorm_mu = true
+    renorm_lambda = true
 
     plotparam =
         UEG.ParaMC(; order=max_order, rs=rs, beta=beta, mass2=mass2, isDynamic=false)
@@ -57,6 +61,15 @@ function main()
     intn_str = ""
     if expand_bare_interactions
         intn_str = "no_bare_"
+    end
+
+    # Distinguish results with different counterterm schemes
+    ct_string = (renorm_mu || renorm_lambda) ? "with_ct" : ""
+    if renorm_mu
+        ct_string *= "_mu"
+    end
+    if renorm_lambda
+        ct_string *= "_lambda"
     end
 
     # Use LaTex fonts for plots
@@ -70,7 +83,7 @@ function main()
     savename =
         "results/data/c1c_n=$(max_order)_rs=$(rs)_" *
         "beta_ef=$(beta)_lambda=$(mass2)_" *
-        "neval=$(neval)_$(intn_str)$(solver)_with_ct"
+        "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)"
     settings, param, kgrid, partitions, res = jldopen("$savename.jld2", "a+") do f
         key = "$(UEG.short(plotparam))"
         return f[key]
@@ -83,7 +96,7 @@ function main()
     merged_data = CounterTerm.mergeInteraction(data)
 
     # Aggregate the full results for C⁽¹ᶜ⁾
-    c1cN = aggregate_results_c1cN(merged_data, nmax=max_order, nmin=min_order)
+    c1cN = aggregate_results_c1cN(merged_data; nmax=max_order, nmin=min_order)
 
     println(settings)
     println(UEG.paraid(param))
@@ -97,9 +110,9 @@ function main()
     # are free to mix rs of the current MC calculation with this result at rs = 2.
     # Similarly, the bare results were calculated at zero temperature (beta is arb.)
     rs_quad = 2.0
-    sosem_quad = np.load("results/data/soms_rs=$(rs_quad)_beta_ef=40.0.npz")
+    sosem_quad = np.load("results/data/soms_rs=$(rs_quad)_beta_ef=200.0.npz")
     # np.load("results/data/soms_rs=$(Float64(param.rs))_beta_ef=$(param.beta).npz")
-    k_kf_grid_quad = np.linspace(0.0, 6.0; num=600)
+    k_kf_grid_quad = np.linspace(0.0, 3.0; num=600)
     # Non-dimensionalize rs = 2 quadrature results by Thomas-Fermi energy
     param_quad = Parameter.atomicUnit(0, rs_quad)    # (dimensionless T, rs)
     eTF_quad = param_quad.qTF^2 / (2 * param_quad.me)
@@ -134,22 +147,27 @@ function main()
     ax.set_ylabel(
         "\$C^{(1c)}_{N}(\\mathbf{k}) \\,/\\, {\\epsilon}^{\\hspace{0.1em}2}_{\\mathrm{TF}}\$",
     )
-    yoffset = -0.15
+    # xloc = 0.5
+    # yloc = -0.075
+    # ydiv = -0.009
+    xloc = 1.75
+    yloc = -0.3
+    ydiv = -0.085
     ax.text(
-        1.75,
-        -0.425 + yoffset,
+        xloc,
+        yloc,
         "\$r_s = 2,\\, \\beta \\hspace{0.1em} \\epsilon_F = 200,\$";
         fontsize=14,
     )
     ax.text(
-        1.75,
-        -0.525 + yoffset,
-        "\$\\lambda = \\frac{\\epsilon_{\\mathrm{Ry}}}{10},\\, N_{\\mathrm{eval}} = \\mathrm{5e8},\$";
+        xloc,
+        yloc + ydiv,
+        "\$\\lambda = 2\\epsilon_{\\mathrm{Ry}},\\, N_{\\mathrm{eval}} = \\mathrm{5e8},\$";
         fontsize=14,
     )
     ax.text(
-        1.75,
-        -0.625 + yoffset,
+        xloc,
+        yloc + 2 * ydiv,
         "\${\\epsilon}_{\\mathrm{TF}}\\equiv\\frac{\\hbar^2 q^2_{\\mathrm{TF}}}{2 m_e}=2\\pi\\mathcal{N}_F\$ (a.u.)";
         fontsize=12,
     )
@@ -161,7 +179,7 @@ function main()
     fig.savefig(
         "results/c1c/c1c_N=$(param.order)_rs=$(param.rs)_" *
         "beta_ef=$(param.beta)_lambda=$(param.mass2)_" *
-        "neval=$(neval)_$(intn_str)$(solver)_total_jld2.pdf",
+        "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)_total.pdf",
     )
     plt.close("all")
     return

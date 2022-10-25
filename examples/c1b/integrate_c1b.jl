@@ -1,5 +1,6 @@
 using ElectronGas
 using ElectronLiquid.UEG: ParaMC
+using JLD2
 using Measurements
 using SOSEM
 using PyCall
@@ -28,8 +29,6 @@ function main()
     @debug "β * EF = $(mcparam.beta), β = $(mcparam.β), EF = $(mcparam.EF)" maxlog = 1
 
     # K-mesh for measurement
-    # k_kf_grid = [0.0]
-    # k_kf_grid = np.load("results/kgrids/kgrid_vegas_dimless_n=103.npy")
     k_kf_grid = np.load("results/kgrids/kgrid_vegas_dimless_n=77_small.npy")
     kgrid = mcparam.kF * k_kf_grid
 
@@ -66,60 +65,50 @@ function main()
         neval=neval,
         print=print,
     )
-    # Extract the result on the main thread.
+
+    # Distinguish results with fixed vs re-expanded bare interactions
+    intn_str = ""
+    if settings.expand_bare_interactions
+        intn_str = "no_bare_"
+    end
+
+    # Process result on main thread
     if !isnothing(res)
         # NOTE: Since C⁽¹ᵇ⁾ᴸ = C⁽¹ᵇ⁾ᴿ for the UEG, the
         #       full class (b) moment is C⁽¹ᵇ⁾ = 2C⁽¹ᵇ⁾ᴸ.
         means = 2 * res.mean
         stdevs = 2 * res.stdev
-    end
-
-    # z-score test for uniform value for this SOSEM observable
-    if mcparam.order == 2 && !isempty(means)
-        # C⁽¹ᵇ⁾ = 2C⁽¹ᵇ⁾ᴸ.
-        exact = 2 * DiagGen.get_exact_k0(settings.observable)
-        # Test standard score (z-score) of the measurement
-        meas = measurement(means[1], stdevs[1])
-        score = stdscore(meas, exact)
-        obsstring = DiagGen.get_bare_string(settings.observable)
-        # Result should be accurate to within the specified standard score (by default, 5σ)
-        println("""
-                $obsstring ($solver):
-                 • Exact: $exact
-                 • Measured: $meas
-                 • Standard score: $score
-                """)
-    end
-
-    # Save the results of a calculation at multiple external k
-    if length(means) > 1
-        # Distinguish results with fixed vs re-expanded bare interactions
-        intn_str = ""
-        if settings.expand_bare_interactions
-            intn_str = "no_bare_"
-        end
-        # Save the result
+        # Save to JLD2
         savename =
             "results/data/c1b_n=$(mcparam.order)_rs=$(mcparam.rs)_" *
             "beta_ef=$(mcparam.beta)_lambda=$(mcparam.mass2)_" *
             "neval=$(neval)_$(intn_str)$(solver)"
-        # Remove old data, if it exists
-        rm(savename; force=true)
-        # TODO: kwargs implementation (kgrid_<solver>...)
-        np.savez(
-            savename;
-            mcparam=[
-                mcparam.order,
-                mcparam.rs,
-                mcparam.beta,
-                mcparam.kF,
-                mcparam.qTF,
-                mcparam.mass2,
-            ],
-            kgrid=kgrid,
-            means=2 * means,
-            stdevs=2 * stdevs,
-        )
+        jldopen("$savename.jld2", "a+") do f
+            key = "$(short(mcparam))"
+            if haskey(f, key)
+                @warn("replacing existing data for $key")
+                delete!(f, key)
+            end
+            return f[key] = (settings, mcparam, kgrid, res)
+        end
+
+        # z-score test for uniform value for this SOSEM observable
+        if mcparam.order == 2
+            # C⁽¹ᵇ⁾ = 2C⁽¹ᵇ⁾ᴸ.
+            exact = 2 * DiagGen.get_exact_k0(settings.observable)
+            # Test standard score (z-score) of the measurement
+            meas = measurement(means[1], stdevs[1])
+            score = stdscore(meas, exact)
+            obsstring = DiagGen.get_bare_string(settings.observable)
+            # Result should be accurate to within the specified standard score (by default, 5σ)
+            println("""
+                    $obsstring ($solver):
+                     • Exact: $exact
+                     • Measured: $meas
+                     • Standard score: $score
+                    """)
+        end
+
         if plot
             # Plot the result
             fig, ax = plt.subplots()
@@ -129,9 +118,8 @@ function main()
                 # are free to mix rs of the current MC calculation with this result at rs = 2.
                 # Similarly, the bare results were calculated at zero temperature (beta is arb.)
                 rs_quad = 2.0
-                sosem_quad = np.load("results/data/soms_rs=$(rs_quad)_beta_ef=40.0.npz")
-                # np.load("results/data/soms_rs=$(Float64(mcparam.rs))_beta_ef=$(mcparam.beta).npz")
-                k_kf_grid_quad = np.linspace(0.0, 6.0; num=600)
+                sosem_quad = np.load("results/data/soms_rs=$(rs_quad)_beta_ef=200.0.npz")
+                k_kf_grid_quad = np.linspace(0.0, 3.0; num=600)
                 # Non-dimensionalize rs = 2 quadrature results by Thomas-Fermi energy
                 param_quad = Parameter.atomicUnit(0, rs_quad)    # (dimensionless T, rs)
                 eTF_quad = param_quad.qTF^2 / (2 * param_quad.me)
