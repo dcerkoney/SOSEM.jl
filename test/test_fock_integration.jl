@@ -1,20 +1,3 @@
-"""Dimensionless Lindhard function F(x)."""
-function lindhard(x, epsilon=1e-5)
-    # Exact limits at 0 and 1
-    if x ≈ 0
-        return 1
-    elseif x ≈ 1
-        return 1 / 2
-    end
-    if x > 1.0 / epsilon
-        # Taylor expansion for large x
-        r = 1 / x
-        return r^2 / 3 + r^4 / 15 + r^6 / 35
-    else
-        return 1 / 2 + ((1 - x^2) / (4x)) * log(abs((1 + x) / (1 - x)))
-    end
-end
-
 """Bare Coulomb interaction."""
 function CoulombBareinstant(q, p::ParaMC)
     return KOinstant(q, p.e0, p.dim, 0.0, 0.0, p.kF)
@@ -159,7 +142,7 @@ function fock_integral(;
     )
 
     # The nondimensionalized Fock self-energy is the negative Lindhard function
-    exact = -lindhard.(kgrid / param.kF)
+    exact = -UEG_MC.lindhard.(kgrid / param.kF)
 
     # Check the MC results against the exact (non-dimensionalized)
     # Fock (exhange) self-energy: Σₓ(k) / E²_{TF} = -F(k / kF)

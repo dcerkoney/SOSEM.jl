@@ -72,7 +72,7 @@ function eval(id::BareGreenId, K, _, varT, additional::Tuple{ParaMC,W}) where {W
     green = 0.0
     order = id.order[1]
     if order == 0
-        if τ ≈ 0.0
+        if τ == 0.0
             green = s * Spectral.kernelFermiT(-1e-8, ϵ, β)
         else
             green = s * Spectral.kernelFermiT(τ, ϵ, β)

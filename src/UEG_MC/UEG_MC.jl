@@ -27,6 +27,10 @@ export PlotParams
 include("renormalization.jl")
 export chemicalpotential_renormalization
 
+# Dimensionless Lindhard functions for the bare and statically-screened UEG theories
+include("lindhard.jl")
+export lindhard, screened_lindhard
+
 # Propagator evaluation for Monte-Carlo
 include("propagators.jl")
 using .Propagators

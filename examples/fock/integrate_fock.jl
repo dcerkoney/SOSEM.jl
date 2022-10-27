@@ -9,6 +9,7 @@ using MCIntegration
 using Lehmann
 using LinearAlgebra
 using PyCall
+using SOSEM.UEG_MC: lindhard
 
 # For saving/loading numpy data
 @pyimport numpy as np
@@ -32,23 +33,6 @@ function DiagTree.eval(id::BareGreenId, K, extT, varT, p::ParaMC)
     ϵ = norm(K)^2 / (2me * massratio) - μ
     # Overall sign difference relative to the Negle & Orland convention
     return -Spectral.kernelFermiT(-1e-8, ϵ, β)
-end
-
-"""Dimensionless Lindhard function F(x)."""
-function lindhard(x, epsilon=1e-5)
-    # Exact limits at 0 and 1
-    if x ≈ 0
-        return 1
-    elseif x ≈ 1
-        return 1 / 2
-    end
-    if x > 1.0 / epsilon
-        # Taylor expansion for large x
-        r = 1 / x
-        return r^2 / 3 + r^4 / 15 + r^6 / 35
-    else
-        return 1 / 2 + ((1 - x^2) / (4x)) * log(abs((1 + x) / (1 - x)))
-    end
 end
 
 """

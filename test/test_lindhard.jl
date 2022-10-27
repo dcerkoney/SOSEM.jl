@@ -1,10 +1,14 @@
-"""Dimensionless Lindhard function F(x)."""
-function lindhard(x, taylor_expand, epsilon=1e-7)
-    # Exact limits at 0 and 1
-    if x ≈ 0
+"""
+Dimensionless Lindhard function F(x) for the UEG, with optional Taylor expansion for testing.
+Here x is a dimensionless wavenumber.
+"""
+function lindhard(x::T, taylor_expand; epsilon=1e-5) where {T<:Real}
+    if UEG_MC.almostzero(x)
         return 1
     elseif x ≈ 1
         return 1 / 2
+    elseif x < 0
+        throw(DomainError(x))  # x should be a non-negative number
     end
     if taylor_expand && x > 1.0 / epsilon
         # Taylor expansion for large x
@@ -64,6 +68,19 @@ function integrate_lindhard(;
               """)
     end
     return abs(score) ≤ zscore_window
+end
+
+@testset "Lindhard function" begin
+    @test UEG_MC.lindhard(0) == 1
+    @test UEG_MC.lindhard(1e-8) == 1
+    @test UEG_MC.lindhard(1) == 1 / 2
+    @test UEG_MC.lindhard(1 + 1e-8) == 1 / 2
+end
+
+@testset "Yukawa-screened Lindhard function" begin
+    @test UEG_MC.screened_lindhard(0; lambda=eps(Float64) / 10) ≈ UEG_MC.lindhard(0)
+    @test UEG_MC.screened_lindhard(1; lambda=eps(Float64) / 10) ≈ UEG_MC.lindhard(1)
+    @test UEG_MC.screened_lindhard(π; lambda=eps(Float64) / 10) ≈ UEG_MC.lindhard(π)
 end
 
 @testset "Lindhard function improper integration" begin
