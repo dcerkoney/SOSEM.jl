@@ -9,7 +9,7 @@ function lindhard(x, taylor_expand, epsilon=1e-7)
     if taylor_expand && x > 1.0 / epsilon
         # Taylor expansion for large x
         r = 1 / x
-        return r^2 / 6 + r^4 / 30 + r^6 / 70
+        return r^2 / 3 + r^4 / 15 + r^6 / 35
     else
         return 1 / 2 + ((1 - x^2) / (4x)) * log(abs((1 + x) / (1 - x)))
     end
