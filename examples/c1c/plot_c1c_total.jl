@@ -48,6 +48,52 @@ function aggregate_results_c1cN(c1c; nmax, nmin=2, renorm_mu=false)
     return c1c_total
 end
 
+function load_z_mu(
+    param::UEG.ParaMC,
+    parafilename="para.csv",
+    ct_filename="examples/counterterms/data_Z.jld2",
+)
+    # Load μ from csv
+    local ct_data
+    filefound = false
+    f = jldopen(ct_filename, "r")
+    for key in keys(f)
+        if UEG.paraid(f[key][1]) == UEG.paraid(param)
+            ct_data = f[key]
+            filefound = true
+        end
+    end
+    if !filefound
+        throw(KeyError(UEG.paraid(param)))
+    end
+
+    df = CounterTerm.fromFile(parafilename)
+    para, _, _, data = ct_data
+    printstyled(UEG.short(para); color=:yellow)
+    println()
+
+    function zfactor(data, β)
+        return @. (imag(data[2, 1]) - imag(data[1, 1])) / (2π / β)
+    end
+
+    function mu(data)
+        return real(data[1, 1])
+    end
+
+    for p in sort([k for k in keys(data)])
+        println("$p: μ = $(mu(data[p]))   z = $(zfactor(data[p], para.β))")
+    end
+
+    μ = Dict()
+    for (p, val) in data
+        μ[p] = mu(val)
+    end
+    z = Dict()
+    for (p, val) in data
+        z[p] = zfactor(val, para.β)
+    end
+end
+
 function main()
     rs = 1.0
     beta = 200.0
@@ -111,9 +157,6 @@ function main()
     merged_data = CounterTerm.mergeInteraction(data)
     println([k for (k, _) in merged_data])
 
-    parafilename = "para.csv"
-    ct_filename = "examples/counterterms/data_Z.jld2"
-
     # Get total data
     if renorm_mu
         if renorm_mu_lo_ex && max_order_plot == 3
@@ -123,50 +166,10 @@ function main()
             c1c3 = merged_data[(3, 0)] + δμ1 * merged_data[(2, 1)]
             c1c = [c1c2, c1c3]
         else
-            # Load μ from csv
-            local ct_data
-            filefound = false
-            f = jldopen(ct_filename, "r")
-            for key in keys(f)
-                if UEG.paraid(f[key][1]) == UEG.paraid(param)
-                    ct_data = f[key]
-                    filefound = true
-                end
-            end
-            if !filefound
-                throw(KeyError(UEG.paraid(param)))
-            end
-
-            df = CounterTerm.fromFile(parafilename)
-            para, _, _, data = ct_data
-            printstyled(UEG.short(para); color=:yellow)
-            println()
-
-            function zfactor(data, β)
-                return @. (imag(data[2, 1]) - imag(data[1, 1])) / (2π / β)
-            end
-
-            function mu(data)
-                return real(data[1, 1])
-            end
-
-            for p in sort([k for k in keys(data)])
-                println("$p: μ = $(mu(data[p]))   z = $(zfactor(data[p], para.β))")
-            end
-
-            μ = Dict()
-            for (p, val) in data
-                μ[p] = mu(val)
-            end
-            z = Dict()
-            for (p, val) in data
-                z[p] = zfactor(val, para.β)
-            end
-
-            # Reexpand merged data in powers of μ, if applicable
+            # Reexpand merged data in powers of μ
+            z, μ = load_z_mu(param)
             δz, δμ = CounterTerm.sigmaCT(max_order - 2, μ, z; verbose=1)
             println("Computed δμ: ", δμ)
-            # TODO: Debug the overall sign difference
             c1c = UEG_MC.chemicalpotential_renormalization(max_order_plot, merged_data, δμ)
             # Test manual renormalization with exact lowest-order chemical potential
             if !renorm_mu_lo_ex && max_order >= 3

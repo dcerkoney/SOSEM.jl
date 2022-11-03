@@ -18,7 +18,7 @@ function main()
     solver = :vegasmc
     expand_bare_interactions = false
 
-    neval = 1e8
+    neval = 5e8
     max_order = 4
     max_order_plot = 4
 
@@ -104,10 +104,10 @@ function main()
             means, stdevs = res.mean[o], res.stdev[o]
         end
         # Data gets noisy above 1st Green's function counterterm order
-        marker =
-            (partitions[o][2] > 1 || (partitions[o][1] > 3 && partitions[o][2] > 0)) ?
-            "o-" : "-"
-        # marker = "-"
+        # marker =
+        #     (partitions[o][2] > 1 || (partitions[o][1] > 3 && partitions[o][2] > 0)) ?
+        #     "o-" : "-"
+        marker = "-"
         ax.plot(
             k_kf_grid,
             means,
@@ -132,13 +132,8 @@ function main()
         "\$C^{(1c)}_{\\mathcal{P}}(k) \\,/\\, {\\epsilon}^{\\hspace{0.1em}2}_{\\mathrm{TF}}\$",
     )
     xloc = 1.75
-    yloc = -0.5
-    ydiv = -0.1
-    # xloc = 1.75
-    # yloc = -0.02
-    # yloc = -0.055
-    # ydiv = -0.01
-    # ydiv = -0.009
+    yloc = 1.0
+    ydiv = -0.3
     ax.text(
         xloc,
         yloc,

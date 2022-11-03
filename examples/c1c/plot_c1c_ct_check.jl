@@ -20,6 +20,54 @@ function restodict(res, partitions)
     return data
 end
 
+function load_z_mu(
+    param::UEG.ParaMC,
+    parafilename="para.csv",
+    ct_filename="examples/counterterms/data_Z.jld2",
+)
+    # Load μ from csv
+    local ct_data
+    filefound = false
+    f = jldopen(ct_filename, "r")
+    for key in keys(f)
+        if UEG.paraid(f[key][1]) == UEG.paraid(param)
+            ct_data = f[key]
+            filefound = true
+        end
+    end
+    if !filefound
+        throw(KeyError(UEG.paraid(param)))
+    end
+
+    df = CounterTerm.fromFile(parafilename)
+    para, _, _, data = ct_data
+    printstyled(UEG.short(para); color=:yellow)
+    println()
+
+    function zfactor(data, β)
+        return @. (imag(data[2, 1]) - imag(data[1, 1])) / (2π / β)
+    end
+
+    function mu(data)
+        return real(data[1, 1])
+    end
+
+    for p in sort([k for k in keys(data)])
+        println("$p: μ = $(mu(data[p]))   z = $(zfactor(data[p], para.β))")
+    end
+
+    μ = Dict()
+    for (p, val) in data
+        μ[p] = mu(val)
+    end
+    z = Dict()
+    for (p, val) in data
+        z[p] = zfactor(val, para.β)
+    end
+
+    return z, μ
+end
+
 function main()
     rs = 1.0
     beta = 200.0
@@ -32,10 +80,12 @@ function main()
     max_order = 4
     min_order_plot = 3
     max_order_plot = 3
+    @assert max_order ≥ 3
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
     renorm_lambda = true
+    @assert renorm_mu
 
     # Include unscreened bare result
     plot_bare = false
@@ -142,33 +192,86 @@ function main()
     merged_data = CounterTerm.mergeInteraction(data)
     println([k for (k, _) in merged_data])
 
-    # The first-order counterterm is: δμ1= ReΣ₁[λ](kF, 0)
-    δμ1 = UEG_MC.delta_mu1(param)
-    # C⁽¹⁾₃ = C⁽¹⁾_{3,0} + δμ₁ C⁽¹⁾_{2,1}
-    c1c3 = merged_data[(3, 0)] + δμ1 * merged_data[(2, 1)]
+    # Reexpand merged data in powers of μ
+    z, μ = load_z_mu(param)
+    δz, δμ = CounterTerm.sigmaCT(max_order - 2, μ, z; verbose=1)
+    println("Computed δμ: ", δμ)
+    c1c = UEG_MC.chemicalpotential_renormalization(max_order_plot, merged_data, δμ)
+
+    # Test manual renormalization with exact lowest-order chemical potential;
+    # the first-order counterterm is: δμ1= ReΣ₁[λ](kF, 0)
+    δμ1_exact = UEG_MC.delta_mu1(param)
+    # C⁽¹⁾₃ = C⁽¹⁾_{3,0} + δμ₁ C⁽¹⁾_{2,1} (exact δμ₁)
+    c1c3_exact = merged_data[(3, 0)] + δμ1_exact * merged_data[(2, 1)]
+    c1c3_means_exact = Measurements.value.(c1c3_exact)
+    c1c3_errs_exact = Measurements.uncertainty.(c1c3_exact)
+    println("Largest magnitude of C^{(1c)}_{n=3}(k): $(maximum(abs.(c1c3_exact)))")
+    # C⁽¹⁾₃ = C⁽¹⁾_{3,0} + δμ₁ C⁽¹⁾_{2,1} (calc δμ₁)
+    c1c3 = c1c[2]  # c1c = [c1c2, c1c3, ...]
     c1c3_means = Measurements.value.(c1c3)
     c1c3_errs = Measurements.uncertainty.(c1c3)
-    println("Largest magnitude of C^{(1c)}_3(k): $(maximum(abs.(c1c3)))")
+    stdscores = stdscore.(c1c3, c1c3_exact)
+    worst_score = argmax(abs, stdscores)
+    println("Exact δμ₁: ", δμ1_exact)
+    println("Computed δμ₁: ", δμ[1])
+    println(
+        "Worst standard score for total result to 3rd " *
+        "order (auto vs exact+manual): $worst_score",
+    )
 
     # Check the counterterm cancellation to leading order in δμ
-    ax.plot(
-        k_kf_grid,
-        c1c3_means,
-        "-";
-        # "o-";
-        markersize=2,
-        color="violet",
-        label="\$\\widetilde{C}^{(1c)}_{n=3} = \\widetilde{C}^{(1c)}_{(3,0,0)} " *
-              " + \\delta\\mu_1 \\widetilde{C}^{(1c)}_{(2,1,0)}\$ ($solver)",
-    )
-    ax.fill_between(
-        k_kf_grid,
-        c1c3_means - c1c3_errs,
-        c1c3_means + c1c3_errs;
-        color="violet",
-        alpha=0.4,
-    )
+    c1c3_kind = ["exact", "calc."]
+    c1c3_kind_means = [c1c3_means_exact, c1c3_means]
+    c1c3_kind_errs = [c1c3_errs_exact, c1c3_errs]
+    next_color = length(partitions)  # next available color for plotting
+    for (kind, means, errs) in zip(c1c3_kind, c1c3_kind_means, c1c3_kind_errs)
+        ax.plot(
+            k_kf_grid,
+            means,
+            "-";
+            # "o-";
+            markersize=2,
+            color="C$next_color",
+            label="\$\\widetilde{C}^{(1c)}_{n=3} = \\widetilde{C}^{(1c)}_{(3,0)} " *
+                  " + \\delta\\mu_1 \\widetilde{C}^{(1c)}_{(2,1)}\$ ($kind \$\\delta\\mu_1\$, $solver)",
+        )
+        ax.fill_between(
+            k_kf_grid,
+            means - errs,
+            means + errs;
+            color="C$next_color",
+            alpha=0.4,
+        )
+        next_color += 1
+    end
 
+    if max_order ≥ 4 && max_order_plot ≥ 4
+        # Plot the counterterm cancellation at next-leading order in δμ
+        c1c4_means = Measurements.value.(c1c[3])
+        c1c4_errs = Measurements.uncertainty.(c1c[3])
+        ax.plot(
+            k_kf_grid,
+            c1c4_means,
+            "-";
+            # "o-";
+            markersize=2,
+            color="C$next_color",
+            label="\$\\widetilde{C}^{(1c)}_{n=4} = \\widetilde{C}^{(1c)}_{(4,0)} + " *
+                  "\\delta\\mu_1 \\widetilde{C}^{(1c)}_{(3,1)}\$ + " *
+                  "\\delta\\mu^2_1 \\widetilde{C}^{(1c)}_{(2,2)}\$ + " *
+                  "\\delta\\mu_2 \\widetilde{C}^{(1c)}_{(2,1)}\$ " *
+                  "($kind \$\\delta\\mu_1\$, $solver)",
+        )
+        ax.fill_between(
+            k_kf_grid,
+            c1c4_means - c1c4_errs,
+            c1c4_means + c1c4_errs;
+            color="C$next_color",
+            alpha=0.4,
+        )
+    end
+
+    # Plot labels and legend
     ax.legend(; loc="lower right")
     ax.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
     # ax.set_ylim(-0.1, 0.0025)
