@@ -24,10 +24,22 @@ docs/site/
 Manifest.toml
 
 # vscode files
-.vscode/
+# .vscode/
 *.code-workspace
 .history
 .markdown*
+
+# Ignore latex files
+*.tex
+*.aux
+*.fdb_latexmk
+*.fls
+*.log
+*.gz
+*.mp
+*.t1
+*.1
+*.dvi
 
 # Misc directories
 notes
