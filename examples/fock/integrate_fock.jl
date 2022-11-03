@@ -199,6 +199,7 @@ function main()
     # Fock (exhange) self-energy: Σx(0) / E²_{TF} = -F(0) = -1
     means, stdevs = res.mean, res.stdev
     meas = measurement.(means, stdevs)
+    scores = stdscore.(meas, exact)
     score_k0 = scores[1]
     worst_score = argmax(abs, scores)
 

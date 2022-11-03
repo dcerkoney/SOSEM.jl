@@ -14,6 +14,8 @@ const OptInt = Union{Nothing,Int}
 const ProprTauType = Tuple{Int,Int}
 const ProprOptTauType = Tuple{OptInt,Int}
 const Gamma3OptTauType = Tuple{Int,Int,OptInt}
+const Interaction = FeynmanDiagram.Interaction
+const Filter = FeynmanDiagram.Filter
 
 include("IntegerCompositions/weak_integer_compositions.jl")
 using .IntegerCompositions

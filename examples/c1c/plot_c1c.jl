@@ -11,23 +11,20 @@ using SOSEM
 # NOTE: Call from main project directory as: julia examples/c1c/plot_c1c.jl
 
 function main()
-    rs = 2.0
+    rs = 1.0
     beta = 200.0
-    mass2 = 0.1
-    # mass2 = 2.0
+    mass2 = 2.0
+    # mass2 = 0.1
     solver = :vegasmc
-    expand_bare_interactions = true
-    neval = 5e8
+    expand_bare_interactions = false
+
+    neval = 1e8
     max_order = 4
-    max_order_plot = 3
+    max_order_plot = 4
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
     renorm_lambda = true
-
-    # Enable/disable interaction and chemical potential counterterms
-    # renorm_mu = true
-    # renorm_lambda = true
 
     # Include unscreened bare result
     plot_bare = true
@@ -61,8 +58,7 @@ function main()
     savename =
         "results/data/c1c_n=$(max_order)_rs=$(rs)_" *
         "beta_ef=$(beta)_lambda=$(mass2)_" *
-        "neval=$(neval)_$(intn_str)$(solver)_with_ct"
-        # "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)"
+        "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)"
     settings, param, kgrid, partitions, res = jldopen("$savename.jld2", "a+") do f
         key = "$(UEG.short(plotparam))"
         return f[key]
@@ -79,7 +75,7 @@ function main()
     fig, ax = plt.subplots()
 
     # Non-dimensionalize bare and RPA+FL non-local moments
-    rs_quad = 2.0
+    rs_quad = 1.0
     sosem_quad = np.load("results/data/soms_rs=$(rs_quad)_beta_ef=200.0.npz")
     # np.load("results/data/soms_rs=$(Float64(param.rs))_beta_ef=$(param.beta).npz")
     k_kf_grid_quad = np.linspace(0.0, 3.0; num=600)
@@ -108,8 +104,10 @@ function main()
             means, stdevs = res.mean[o], res.stdev[o]
         end
         # Data gets noisy above 1st Green's function counterterm order
-        # marker = partitions[o][2] > 1 ? "o-" : "-"
-        marker = "-"
+        marker =
+            (partitions[o][2] > 1 || (partitions[o][1] > 3 && partitions[o][2] > 0)) ?
+            "o-" : "-"
+        # marker = "-"
         ax.plot(
             k_kf_grid,
             means,
@@ -131,25 +129,27 @@ function main()
     # ax.set_ylim(-0.1, 0.0025)
     ax.set_xlabel("\$k / k_F\$")
     ax.set_ylabel(
-        "\$C^{(1c)}_{\\mathcal{P}}(\\mathbf{k}) \\,/\\, {\\epsilon}^{\\hspace{0.1em}2}_{\\mathrm{TF}}\$",
+        "\$C^{(1c)}_{\\mathcal{P}}(k) \\,/\\, {\\epsilon}^{\\hspace{0.1em}2}_{\\mathrm{TF}}\$",
     )
-    # xloc = 0.5
-    # yloc = -0.075
-    # ydiv = -0.009
     xloc = 1.75
-    yloc = -0.3
-    ydiv = -0.085
+    yloc = -0.5
+    ydiv = -0.1
+    # xloc = 1.75
+    # yloc = -0.02
+    # yloc = -0.055
+    # ydiv = -0.01
+    # ydiv = -0.009
     ax.text(
         xloc,
         yloc,
-        "\$r_s = 2,\\, \\beta \\hspace{0.1em} \\epsilon_F = 200,\$";
+        "\$r_s = 1,\\, \\beta \\hspace{0.1em} \\epsilon_F = 200,\$";
         fontsize=14,
     )
     ax.text(
         xloc,
         yloc + ydiv,
-        "\$\\lambda = \\frac{\\epsilon_{\\mathrm{Ry}}}{10},\\, N_{\\mathrm{eval}} = \\mathrm{5e8},\$";
-        # "\$\\lambda = 2\\epsilon_{\\mathrm{Ry}},\\, N_{\\mathrm{eval}} = \\mathrm{5e8},\$";
+        "\$\\lambda = 2\\epsilon_{\\mathrm{Ry}},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)},\$";
+        # "\$\\lambda = \\frac{\\epsilon_{\\mathrm{Ry}}}{10},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)},\$";
         fontsize=14,
     )
     ax.text(
@@ -158,15 +158,16 @@ function main()
         "\${\\epsilon}_{\\mathrm{TF}}\\equiv\\frac{\\hbar^2 q^2_{\\mathrm{TF}}}{2 m_e}=2\\pi\\mathcal{N}_F\$ (a.u.)";
         fontsize=12,
     )
-    # plt.title("Using fixed bare Coulomb interactions \$V_1\$, \$V_2\$")
-    plt.title(
-        "Using re-expanded Coulomb interactions \$V_1[V_\\lambda]\$, \$V_2[V_\\lambda]\$",
-    )
+    plt.title("Using fixed bare Coulomb interactions \$V_1\$, \$V_2\$")
+    # plt.title(
+    #     "Using re-expanded Coulomb interactions \$V_1[V_\\lambda]\$, \$V_2[V_\\lambda]\$",
+    # )
     plt.tight_layout()
     fig.savefig(
-        "results/c1c/c1c_n=$(param.order)_rs=$(param.rs)_" *
+        "results/c1c/c1c_n=$(max_order_plot)_rs=$(param.rs)_" *
         "beta_ef=$(param.beta)_lambda=$(param.mass2)_" *
-        "neval=$(neval)_$(intn_str)$(solver)_$(ct_string).pdf",
+        "neval=$(neval)_$(intn_str)$(solver)_" *
+        "$(ct_string).pdf",
     )
     plt.close("all")
     return

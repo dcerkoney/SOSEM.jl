@@ -29,6 +29,8 @@ end
 
 # Unscreened Coulomb interaction (for outer V lines of non-local SOSEM)
 @inline function CoulombBareinstant(q, p::ParaMC)
+    # Test fictitious Yukawa screening for bare interactions (mass2 = 1e-6)
+    # return KOinstant(q, p.e0, p.dim, 1e-6, 0.0, p.kF)
     return KOinstant(q, p.e0, p.dim, 0.0, 0.0, p.kF)
 end
 

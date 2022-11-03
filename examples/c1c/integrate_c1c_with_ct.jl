@@ -17,13 +17,16 @@ function main()
 
     settings = DiagGen.Settings(;
         observable=DiagGen.c1c,
-        n_order=3,
+        n_order=4,
         verbosity=DiagGen.quiet,
-        expand_bare_interactions=true,
+        expand_bare_interactions=false,
+        filter=[NoHartree],
+        interaction=[FeynmanDiagram.Interaction(ChargeCharge, Instant)],  # Yukawa-type interaction
+        # interaction=[FeynmanDiagram.Interaction(ChargeCharge, Dynamic)],  # TODO: test RPA-type interaction
     )
 
     # UEG parameters for MC integration
-    param = ParaMC(; order=settings.n_order, rs=2.0, beta=200.0, mass2=2.0, isDynamic=false)
+    param = ParaMC(; order=settings.n_order, rs=1.0, beta=200.0, mass2=2.0, isDynamic=false)
     @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)"
 
     # K-mesh for measurement
@@ -38,7 +41,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 5e8
+    neval = 1e8
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -109,10 +112,8 @@ function main()
             fig, ax = plt.subplots()
             # Compare with bare quadrature results (stored in Hartree a.u.)
             if compare_bare
-                # Since the bare result is independent of rs after non-dimensionalization, we
-                # are free to mix rs of the current MC calculation with this result at rs = 2.
-                # Similarly, the bare results were calculated at zero temperature (beta is arb.)
-                rs_quad = 2.0
+                # NOTE: The bare results were calculated at zero temperature (beta is arb.)
+                rs_quad = 1.0
                 sosem_quad = np.load("results/data/soms_rs=$(rs_quad)_beta_ef=200.0.npz")
                 # np.load("results/data/soms_rs=$(Float64(param.rs))_beta_ef=$(param.beta).npz")
                 k_kf_grid_quad = np.linspace(0.0, 3.0; num=600)

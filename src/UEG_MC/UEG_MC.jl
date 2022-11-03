@@ -12,7 +12,7 @@ using ..SOSEM: @todo, DiagramF64, ExprTreeF64
 
 # Chemical potential renormalization for Monte-Carlo with counterterms
 include("renormalization.jl")
-export chemicalpotential_renormalization
+export chemicalpotential_renormalization, delta_mu1
 
 # Dimensionless Lindhard functions for the bare and statically-screened UEG theories
 include("lindhard.jl")

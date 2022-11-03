@@ -3,8 +3,9 @@ using JLD2
 
 # Physical params matching data for SOSEM observables
 order = [2]  # C^{(1)}_{N≤4} includes CTs up to 2nd order
-rs = [2.0]
-mass2 = [0.1]
+rs = [1.0]
+# mass2 = [0.1]
+mass2 = [2.0]
 beta = [200.0]
 
 # Total number of MCMC evaluations

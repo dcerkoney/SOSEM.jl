@@ -94,9 +94,9 @@ function counterterm_single_split(n::Int, n_lowest::Int=2)
         return Tuple{Int,Int}[]
     end
     splits = Tuple{Int,Int}[]
-    max = n_lowest
-    n1 = n_lowest
-    n2 = 0
+    max    = n_lowest
+    n1     = n_lowest
+    n2     = 0
     while max <= n
         push!(splits, (n1, n2))
         n1 += 1

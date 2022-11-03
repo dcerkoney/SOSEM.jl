@@ -11,6 +11,8 @@ end
     n_order::Int = 2  # Total order ξ (loops + CTs)
     verbosity::Verbosity = quiet
     expand_bare_interactions::Bool = false
+    filter::Vector{Filter} = [NoHartree]
+    interaction::Vector{Interaction} = [Interaction(ChargeCharge, Instant)]
     name::Symbol = Symbol(string(observable))  # Derive SOSEM name from observable
 end
 
@@ -77,7 +79,7 @@ Configuration bundling physical properties and fixed variables for a Σ₂[G, V,
     # External time indices
     extT::Tuple{Int,Int}
     # A generic ID for intermediate diagram construction steps
-    generic_id = GenericId(propagator_param(GreenDiag, 0, 1, 1))
+    generic_id::GenericId
 end
 
 """Construct a Config struct via diagram parameters with/without Γⁱ₃ insertion."""
@@ -106,13 +108,13 @@ end
 """Construct a Config struct with trivial Γⁱ₃ insertion (Γⁱ₃ = Γ₀)."""
 function _Config(settings::Settings, n_loop, g_names, v_names)
     # Expansion order info
-    n_g = 3
-    n_v = 2
-    n_expand = n_loop - n_v  # Expansion order for internal lines/vertices
+    n_g          = 3
+    n_v          = 2
+    n_expand     = n_loop - n_v  # Expansion order for internal lines/vertices
     n_expandable = n_g
 
     # Get diagram parameters
-    param = _getparam(n_loop)
+    param = _getparam(n_loop; filter=settings.filter, interaction=settings.interaction)
 
     # Total size of the SOSEM loop basis dimension (= n_loop + n_v + 1)
     nk = param.totalLoopNum
@@ -120,7 +122,7 @@ function _Config(settings::Settings, n_loop, g_names, v_names)
     nt = param.totalTauNum
 
     # Basis momenta for loops of Σ₂
-    k = DiagTree.getK(nk, 1)
+    k  = DiagTree.getK(nk, 1)
     k1 = DiagTree.getK(nk, 2)
     k3 = DiagTree.getK(nk, 3)
     # Derived momenta
@@ -128,8 +130,8 @@ function _Config(settings::Settings, n_loop, g_names, v_names)
     q1 = k1 - k
     q2 = k3 - k
     # Propagator momenta/times
-    g_ks = (k1, k2, k3)
-    v_ks = (q1, q2)
+    g_ks   = (k1, k2, k3)
+    v_ks   = (q1, q2)
     g_taus = ((1, nt), (nt, 1), (1, nt))
     v_taus = ((1, 1), (nt, nt))
     # External times
@@ -147,12 +149,24 @@ function _Config(settings::Settings, n_loop, g_names, v_names)
 
     # Discontinuity side and sign for this observable
     discont_side = _get_discont_side(settings.observable)
-    obs_sign = _get_obs_sign(settings.observable)
-    extT_sign = _get_extT_sign(discont_side)
+    obs_sign     = _get_obs_sign(settings.observable)
+    extT_sign    = _get_extT_sign(discont_side)
 
     # Bundle data for each line/vertex object
     g_data = GData(g_names, g_taus, g_ks, indices_g, indices_g_dash)
     v_data = VData(v_names, v_taus, v_ks, v_orders)
+
+    # Generic ID for intermediate diagram objects
+    generic_id = GenericId(
+        propagator_param(
+            GreenDiag,
+            0,
+            1,
+            1;
+            filter=param.filter,
+            interaction=param.interaction,
+        ),
+    )
 
     # Config struct for low-order case
     return Config(;
@@ -167,19 +181,20 @@ function _Config(settings::Settings, n_loop, g_names, v_names)
         obs_sign=obs_sign,
         extT_sign=extT_sign,
         extT=extT,
+        generic_id=generic_id,
     )
 end
 
 """Construct a Config struct with nontrivial Γⁱ₃ insertion (Γⁱ₃ > Γ₀)."""
 function _Config(settings::Settings, n_loop, g_names, v_names, gamma3_name)
     # Expansion order info
-    n_g = 3
-    n_v = 2
-    n_expand = n_loop - n_v     # Expansion order for internal lines/vertices
-    n_expandable = n_g + 1      # ( = n_g + n_gamma3)
+    n_g          = 3
+    n_v          = 2
+    n_expand     = n_loop - n_v     # Expansion order for internal lines/vertices
+    n_expandable = n_g + 1          # ( = n_g + n_gamma3)
 
     # Get diagram parameters
-    param = _getparam(n_loop)
+    param = _getparam(n_loop; filter=settings.filter, interaction=settings.interaction)
 
     # Total size of the SOSEM loop basis dimension (= n_order + 1)
     nk = param.totalLoopNum
@@ -187,7 +202,7 @@ function _Config(settings::Settings, n_loop, g_names, v_names, gamma3_name)
     nt = param.totalTauNum
 
     # Basis momenta for loops of Σ₂
-    k = DiagTree.getK(nk, 1)
+    k  = DiagTree.getK(nk, 1)
     k1 = DiagTree.getK(nk, 2)
     k3 = DiagTree.getK(nk, 3)
     # Derived momenta
@@ -232,13 +247,25 @@ function _Config(settings::Settings, n_loop, g_names, v_names, gamma3_name)
 
     # Discontinuity side and sign for this observable
     discont_side = _get_discont_side(settings.observable)
-    obs_sign = _get_obs_sign(settings.observable)
-    extT_sign = _get_extT_sign(discont_side)
+    obs_sign     = _get_obs_sign(settings.observable)
+    extT_sign    = _get_extT_sign(discont_side)
 
     # Bundle data for each line/vertex object
-    g_data = GData(g_names, g_taus, g_ks, indices_g, indices_g_dash)
-    v_data = VData(v_names, v_taus, v_ks, v_orders)
+    g_data      = GData(g_names, g_taus, g_ks, indices_g, indices_g_dash)
+    v_data      = VData(v_names, v_taus, v_ks, v_orders)
     gamma3_data = Gamma3Data(gamma3_name, gamma3_side, gamma3_taus, gamma3_ks, index_gamma3)
+
+    # Generic ID for intermediate diagram objects
+    generic_id = GenericId(
+        propagator_param(
+            GreenDiag,
+            0,
+            1,
+            1;
+            filter=param.filter,
+            interaction=param.interaction,
+        ),
+    )
 
     # Config struct for high-order case
     return Config(;
@@ -255,6 +282,7 @@ function _Config(settings::Settings, n_loop, g_names, v_names, gamma3_name)
         obs_sign=obs_sign,
         extT_sign=extT_sign,
         extT=extT,
+        generic_id=generic_id,
     )
 end
 

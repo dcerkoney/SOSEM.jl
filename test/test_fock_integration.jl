@@ -96,7 +96,7 @@ function fock_integral(;
     alpha=2.0,
     neval=5e5,
     mcprint=-1,
-    zscore_window=5,
+    zscore_window=6,
     solver=:vegas,
     verbosity=DiagGen.quiet,
 )

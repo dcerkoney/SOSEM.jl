@@ -35,7 +35,7 @@ end
 Dimensionless Lindhard function F(x, lambda) for the screened UEG with Yukawa interaction V[λ].
 Here x is a dimensionless wavenumber and lambda is the dimensionless Yukawa mass squared.
 """
-function screened_lindhard(x::S; lambda::T, epsilon=1e-5) where {S,T<:Real}
+function screened_lindhard(x::S; lambda::T, epsilon=1e-5) where {S<:Real,T<:Real}
     if lambda < 0
         # lambda should be a non-negative number
         throw(DomainError(lambda))
@@ -48,7 +48,7 @@ function screened_lindhard(x::S; lambda::T, epsilon=1e-5) where {S,T<:Real}
         if almostzero(x)
             return 1 - m * atan(1 / m)
         elseif x ≈ 1
-            return 1 / 2 - (m / 2) * atan(2 / m) + (lambda / 2) * atan(2 / (2 + lambda))
+            return 1 / 2 - (m / 2) * atan(2 / m) + (lambda / 4) * atanh(2 / (2 + lambda))
         elseif x < 0
             throw(DomainError(x))  # x should be a non-negative number
         end

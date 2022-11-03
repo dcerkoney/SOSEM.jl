@@ -27,73 +27,73 @@ end
     c1d      #                                 + C⁽¹ᵈ⁾
 end
 const bare_observable_to_exact_k0 = Dict(
-    c1a => Inf,  # The bare local moment is divergent
+    c1a   => Inf,  # The bare local moment is divergent
     c1bL0 => (1 / 4 - pi^2 / 16),
     c1bR0 => (1 / 4 - pi^2 / 16),
-    c1c => -1,
-    c1d => pi^2 / 8,
+    c1c   => -1,
+    c1d   => pi^2 / 8,
 )
 const observable_to_lowest_loop_order = Dict(
     sigma20 => 2,
-    sigma2 => 3,  # Γⁱ₃ > Γ₀ insertion ⟹ one additional loop
-    c1a => 2,
-    c1bL0 => 2,
-    c1bR0 => 2,
-    c1bL => 3,    # Γⁱ₃ > Γ₀ insertion ⟹ one additional loop
-    c1bR => 3,    # Γⁱ₃ > Γ₀ insertion ⟹ one additional loop
-    c1c => 2,
-    c1d => 2,
+    sigma2  => 3,  # Γⁱ₃ > Γ₀ insertion ⟹ one additional loop
+    c1a     => 2,
+    c1bL0   => 2,
+    c1bR0   => 2,
+    c1bL    => 3,  # Γⁱ₃ > Γ₀ insertion ⟹ one additional loop
+    c1bR    => 3,  # Γⁱ₃ > Γ₀ insertion ⟹ one additional loop
+    c1c     => 2,
+    c1d     => 2,
 )
 const observable_to_dash_indices = Dict(
     sigma20 => Int[],
-    sigma2 => Int[],
-    c1a => [3],   # local SOSEM class has only one dash configuration
-    c1bL0 => [1],
-    c1bR0 => [3],
-    c1bL => [1],
-    c1bR => [3],  # crossing-symmetric (non-local) counterpart to c1a => same dash index (3) 
-    c1c => [2],
-    c1d => [1, 3],
+    sigma2  => Int[],
+    c1a     => [3],    # local SOSEM class has only one dash configuration
+    c1bL0   => [1],
+    c1bR0   => [3],
+    c1bL    => [1],
+    c1bR    => [3],    # crossing-symmetric (non-local) counterpart to c1a => same dash index (3) 
+    c1c     => [2],
+    c1d     => [1, 3],
 )
 const observable_to_discont_side = Dict(
     sigma20 => both,
-    sigma2 => both,
-    c1a => positive,
-    c1bL0 => positive,
-    c1bR0 => positive,
-    c1bL => positive,
-    c1bR => positive,
-    c1c => negative,
-    c1d => positive,
+    sigma2  => both,
+    c1a     => positive,
+    c1bL0   => positive,
+    c1bR0   => positive,
+    c1bL    => positive,
+    c1bR    => positive,
+    c1c     => negative,
+    c1d     => positive,
 )
 const observable_to_obs_sign = Dict(
     sigma20 => 0,  # Direct measurement not yet implemented
-    sigma2 => 0,   # Direct measurement not yet implemented
-    c1a => 1,
-    c1bL0 => 1,
-    c1bR0 => 1,
-    c1bL => 1,
-    c1bR => 1,
-    c1c => -1,
-    c1d => 1,      # Since (Θ₋₁(τ))² = Θ(-τ)
+    sigma2  => 0,  # Direct measurement not yet implemented
+    c1a     => 1,
+    c1bL0   => 1,
+    c1bR0   => 1,
+    c1bL    => 1,
+    c1bR    => 1,
+    c1c     => -1,
+    c1d     => 1,  # Since (Θ₋₁(τ))² = Θ(-τ)
 )
 const observable_to_string = Dict(
     sigma20 => "Σ₂[G, V, Γⁱ₃ = Γ₀]",
-    sigma2 => "Σ₂[G, V, Γⁱ₃ > Γ₀]",
-    c1a => "C⁽¹ᵃ⁾[G, V, Γⁱ₃ ≥ Γ₀]",
-    c1bL0 => "C⁽¹ᵇ⁾ᴸ[G, V, Γⁱ₃ = Γ₀]",
-    c1bR0 => "C⁽¹ᵇ⁾ᴿ[G, V, Γⁱ₃ = Γ₀]",
-    c1bL => "C⁽¹ᵇ⁾ᴸ[G, V, Γⁱ₃ > Γ₀]",
-    c1bR => "C⁽¹ᵇ⁾ᴿ[G, V, Γⁱ₃ > Γ₀]",
-    c1c => "C⁽¹ᶜ⁾[G, V, Γⁱ₃ = Γ₀]",
-    c1d => "C⁽¹ᵈ⁾[G, V, Γⁱ₃ = Γ₀]",
+    sigma2  => "Σ₂[G, V, Γⁱ₃ > Γ₀]",
+    c1a     => "C⁽¹ᵃ⁾[G, V, Γⁱ₃ ≥ Γ₀]",
+    c1bL0   => "C⁽¹ᵇ⁾ᴸ[G, V, Γⁱ₃ = Γ₀]",
+    c1bR0   => "C⁽¹ᵇ⁾ᴿ[G, V, Γⁱ₃ = Γ₀]",
+    c1bL    => "C⁽¹ᵇ⁾ᴸ[G, V, Γⁱ₃ > Γ₀]",
+    c1bR    => "C⁽¹ᵇ⁾ᴿ[G, V, Γⁱ₃ > Γ₀]",
+    c1c     => "C⁽¹ᶜ⁾[G, V, Γⁱ₃ = Γ₀]",
+    c1d     => "C⁽¹ᵈ⁾[G, V, Γⁱ₃ = Γ₀]",
 )
 const bare_observable_to_string = Dict(
-    c1a => "C₂⁽¹ᵃ⁾",  # Divergent, but we provide a string representation anyway
+    c1a   => "C₂⁽¹ᵃ⁾",   # Divergent, but we provide a string representation anyway
     c1bL0 => "C₂⁽¹ᵇ⁾ᴸ",
     c1bR0 => "C₂⁽¹ᵇ⁾ᴿ",
-    c1c => "C₂⁽¹ᶜ⁾",
-    c1d => "C₂⁽¹ᵈ⁾",
+    c1c   => "C₂⁽¹ᶜ⁾",
+    c1d   => "C₂⁽¹ᵈ⁾",
 )
 """Overload print operator for string representations of observables."""
 Base.print(io::IO, obs::Observables) = print(io, observable_to_string[obs])
@@ -166,7 +166,7 @@ end
     return observable_to_dash_indices[observable]
 end
 
-"""Returns the indices for dashed Green's function line(s), if any, for the given observable."""
+# """Returns the indices for dashed Green's function line(s), if any, for the given observable."""
 # @inline function _get_gamma3_index(observable::Observables)
 #     @assert _has_gamma3(observable)
 #     if observable == c1bL
@@ -202,7 +202,11 @@ Construct diagram parameters for a second-order self-energy moment (SOSEM).
 Each SOSEM is derived from a self-energy diagram with two bare Coulomb (V)
 lines Σ₂[G, V, Γⁱ₃], where Γⁱ₃ is the improper three-point vertex.
 """
-function _getparam(n_loop_tot::Int)
+function _getparam(
+    n_loop_tot::Int;
+    filter=[NoHartree],
+    interaction=[Interaction(ChargeCharge, Instant)],
+)
     # Instantaneous bare interaction (interactionTauNum = 1) 
     # => innerLoopNum = totalTauNum = n_loop_tot
     return DiagParaF64(;
@@ -211,13 +215,20 @@ function _getparam(n_loop_tot::Int)
         firstTauIdx=1,
         innerLoopNum=n_loop_tot,
         totalTauNum=n_loop_tot,
-        filter=[NoHartree],
-        interaction=[FeynmanDiagram.Interaction(ChargeCharge, Instant)],
+        interaction=interaction,
+        filter=filter,
     )
 end
 
 """Construct diagram parameters for bare propagators."""
-function propagator_param(type, n_loop_inner, firstTauIdx, firstLoopIdx, filter=[NoHartree])
+function propagator_param(
+    type,
+    n_loop_inner,
+    firstTauIdx,
+    firstLoopIdx;
+    filter=[NoHartree],
+    interaction=[Interaction(ChargeCharge, Instant)],
+)
     # The bare interaction is instantaneous (interactionTauNum = 1),
     # so innerLoopNum = totalTauNum = n_loop_inner
     return DiagParaF64(;
@@ -227,7 +238,7 @@ function propagator_param(type, n_loop_inner, firstTauIdx, firstLoopIdx, filter=
         firstTauIdx=firstTauIdx,
         firstLoopIdx=firstLoopIdx,
         totalLoopNum=n_loop_inner + 3,  # = n_loop_tot + 1
-        interaction=[FeynmanDiagram.Interaction(ChargeCharge, Instant)],
+        interaction=interaction,
         filter=filter,
     )
 end
