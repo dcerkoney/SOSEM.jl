@@ -1,8 +1,10 @@
 using ElectronGas
 using ElectronLiquid.UEG: ParaMC, short
+using FeynmanDiagram
 using JLD2
 using Measurements
 using SOSEM
+using Parameters
 using PyCall
 
 # For saving/loading numpy data
@@ -15,19 +17,32 @@ function main()
         ENV["JULIA_DEBUG"] = SOSEM
     end
 
+    # Test 1st-order μ-renorm via exact shift + Fock diagram filter
+    filter_fock = true
+
+    # UEG has no Hartree terms, and Fock insertions are optional
+    filter = filter_fock ? [NoHartree, NoFock] : [NoHartree]
+    filter_string = filter_fock ? "_filter_Fock" : ""
+
     settings = DiagGen.Settings(;
         observable=DiagGen.c1c,
         n_order=4,
         verbosity=DiagGen.quiet,
         expand_bare_interactions=false,
-        filter=[NoHartree],
+        filter=filter,
         interaction=[FeynmanDiagram.Interaction(ChargeCharge, Instant)],  # Yukawa-type interaction
         # interaction=[FeynmanDiagram.Interaction(ChargeCharge, Dynamic)],  # TODO: test RPA-type interaction
     )
 
     # UEG parameters for MC integration
     param = ParaMC(; order=settings.n_order, rs=1.0, beta=200.0, mass2=2.0, isDynamic=false)
-    @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)"
+    # If we remove Fock insertions, we must shift the chemical potential accordingly
+    if filter_fock
+        μF = param.μ + UEG_MC.delta_mu1(param)  # For the UEG, μF = μ1 = μ₀ + δμ₁
+        param = reconstruct(param; μ=μF)
+        println("EF = $(param.EF), μF = $(param.μ)")
+    end
+    @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF), μ = $(param.μ)"
 
     # K-mesh for measurement
     k_kf_grid = np.load("results/kgrids/kgrid_vegas_dimless_n=77_small.npy")
@@ -41,7 +56,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 1e8
+    neval = 1e5
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -54,6 +69,8 @@ function main()
         renorm_mu=renorm_mu,
         renorm_lambda=renorm_lambda,
     )
+    # Double-check that any invalid Fock insertions were removed
+    @assert !(filter_fock && any(p[1] + p[3] == 3 for p in partitions))
 
     println("Integrating partitions: $partitions")
     @debug "diagtrees: $diagtrees"
@@ -97,7 +114,8 @@ function main()
         savename =
             "results/data/c1c_n=$(param.order)_rs=$(param.rs)_" *
             "beta_ef=$(param.beta)_lambda=$(param.mass2)_" *
-            "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)"
+            "neval=$(neval)_$(intn_str)$(solver)_" *
+            "$(ct_string)$(filter_string)"
         jldopen("$savename.jld2", "a+") do f
             key = "$(short(param))"
             if haskey(f, key)
@@ -167,7 +185,8 @@ function main()
             fig.savefig(
                 "results/c1c/n=$(param.order)/c1c_n=$(param.order)_rs=$(param.rs)_" *
                 "beta_ef=$(param.beta)_lambda=$(param.mass2)_" *
-                "neval=$(neval)_$(intn_str)$(solver)_$(ct_string).pdf",
+                "neval=$(neval)_$(intn_str)$(solver)_" *
+                "$(ct_string)$(filter_string).pdf",
             )
             plt.close("all")
         end

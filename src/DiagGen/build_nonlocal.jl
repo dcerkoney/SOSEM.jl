@@ -106,14 +106,19 @@ end
 
 """Check if a (weak) composition of expansion orders is valid for a given observable/settings."""
 @inline function _is_invalid_expansion(cfg::Config, expansion_orders::Vector{Int})
-    # We can't spend any orders on dashed line(s), if any exist
-    is_invalid =
-        !isempty(cfg.G.dash_indices) && any(expansion_orders[cfg.G.dash_indices] .!= 0)
-    if cfg.has_gamma3
-        # We must spend at least one order on the 3-point vertex insertion
-        is_invalid = is_invalid || expansion_orders[cfg.Gamma3.index] == 0
+    # If we are filtering Hartree & Fock insertions, Green's functions with expansion order 1 are invalid
+    if 1 in expansion_orders[cfg.G.indices] && all(f in cfg.param.filter for f in [NoHartree, NoFock])
+        return true
     end
-    return is_invalid
+    # We must spend at least one order on 3-point vertex insertions
+    if cfg.has_gamma3 && expansion_orders[cfg.Gamma3.index] == 0
+        return true
+    end
+    # We can't spend any orders on dashed line(s), if any exist
+    if !isempty(cfg.G.dash_indices) && any(expansion_orders[cfg.G.dash_indices] .!= 0)
+        return true
+    end
+    return false
 end
 
 """Construct a second-order self-energy (moment) subdiagram"""

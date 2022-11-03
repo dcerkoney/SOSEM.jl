@@ -54,13 +54,19 @@ If `renorm_mu` is false, then n_ct_mu = 0.
 """
 function counterterm_partitions(s::Settings; renorm_mu=false, renorm_lambda=true)
     n_min = _get_lowest_loop_order(s.observable)  # Lowest loop order depends on the observable
-    return counterterm_partitions(
+    partitions = counterterm_partitions(
         s.n_order,
         n_min;
         n_lowest=n_min,
         renorm_mu=renorm_mu,
         renorm_lambda=renorm_lambda,
     )
+    if NoFock in s.filter
+        # First-order μ-renorm handled in pre-processing
+       return [p for p in partitions if p[2] != 1]
+    else
+        return partitions
+    end
 end
 
 """
@@ -73,13 +79,19 @@ function counterterm_partitions_fixed_order(
     renorm_mu=false,
     renorm_lambda=true,
 )
-    return counterterm_partitions(
+    partitions = counterterm_partitions(
         s.n_order,
         s.n_order;
         n_lowest=_get_lowest_loop_order(s.observable),
         renorm_mu=renorm_mu,
         renorm_lambda=renorm_lambda,
     )
+    if NoFock in s.filter
+        # First-order μ-renorm handled in pre-processing
+       return [p for p in partitions if p[2] != 1]
+    else
+        return partitions
+    end
 end
 
 """
