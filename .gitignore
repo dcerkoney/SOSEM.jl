@@ -29,6 +29,9 @@ Manifest.toml
 .history
 .markdown*
 
+# Tex files
+*.tex
+
 # Misc directories
 notes
 old
