@@ -18,7 +18,7 @@ function main()
 
     settings = DiagGen.Settings(;
         observable=DiagGen.c1bL,
-        n_order=3,
+        n_order=4,
         verbosity=DiagGen.quiet,
         expand_bare_interactions=false,
         filter=[NoHartree],
