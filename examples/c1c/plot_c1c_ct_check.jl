@@ -78,8 +78,8 @@ function main()
 
     neval = 5e8
     max_order = 4
-    min_order_plot = 3
-    max_order_plot = 3
+    min_order_plot = 4
+    max_order_plot = 4
     @assert max_order ≥ 3
 
     # Enable/disable interaction and chemical potential counterterms
@@ -152,6 +152,8 @@ function main()
             label="\$\\mathcal{P}=$((2,0,0))\$ (quad)",
         )
     end
+    # Next available color for plotting
+    next_color = 4
     for o in eachindex(partitions)
         if !(min_order_plot <= sum(partitions[o]) <= max_order_plot)
             continue
@@ -165,26 +167,30 @@ function main()
             means, stdevs = res.mean[o], res.stdev[o]
         end
         # Data gets noisy above 1st Green's function counterterm order
-        marker =
-            (partitions[o][2] > 1 || (partitions[o][1] > 3 && partitions[o][2] > 0)) ?
-            "o-" : "-"
-        # marker = "o-"
+        # marker =
+        #     (partitions[o][2] > 1 || (partitions[o][1] > 3 && partitions[o][2] > 0)) ?
+        #     "o-" : "-"
+        marker = "-"
         ax.plot(
             k_kf_grid,
             means,
             marker;
             markersize=2,
-            color="C$(o - 1)",
-            label="\$\\widetilde{C}^{(1c)}_{$(partitions[o])}\$ ($solver)",
+            color=next_color == 3 ? "C0" : "C$next_color",
+            # color="C$next_color",
+            label="\$\\widetilde{C}^{(1c)}_{$(partitions[o])}\$",
+            # label="\$\\widetilde{C}^{(1c)}_{$(partitions[o])}\$ ($solver)",
             # label="\$\\mathcal{P}=$(partitions[o])\$ ($solver)",
         )
         ax.fill_between(
             k_kf_grid,
             means - stdevs,
             means + stdevs;
-            color="C$(o - 1)",
+            color=next_color == 3 ? "C0" : "C$next_color",
+            # color="C$next_color",
             alpha=0.4,
         )
+        next_color -= 1
     end
 
     # Convert results to a Dict of measurements at each order with interaction counterterms merged
@@ -220,33 +226,33 @@ function main()
     )
 
     # Check the counterterm cancellation to leading order in δμ
-    c1c3_kind = ["exact", "calc."]
-    c1c3_kind_means = [c1c3_means_exact, c1c3_means]
-    c1c3_kind_errs = [c1c3_errs_exact, c1c3_errs]
-    next_color = length(partitions)  # next available color for plotting
-    for (kind, means, errs) in zip(c1c3_kind, c1c3_kind_means, c1c3_kind_errs)
-        ax.plot(
-            k_kf_grid,
-            means,
-            "-";
-            # "o-";
-            markersize=2,
-            color="C$next_color",
-            label="\$\\widetilde{C}^{(1c)}_{n=3} = \\widetilde{C}^{(1c)}_{(3,0)} " *
-                  " + \\delta\\mu_1 \\widetilde{C}^{(1c)}_{(2,1)}\$ ($kind \$\\delta\\mu_1\$, $solver)",
-        )
-        ax.fill_between(
-            k_kf_grid,
-            means - errs,
-            means + errs;
-            color="C$next_color",
-            alpha=0.4,
-        )
-        next_color += 1
+    if min_order_plot ≤ 3
+        c1c3_kind = ["exact", "calc."]
+        c1c3_kind_means = [c1c3_means_exact, c1c3_means]
+        c1c3_kind_errs = [c1c3_errs_exact, c1c3_errs]
+        for (kind, means, errs) in zip(c1c3_kind, c1c3_kind_means, c1c3_kind_errs)
+            ax.plot(
+                k_kf_grid,
+                means,
+                "-";
+                # "o-";
+                markersize=2,
+                color="C$next_color",
+                label="\$\\widetilde{C}^{(1c)}_{n=3} = \\widetilde{C}^{(1c)}_{(3,0)} " *
+                      " + \\delta\\mu_1 \\widetilde{C}^{(1c)}_{(2,1)}\$ ($kind \$\\delta\\mu\$, $solver)",
+            )
+            ax.fill_between(
+                k_kf_grid,
+                means - errs,
+                means + errs;
+                color="C$next_color",
+                alpha=0.4,
+            )
+            next_color += 1
+        end
     end
-
-    if max_order ≥ 4 && max_order_plot ≥ 4
-        # Plot the counterterm cancellation at next-leading order in δμ
+    # Plot the counterterm cancellation at next-leading order in δμ
+    if max_order_plot ≥ 4
         c1c4_means = Measurements.value.(c1c[3])
         c1c4_errs = Measurements.uncertainty.(c1c[3])
         ax.plot(
@@ -254,40 +260,52 @@ function main()
             c1c4_means,
             "-";
             # "o-";
-            markersize=2,
-            color="C$next_color",
-            label="\$\\widetilde{C}^{(1c)}_{n=4} = \\widetilde{C}^{(1c)}_{(4,0)} + " *
-                  "\\delta\\mu_1 \\widetilde{C}^{(1c)}_{(3,1)}\$ + " *
-                  "\\delta\\mu^2_1 \\widetilde{C}^{(1c)}_{(2,2)}\$ + " *
-                  "\\delta\\mu_2 \\widetilde{C}^{(1c)}_{(2,1)}\$ " *
-                  "($kind \$\\delta\\mu_1\$, $solver)",
+            # markersize=3,
+            linewidth=2,
+            color=next_color == 0 ? "r" : "C$next_color",
+            label="\$\\widetilde{C}^{(1c)}_{n=4}\$",
         )
         ax.fill_between(
             k_kf_grid,
             c1c4_means - c1c4_errs,
             c1c4_means + c1c4_errs;
-            color="C$next_color",
+            color=next_color == 0 ? "r" : "C$next_color",
             alpha=0.4,
+        )
+        ax.text(
+            0.1025,
+            -0.5,
+            "\$\\widetilde{C}^{(1c)}_{n=4} = \\widetilde{C}^{(1c)}_{(4,0)} + " *
+            "\\delta\\mu_1 \\widetilde{C}^{(1c)}_{(3,1)}\$";
+            fontsize=12,
+        )
+        ax.text(
+            0.31,
+            -0.775,
+            "\$ + \\delta\\mu^2_1 \\widetilde{C}^{(1c)}_{(2,2)} + " *
+            "\\delta\\mu_2 \\widetilde{C}^{(1c)}_{(2,1)}\$";
+            fontsize=12,
         )
     end
 
     # Plot labels and legend
-    ax.legend(; loc="lower right")
-    ax.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
+    ax.legend(; loc="lower right", ncol=2)
+    ax.set_xlim(minimum(k_kf_grid), min(2.0, maximum(k_kf_grid)))
+    # ax.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
     # ax.set_ylim(-0.1, 0.0025)
     ax.set_xlabel("\$k / k_F\$")
     ax.set_ylabel(
         "\$\\widetilde{C}^{(1c)}_{(\\,\\cdot\\,)}(k) " *
         " \\equiv C^{(1c)}_{(\\,\\cdot\\,)}(k) \\,/\\, {\\epsilon}^{\\hspace{0.1em}2}_{\\mathrm{TF}}\$",
     )
-    xloc = 1.75
-    yloc = -0.15
-    ydiv = -0.05
+    # # (nmax = 3)
     # xloc = 1.75
-    # yloc = -0.02
-    # yloc = -0.055
-    # ydiv = -0.01
-    # ydiv = -0.009
+    # yloc = -0.15
+    # ydiv = -0.05
+    # (nmax = 4)
+    xloc = 1.125
+    yloc = 1.0
+    ydiv = -0.3
     ax.text(
         xloc,
         yloc,
