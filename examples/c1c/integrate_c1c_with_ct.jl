@@ -1,5 +1,6 @@
 using ElectronGas
 using ElectronLiquid.UEG: ParaMC, short
+using FeynmanDiagram
 using JLD2
 using Measurements
 using SOSEM

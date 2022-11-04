@@ -231,7 +231,7 @@ function main()
         k_kf_grid_quad,
         c1c_bare_quad,
         "k";
-        label="\$LO\$ (quad)",
+        label="LO (quad)",
         # label="\$LO = \\mathrm{RPA}+\\mathrm{FL}\$ (quad)",
     )
     # No additional RPA+FL results for class (c) moment!
