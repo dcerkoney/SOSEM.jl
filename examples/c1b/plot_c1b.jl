@@ -19,8 +19,8 @@ function main()
     expand_bare_interactions = false
 
     neval = 5e8
-    max_order = 4
-    max_order_plot = 4
+    max_order = 3
+    max_order_plot = 3
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -83,25 +83,60 @@ function main()
     param_quad = Parameter.atomicUnit(0, rs_quad)    # (dimensionless T, rs)
     eTF_quad = param_quad.qTF^2 / (2 * param_quad.me)
     c1b_lo_quad_dimless = sosem_quad.get("bare_b") / eTF_quad^2
-    # RPA+FL results for class (b) moment
-    c1b_rpa_fl = sosem_quad.get("rpa+fl_b") / eTF_quad^2
-    c1b_rpa_fl_err = sosem_quad.get("rpa+fl_b_err") / eTF_quad^2
+    # delta RPA results for class (b) moment
+    c1b_rpa_dimless = sosem_quad.get("rpa_b") / eTF_quad^2
+    c1b_rpa_err_dimless = sosem_quad.get("rpa_b_err") / eTF_quad^2
+    delta_c1b_rpa = c1b_lo_quad_dimless - c1b_rpa_dimless
+    delta_c1b_rpa_err = c1b_rpa_err_dimless
+    # delta RPA+FL results for class (b) moment
+    c1b_rpa_fl_dimless = sosem_quad.get("rpa+fl_b") / eTF_quad^2
+    c1b_rpa_fl_err_dimless = sosem_quad.get("rpa+fl_b_err") / eTF_quad^2
+    delta_c1b_rpa_fl = c1b_lo_quad_dimless - c1b_rpa_fl_dimless
+    delta_c1b_rpa_fl_err = c1b_rpa_fl_err_dimless
     if plot_bare
-        ax.plot(
-            k_kf_grid_quad,
-            c1b_lo_quad_dimless,
-            "k";
-            label="LO (quad)",
-        )
-        ax.plot(k_kf_grid_quad, c1b_rpa_fl, "k"; label="RPA\$+\$FL (vegas)")
+        # ax.plot(
+        #     k_kf_grid_quad,
+        #     c1b_lo_quad_dimless,
+        #     "k";
+        #     linestyle="--",
+        #     label="LO (quad)",
+        # )
+        ax.plot(k_kf_grid_quad, -delta_c1b_rpa, "k"; linestyle="--", label="RPA (vegas)")
         ax.fill_between(
             k_kf_grid_quad,
-            c1b_rpa_fl - c1b_rpa_fl_err,
-            c1b_rpa_fl + c1b_rpa_fl_err;
+            -(delta_c1b_rpa - delta_c1b_rpa_err),
+            -(delta_c1b_rpa + delta_c1b_rpa_err);
+            color="k",
+            alpha=0.3,
+        )
+        ax.plot(k_kf_grid_quad, -delta_c1b_rpa_fl, "k"; label="RPA\$+\$FL (vegas)")
+        ax.fill_between(
+            k_kf_grid_quad,
+            -(delta_c1b_rpa_fl - delta_c1b_rpa_fl_err),
+            -(delta_c1b_rpa_fl + delta_c1b_rpa_fl_err);
             color="k",
             alpha=0.3,
         )
     end
+    # # RPA+FL results for class (b) moment
+    # c1b_rpa_fl = sosem_quad.get("rpa+fl_b") / eTF_quad^2
+    # c1b_rpa_fl_err = sosem_quad.get("rpa+fl_b_err") / eTF_quad^2
+    # if plot_bare
+    #     ax.plot(
+    #         k_kf_grid_quad,
+    #         c1b_lo_quad_dimless,
+    #         "k";
+    #         label="LO (quad)",
+    #     )
+    #     ax.plot(k_kf_grid_quad, c1b_rpa_fl, "k"; label="RPA\$+\$FL (vegas)")
+    #     ax.fill_between(
+    #         k_kf_grid_quad,
+    #         c1b_rpa_fl - c1b_rpa_fl_err,
+    #         c1b_rpa_fl + c1b_rpa_fl_err;
+    #         color="k",
+    #         alpha=0.3,
+    #     )
+    # end
 
     for o in eachindex(partitions)
         if sum(partitions[o]) > max_order_plot
@@ -131,7 +166,8 @@ function main()
             marker;
             markersize=2,
             color="C$(o - 1)",
-            label="\$\\mathcal{P}=$(partitions[o])\$ ($solver)",
+            label="\$C^{(1)nl}_{n=3} = \\delta C^{(1b)}_{3}\$ ($solver)",
+            # label="\$\\mathcal{P}=$(partitions[o])\$ ($solver)",
         )
         ax.fill_between(
             k_kf_grid,
@@ -146,11 +182,12 @@ function main()
     # ax.set_ylim(-0.1, 0.0025)
     ax.set_xlabel("\$k / k_F\$")
     ax.set_ylabel(
-        "\$C^{(1b)}_{\\mathcal{P}}(k) \\,/\\, {\\epsilon}^{\\hspace{0.1em}2}_{\\mathrm{TF}}\$",
+        # "\$C^{(1b)}_{\\mathcal{P}}(k) \\,/\\, {\\epsilon}^{\\hspace{0.1em}2}_{\\mathrm{TF}}\$",
+        "\$C^{(1)nl}_{n}(k) \\,/\\, {\\epsilon}^{\\hspace{0.1em}2}_{\\mathrm{TF}}\$",
     )
     xloc = 1.75
-    yloc = 1.0
-    ydiv = -0.3
+    yloc = -0.1
+    ydiv = -0.02
     ax.text(
         xloc,
         yloc,

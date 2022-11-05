@@ -202,31 +202,36 @@ function main()
     z, μ = load_z_mu(param)
     δz, δμ = CounterTerm.sigmaCT(max_order - 2, μ, z; verbose=1)
     println("Computed δμ: ", δμ)
-    c1d = UEG_MC.chemicalpotential_renormalization(max_order_plot, merged_data, δμ)
-
-    # Test manual renormalization with exact lowest-order chemical potential;
-    # the first-order counterterm is: δμ1= ReΣ₁[λ](kF, 0)
-    δμ1_exact = UEG_MC.delta_mu1(param)
-    # C⁽¹⁾₃ = C⁽¹⁾_{3,0} + δμ₁ C⁽¹⁾_{2,1} (exact δμ₁)
-    c1d3_exact = merged_data[(3, 0)] + δμ1_exact * merged_data[(2, 1)]
-    c1d3_means_exact = Measurements.value.(c1d3_exact)
-    c1d3_errs_exact = Measurements.uncertainty.(c1d3_exact)
-    println("Largest magnitude of C^{(1d)}_{n=3}(k): $(maximum(abs.(c1d3_exact)))")
-    # C⁽¹⁾₃ = C⁽¹⁾_{3,0} + δμ₁ C⁽¹⁾_{2,1} (calc δμ₁)
-    c1d3 = c1d[2]  # c1d = [c1d2, c1d3, ...]
-    c1d3_means = Measurements.value.(c1d3)
-    c1d3_errs = Measurements.uncertainty.(c1d3)
-    stdscores = stdscore.(c1d3, c1d3_exact)
-    worst_score = argmax(abs, stdscores)
-    println("Exact δμ₁: ", δμ1_exact)
-    println("Computed δμ₁: ", δμ[1])
-    println(
-        "Worst standard score for total result to 3rd " *
-        "order (auto vs exact+manual): $worst_score",
+    c1d = UEG_MC.chemicalpotential_renormalization(
+        merged_data,
+        δμ;
+        min_order=min_order_plot,
+        max_order=max_order_plot,
     )
 
     # Check the counterterm cancellation to leading order in δμ
     if min_order_plot ≤ 3
+        # Test manual renormalization with exact lowest-order chemical potential;
+        # the first-order counterterm is: δμ1= ReΣ₁[λ](kF, 0)
+        δμ1_exact = UEG_MC.delta_mu1(param)
+        # C⁽¹⁾₃ = C⁽¹⁾_{3,0} + δμ₁ C⁽¹⁾_{2,1} (exact δμ₁)
+        c1d3_exact = merged_data[(3, 0)] + δμ1_exact * merged_data[(2, 1)]
+        c1d3_means_exact = Measurements.value.(c1d3_exact)
+        c1d3_errs_exact = Measurements.uncertainty.(c1d3_exact)
+        println("Largest magnitude of C^{(1d)}_{n=3}(k): $(maximum(abs.(c1d3_exact)))")
+        # C⁽¹⁾₃ = C⁽¹⁾_{3,0} + δμ₁ C⁽¹⁾_{2,1} (calc δμ₁)
+        c1d3 = c1d[2]  # c1d = [c1d2, c1d3, ...]
+        c1d3_means = Measurements.value.(c1d3)
+        c1d3_errs = Measurements.uncertainty.(c1d3)
+        stdscores = stdscore.(c1d3, c1d3_exact)
+        worst_score = argmax(abs, stdscores)
+        println("Exact δμ₁: ", δμ1_exact)
+        println("Computed δμ₁: ", δμ[1])
+        println(
+            "Worst standard score for total result to 3rd " *
+            "order (auto vs exact+manual): $worst_score",
+        )
+
         c1d3_kind = ["exact", "calc."]
         c1d3_kind_means = [c1d3_means_exact, c1d3_means]
         c1d3_kind_errs = [c1d3_errs_exact, c1d3_errs]

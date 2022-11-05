@@ -77,9 +77,9 @@ function main()
     expand_bare_interactions = false
 
     neval = 5e8
-    max_order = 4
-    min_order_plot = 4
-    max_order_plot = 4
+    max_order = 3
+    min_order_plot = 3
+    max_order_plot = 3
     @assert max_order ≥ 3
 
     # Enable/disable interaction and chemical potential counterterms
@@ -148,12 +148,7 @@ function main()
     c1b_rpa_fl = sosem_quad.get("rpa+fl_b") / eTF_quad^2
     c1b_rpa_fl_err = sosem_quad.get("rpa+fl_b_err") / eTF_quad^2
     if plot_bare
-        ax.plot(
-            k_kf_grid_quad,
-            c1b_lo_quad_dimless,
-            "k";
-            label="LO (quad)",
-        )
+        ax.plot(k_kf_grid_quad, c1b_lo_quad_dimless, "k"; label="LO (quad)")
         ax.plot(k_kf_grid_quad, c1b_rpa_fl, "k"; label="RPA\$+\$FL (vegas)")
         ax.fill_between(
             k_kf_grid_quad,
@@ -219,31 +214,36 @@ function main()
     z, μ = load_z_mu(param)
     δz, δμ = CounterTerm.sigmaCT(max_order - 2, μ, z; verbose=1)
     println("Computed δμ: ", δμ)
-    c1b0 = UEG_MC.chemicalpotential_renormalization(max_order_plot, merged_data, δμ)
-
-    # Test manual renormalization with exact lowest-order chemical potential;
-    # the first-order counterterm is: δμ1= ReΣ₁[λ](kF, 0)
-    δμ1_exact = UEG_MC.delta_mu1(param)
-    # C⁽¹⁾₃ = C⁽¹⁾_{3,0} + δμ₁ C⁽¹⁾_{2,1} (exact δμ₁)
-    c1b03_exact = merged_data[(3, 0)] + δμ1_exact * merged_data[(2, 1)]
-    c1b03_means_exact = Measurements.value.(c1b03_exact)
-    c1b03_errs_exact = Measurements.uncertainty.(c1b03_exact)
-    println("Largest magnitude of C^{(1b0)}_{n=3}(k): $(maximum(abs.(c1b03_exact)))")
-    # C⁽¹⁾₃ = C⁽¹⁾_{3,0} + δμ₁ C⁽¹⁾_{2,1} (calc δμ₁)
-    c1b03 = c1b0[2]  # c1b0 = [c1b02, c1b03, ...]
-    c1b03_means = Measurements.value.(c1b03)
-    c1b03_errs = Measurements.uncertainty.(c1b03)
-    stdscores = stdscore.(c1b03, c1b03_exact)
-    worst_score = argmax(abs, stdscores)
-    println("Exact δμ₁: ", δμ1_exact)
-    println("Computed δμ₁: ", δμ[1])
-    println(
-        "Worst standard score for total result to 3rd " *
-        "order (auto vs exact+manual): $worst_score",
+    c1b0 = UEG_MC.chemicalpotential_renormalization(
+        merged_data,
+        δμ;
+        min_order=min_order_plot,
+        max_order=max_order_plot,
     )
 
     # Check the counterterm cancellation to leading order in δμ
     if min_order_plot ≤ 3
+        # Test manual renormalization with exact lowest-order chemical potential;
+        # the first-order counterterm is: δμ1= ReΣ₁[λ](kF, 0)
+        δμ1_exact = UEG_MC.delta_mu1(param)
+        # C⁽¹⁾₃ = C⁽¹⁾_{3,0} + δμ₁ C⁽¹⁾_{2,1} (exact δμ₁)
+        c1b03_exact = merged_data[(3, 0)] + δμ1_exact * merged_data[(2, 1)]
+        c1b03_means_exact = Measurements.value.(c1b03_exact)
+        c1b03_errs_exact = Measurements.uncertainty.(c1b03_exact)
+        println("Largest magnitude of C^{(1b0)}_{n=3}(k): $(maximum(abs.(c1b03_exact)))")
+        # C⁽¹⁾₃ = C⁽¹⁾_{3,0} + δμ₁ C⁽¹⁾_{2,1} (calc δμ₁)
+        c1b03 = c1b0[2]  # c1b0 = [c1b02, c1b03, ...]
+        c1b03_means = Measurements.value.(c1b03)
+        c1b03_errs = Measurements.uncertainty.(c1b03)
+        stdscores = stdscore.(c1b03, c1b03_exact)
+        worst_score = argmax(abs, stdscores)
+        println("Exact δμ₁: ", δμ1_exact)
+        println("Computed δμ₁: ", δμ[1])
+        println(
+            "Worst standard score for total result to 3rd " *
+            "order (auto vs exact+manual): $worst_score",
+        )
+
         c1b03_kind = ["exact", "calc."]
         c1b03_kind_means = [c1b03_means_exact, c1b03_means]
         c1b03_kind_errs = [c1b03_errs_exact, c1b03_errs]
@@ -268,6 +268,7 @@ function main()
             next_color += 1
         end
     end
+
     # Plot the counterterm cancellation at next-leading order in δμ
     if max_order_plot ≥ 4
         c1b04_means = Measurements.value.(c1b0[3])

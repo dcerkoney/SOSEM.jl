@@ -5,6 +5,9 @@ using Measurements
 using PyCall
 using SOSEM
 
+# TODO: init δμ[n] to zero for n < lowest_order = 3 (no counterterms at order 3 for this observable)
+@todo
+
 # For saving/loading numpy data
 @pyimport numpy as np
 @pyimport matplotlib.pyplot as plt
