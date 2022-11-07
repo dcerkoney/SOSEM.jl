@@ -8,7 +8,7 @@ using SOSEM
 @pyimport numpy as np
 @pyimport matplotlib.pyplot as plt
 
-# NOTE: Call from main project directory as: julia examples/c1b/plot_c1b.jl
+# NOTE: Call from main project directory as: julia examples/c1c/plot_c1c.jl
 
 function main()
     rs = 1.0
@@ -19,8 +19,8 @@ function main()
     expand_bare_interactions = false
 
     neval = 5e8
-    max_order = 3
-    max_order_plot = 3
+    max_order = 4
+    max_order_plot = 4
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -56,7 +56,7 @@ function main()
 
     # Load the results from JLD2
     savename =
-        "results/data/c1bL_n=$(max_order)_rs=$(rs)_" *
+        "results/data/c1c_n=$(max_order)_rs=$(rs)_" *
         "beta_ef=$(beta)_lambda=$(mass2)_" *
         "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)"
     settings, param, kgrid, partitions, res = jldopen("$savename.jld2", "a+") do f
@@ -75,44 +75,22 @@ function main()
     fig, ax = plt.subplots()
 
     # Non-dimensionalize bare and RPA+FL non-local moments
-    rs_lo = 1.0
-    sosem_lo = np.load("results/data/soms_rs=$(rs_lo)_beta_ef=200.0.npz")
+    rs_quad = 1.0
+    sosem_quad = np.load("results/data/soms_rs=$(rs_quad)_beta_ef=200.0.npz")
+    # np.load("results/data/soms_rs=$(Float64(param.rs))_beta_ef=$(param.beta).npz")
+    k_kf_grid_quad = np.linspace(0.0, 3.0; num=600)
     # Non-dimensionalize rs = 2 quadrature results by Thomas-Fermi energy
-    param_lo = Parameter.atomicUnit(0, rs_lo)    # (dimensionless T, rs)
-    eTF_lo = param_lo.qTF^2 / (2 * param_lo.me)
-    c1b_lo_quad = sosem_lo.get("bare_b") / eTF_lo^2
-    # delta RPA results for class (b) moment
-    delta_c1b_rpa = sosem_lo.get("delta_rpa_b_vegas_N=1e+07.npy") / eTF_lo^2
-    delta_c1b_rpa_err = sosem_lo.get("delta_rpa_b_err_vegas_N=1e+07.npy") / eTF_lo^2
-    # delta RPA+FL results for class (b) moment
-    delta_c1b_rpa_fl = sosem_lo.get("delta_rpa+fl_b_vegas_N=1e+07.npy") / eTF_lo^2
-    delta_c1b_rpa_fl_err = sosem_lo.get("delta_rpa+fl_b_err_vegas_N=1e+07.npy") / eTF_lo^2
+    param_quad = Parameter.atomicUnit(0, rs_quad)    # (dimensionless T, rs)
+    eTF_quad = param_quad.qTF^2 / (2 * param_quad.me)
+    c1c_quad_dimless = sosem_quad.get("bare_c") / eTF_quad^2
     if plot_bare
-        # ax.plot(
-        #     k_kf_grid_quad,
-        #     c1b_lo_quad,
-        #     "k";
-        #     linestyle="--",
-        #     label="LO (quad)",
-        # )
-        ax.plot(k_kf_grid, delta_c1b_rpa, "k"; linestyle="--", label="RPA (vegas)")
-        ax.fill_between(
-            k_kf_grid,
-            (delta_c1b_rpa - delta_c1b_rpa_err),
-            (delta_c1b_rpa + delta_c1b_rpa_err);
-            color="k",
-            alpha=0.3,
-        )
-        ax.plot(k_kf_grid, delta_c1b_rpa_fl, "k"; label="RPA\$+\$FL (vegas)")
-        ax.fill_between(
-            k_kf_grid,
-            (delta_c1b_rpa_fl - delta_c1b_rpa_fl_err),
-            (delta_c1b_rpa_fl + delta_c1b_rpa_fl_err);
-            color="k",
-            alpha=0.3,
+        ax.plot(
+            k_kf_grid_quad,
+            c1c_quad_dimless,
+            "k";
+            label="\$\\mathcal{P}=$((2,0,0))\$ (quad)",
         )
     end
-
     for o in eachindex(partitions)
         if sum(partitions[o]) > max_order_plot
             continue
@@ -125,11 +103,6 @@ function main()
         else
             means, stdevs = res.mean[o], res.stdev[o]
         end
-        # Get means and error bars from the result up to this order
-        # NOTE: Since C⁽¹ᵇ⁾ᴸ = C⁽¹ᵇ⁾ᴿ for the UEG, the
-        #       full class (b) moment is C⁽¹ᵇ⁾ = 2C⁽¹ᵇ⁾ᴸ.
-        means = 2 * means
-        stdevs = 2 * stdevs
         # Data gets noisy above 1st Green's function counterterm order
         # marker =
         #     (partitions[o][2] > 1 || (partitions[o][1] > 3 && partitions[o][2] > 0)) ?
@@ -141,8 +114,7 @@ function main()
             marker;
             markersize=2,
             color="C$(o - 1)",
-            label="\$C^{(1)nl}_{n=3} = \\delta C^{(1b)}_{3}\$ ($solver)",
-            # label="\$\\mathcal{P}=$(partitions[o])\$ ($solver)",
+            label="\$\\mathcal{P}=$(partitions[o])\$ ($solver)",
         )
         ax.fill_between(
             k_kf_grid,
@@ -157,12 +129,11 @@ function main()
     # ax.set_ylim(-0.1, 0.0025)
     ax.set_xlabel("\$k / k_F\$")
     ax.set_ylabel(
-        # "\$C^{(1b)}_{\\mathcal{P}}(k) \\,/\\, {\\epsilon}^{\\hspace{0.1em}2}_{\\mathrm{TF}}\$",
-        "\$C^{(1)nl}_{n}(k) \\,/\\, {\\epsilon}^{\\hspace{0.1em}2}_{\\mathrm{TF}}\$",
+        "\$C^{(1c)}_{\\mathcal{P}}(k) \\,/\\, {\\epsilon}^{\\hspace{0.1em}2}_{\\mathrm{TF}}\$",
     )
     xloc = 1.75
-    yloc = -0.1
-    ydiv = -0.02
+    yloc = 1.0
+    ydiv = -0.3
     ax.text(
         xloc,
         yloc,
@@ -188,7 +159,7 @@ function main()
     # )
     plt.tight_layout()
     fig.savefig(
-        "results/c1b/c1b_n=$(max_order_plot)_rs=$(param.rs)_" *
+        "results/c1c/c1c_n=$(max_order_plot)_rs=$(param.rs)_" *
         "beta_ef=$(param.beta)_lambda=$(param.mass2)_" *
         "neval=$(neval)_$(intn_str)$(solver)_" *
         "$(ct_string).pdf",

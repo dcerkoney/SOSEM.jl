@@ -27,7 +27,7 @@ function main()
     renorm_lambda = true
 
     # Include unscreened bare result
-    plot_bare = true
+    plot_bare = false
 
     plotparam =
         UEG.ParaMC(; order=max_order, rs=rs, beta=beta, mass2=mass2, isDynamic=false)
@@ -91,6 +91,7 @@ function main()
             k_kf_grid_quad,
             c1b_lo_quad_dimless,
             "k";
+            linestyle="--",
             label="LO (quad)",
         )
         ax.plot(k_kf_grid_quad, c1b_rpa_fl, "k"; label="RPA\$+\$FL (vegas)")

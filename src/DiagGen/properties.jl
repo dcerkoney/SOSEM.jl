@@ -20,7 +20,7 @@ end
     sigma2
     c1a      # local SOSEM class:          C⁽¹⁾ˡ = C⁽¹ᵃ⁾
     c1bL0    # non-local SOSEM classes:
-    c1bR0    #                           C⁽¹⁾ⁿˡ 
+    c1bR0    #                             C⁽¹⁾ⁿˡ 
     c1bL     #                                 = C⁽¹ᵇ⁾ᴸ
     c1bR     #                                 + C⁽¹ᵇ⁾ᴿ
     c1c      #                                 + C⁽¹ᶜ⁾
@@ -165,15 +165,6 @@ end
 @inline function _get_dash_indices(observable::Observables)
     return observable_to_dash_indices[observable]
 end
-
-# """Returns the indices for dashed Green's function line(s), if any, for the given observable."""
-# @inline function _get_gamma3_index(observable::Observables)
-#     @assert _has_gamma3(observable)
-#     if observable == c1bL
-#         return 1
-#     else # observable == c1bR
-#         return 
-# end
 
 """Deduce the insertion side for observables with Γⁱ₃ insertions."""
 @inline function _get_insertion_side(observable::Observables)

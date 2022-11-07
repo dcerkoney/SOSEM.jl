@@ -1,6 +1,8 @@
 using ElectronLiquid
 using ElectronGas
+using FeynmanDiagram
 using JLD2
+using MCIntegration
 using Measurements
 using PyCall
 using SOSEM
@@ -9,15 +11,94 @@ using SOSEM
 @pyimport numpy as np
 @pyimport matplotlib.pyplot as plt
 
+# Type signature for partitions
+const PartitionType = Vector{Tuple{Int,Int,Int}}
+
 # NOTE: Call from main project directory as: julia examples/c1b0/plot_c1b0_ct_check.jl
 
 """Convert a list of MCIntegration results for partitions {P} to a Dict of measurements."""
-function restodict(res, partitions)
+function restodict(res::Result, partitions::PartitionType)
     data = Dict()
     for (i, p) in enumerate(partitions)
         data[p] = measurement.(res.mean[i], res.stdev[i])
     end
     return data
+end
+function restodict(res_list::Vector{Result}, partitions_list::Vector{PartitionType})
+    @assert length(res_list) == length(partitions_list)
+    data = Dict()
+    for o in eachindex(partitions_list)
+        for (i, p) in enumerate(partitions_list[o])
+            data[p] = measurement.(res_list[o].mean[i], res_list[o].stdev[i])
+        end
+    end
+    return data
+end
+
+function merge_fixed_order_data(
+    filenames,
+    plotsettings::DiagGen.Settings,
+    plotparams::UEG.ParaMC,
+)
+    # TODO: Refactor---what is the cleanest way to merge the data? 
+    #       Should we compose the MCIntegration.Result structs?
+
+    # ParaMC fields for which we require equality between the different JLD2 data
+    required_param = [:rs, :beta, :mass2, :isDynamic]
+
+    # Settings fields for which we require equality between the different JLD2 data
+    required_settings = [:filter, :interaction, :expand_bare_interactions]
+
+    # Merge JDL2 data from different fixed-order calculations
+    local settings, params, kgrid
+    res_list = Vector{Result}()
+    partitions_list = Vector{PartitionType}()
+    for (i, savename) in enumerate(filenames)
+        _settings, _params, _kgrid, _partitions, _res = jldopen("$savename.jld2", "a+") do f
+            key = "$(UEG.short(plotparams))"
+            return f[key]
+        end
+        # TODO: relax requirement that kgrid is the same for all data
+        if i == 1
+            kgrid = _kgrid
+        else
+            @assert kgrid ≈ _kgrid
+        end
+        # Make sure that required settings are the same for all data
+        for field in required_settings
+            data_setting = getfield(_settings, field)
+            plot_setting = getfield(plotsettings, field)
+            if data_setting != plot_setting
+                @warn (
+                    "Skipping file '$savename': DiagGen settings" *
+                    " differ from current plot settings:"
+                ) maxlog = 1
+                @warn (
+                    " • Data setting: $data_setting" * "\n • Plot setting: $plot_setting"
+                )
+            end
+        end
+        # Make sure that required parameters are the same for all data
+        for field in required_param
+            data_param = getfield(_params, field)
+            plot_param = getfield(plotparams, field)
+            if data_param != plot_param
+                @warn (
+                    "Skipping file '$savename': MC params differ from current plot params:"
+                ) maxlog = 1
+                @warn (" • Data param: $data_param" * "\n • Plot param: $plot_param")
+            end
+        end
+        # Pick param & settings from max order
+        if i == length(filenames)
+            params = _params
+            settings = _settings
+        end
+        # Add the current results and partitions to the lists
+        push!(res_list, _res)
+        push!(partitions_list, _partitions)
+    end
+    return (settings, params, kgrid, partitions_list, res_list)
 end
 
 function load_z_mu(
@@ -77,9 +158,9 @@ function main()
     expand_bare_interactions = false
 
     neval = 5e8
-    max_order = 3
-    min_order_plot = 3
-    max_order_plot = 3
+    max_order = 4
+    min_order_plot = 4
+    max_order_plot = 4
     @assert max_order ≥ 3
 
     # Enable/disable interaction and chemical potential counterterms
@@ -90,8 +171,16 @@ function main()
     # Include unscreened bare result
     plot_bare = false
 
-    plotparam =
+    plotparams =
         UEG.ParaMC(; order=max_order, rs=rs, beta=beta, mass2=mass2, isDynamic=false)
+
+    plotsettings = DiagGen.Settings(;
+        observable=DiagGen.c1bL0,
+        n_order=max_order,
+        expand_bare_interactions=expand_bare_interactions,
+        filter=[NoHartree],
+        interaction=[FeynmanDiagram.Interaction(ChargeCharge, Instant)],  # Yukawa-type interaction
+    )
 
     # Distinguish results with fixed vs re-expanded bare interactions
     intn_str = ""
@@ -116,21 +205,36 @@ function main()
     # markers = ["-", "-", "-", "-", "-"]
 
     # Load the results from JLD2
-    savename =
-        "results/data/c1bL0_n=$(max_order)_rs=$(rs)_" *
+    # savename =
+    #     "results/data/c1bL0_n=$(max_order)_rs=$(rs)_" *
+    #     "beta_ef=$(beta)_lambda=$(mass2)_" *
+    #     "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)"
+    # settings, param, kgrid, partitions, res = jldopen("$savename.jld2", "a+") do f
+    #     key = "$(UEG.short(plotparams))"
+    #     return f[key]
+    # end
+
+    # Load the results from multiple JLD2 files
+    data_fixed_orders = [3, 4]
+    filenames = [
+        "results/data/c1bL0_n=$(order)_rs=$(rs)_" *
         "beta_ef=$(beta)_lambda=$(mass2)_" *
-        "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)"
-    settings, param, kgrid, partitions, res = jldopen("$savename.jld2", "a+") do f
-        key = "$(UEG.short(plotparam))"
-        return f[key]
-    end
-    # Get dimensionless k-grid (k / kF)
-    k_kf_grid = kgrid / param.kF
+        "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)" for
+        order in data_fixed_orders
+    ]
+    settings, param, kgrid, partitions_list, res_list =
+        merge_fixed_order_data(filenames, plotsettings, plotparams)
+
+    # Convert fixed-order data to dictionary
+    data = restodict(res_list, partitions_list)
 
     println(settings)
     println(UEG.paraid(param))
-    println(partitions)
-    println(res)
+    println(res_list)
+    println(partitions_list)
+
+    # Get dimensionless k-grid (k / kF)
+    k_kf_grid = kgrid / param.kF
 
     # Plot the results
     fig, ax = plt.subplots()
@@ -148,7 +252,7 @@ function main()
     c1b_rpa_fl = sosem_quad.get("rpa+fl_b") / eTF_quad^2
     c1b_rpa_fl_err = sosem_quad.get("rpa+fl_b_err") / eTF_quad^2
     if plot_bare
-        ax.plot(k_kf_grid_quad, c1b_lo_quad_dimless, "k"; label="LO (quad)")
+        ax.plot(k_kf_grid_quad, c1b_lo_quad_dimless, "k"; linestyle="--", label="LO (quad)")
         ax.plot(k_kf_grid_quad, c1b_rpa_fl, "k"; label="RPA\$+\$FL (vegas)")
         ax.fill_between(
             k_kf_grid_quad,
@@ -161,52 +265,45 @@ function main()
 
     # Next available color for plotting
     next_color = 4
-    for o in eachindex(partitions)
-        if !(min_order_plot <= sum(partitions[o]) <= max_order_plot)
-            continue
+    for partitions in partitions_list
+        for p in partitions
+            if !(min_order_plot <= sum(p) <= max_order_plot)
+                continue
+            end
+            # Get means and error bars from the result up to this order
+            # NOTE: Since C⁽¹ᵇ⁾ᴸ = C⁽¹ᵇ⁾ᴿ for the UEG, the
+            #       full class (b) moment is C⁽¹ᵇ⁾ = 2C⁽¹ᵇ⁾ᴸ.
+            means = 2 * Measurements.value.(data[p])
+            stdevs = 2 * Measurements.uncertainty.(data[p])
+            # Data gets noisy above 1st Green's function counterterm order
+            # marker =
+            #     (p[2] > 1 || (p[1] > 3 && p[2] > 0)) ?
+            #     "o-" : "-"
+            marker = "-"
+            ax.plot(
+                k_kf_grid,
+                means,
+                marker;
+                markersize=2,
+                color=next_color == 3 ? "C0" : "C$next_color",
+                # color="C$next_color",
+                label="\$\\widetilde{C}^{(1b0)}_{$p}\$",
+                # label="\$\\widetilde{C}^{(1b0)}_{$p}\$ ($solver)",
+                # label="\$\\mathcal{P}=$p\$ ($solver)",
+            )
+            ax.fill_between(
+                k_kf_grid,
+                means - stdevs,
+                means + stdevs;
+                color=next_color == 3 ? "C0" : "C$next_color",
+                # color="C$next_color",
+                alpha=0.4,
+            )
+            next_color -= 1
         end
-        # Get means and error bars from the result for this partition
-        local means, stdevs
-        if res.config.N == 1
-            # res gets automatically flattened for a single-partition measurement
-            means, stdevs = res.mean, res.stdev
-        else
-            means, stdevs = res.mean[o], res.stdev[o]
-        end
-        # Get means and error bars from the result up to this order
-        # NOTE: Since C⁽¹ᵇ⁾ᴸ = C⁽¹ᵇ⁾ᴿ for the UEG, the
-        #       full class (b) moment is C⁽¹ᵇ⁾ = 2C⁽¹ᵇ⁾ᴸ.
-        means = 2 * means
-        stdevs = 2 * stdevs
-        # Data gets noisy above 1st Green's function counterterm order
-        # marker =
-        #     (partitions[o][2] > 1 || (partitions[o][1] > 3 && partitions[o][2] > 0)) ?
-        #     "o-" : "-"
-        marker = "-"
-        ax.plot(
-            k_kf_grid,
-            means,
-            marker;
-            markersize=2,
-            color=next_color == 3 ? "C0" : "C$next_color",
-            # color="C$next_color",
-            label="\$\\widetilde{C}^{(1b0)}_{$(partitions[o])}\$",
-            # label="\$\\widetilde{C}^{(1b0)}_{$(partitions[o])}\$ ($solver)",
-            # label="\$\\mathcal{P}=$(partitions[o])\$ ($solver)",
-        )
-        ax.fill_between(
-            k_kf_grid,
-            means - stdevs,
-            means + stdevs;
-            color=next_color == 3 ? "C0" : "C$next_color",
-            # color="C$next_color",
-            alpha=0.4,
-        )
-        next_color -= 1
     end
 
     # Convert results to a Dict of measurements at each order with interaction counterterms merged
-    data = restodict(res, partitions)
     merged_data = CounterTerm.mergeInteraction(data)
     println([k for (k, _) in merged_data])
 
@@ -292,14 +389,14 @@ function main()
         )
         ax.text(
             0.1025,
-            -0.5,
+            -0.75,
             "\$\\widetilde{C}^{(1b0)}_{n=4} = \\widetilde{C}^{(1b0)}_{(4,0)} + " *
             "\\delta\\mu_1 \\widetilde{C}^{(1b0)}_{(3,1)}\$";
             fontsize=12,
         )
         ax.text(
             0.31,
-            -0.775,
+            -1.025,
             "\$ + \\delta\\mu^2_1 \\widetilde{C}^{(1b0)}_{(2,2)} + " *
             "\\delta\\mu_2 \\widetilde{C}^{(1b0)}_{(2,1)}\$";
             fontsize=12,
@@ -322,7 +419,7 @@ function main()
     # ydiv = -0.05
     # (nmax = 4)
     xloc = 1.125
-    yloc = 1.0
+    yloc = 1.5
     ydiv = -0.3
     ax.text(
         xloc,
