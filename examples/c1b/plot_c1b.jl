@@ -19,8 +19,8 @@ function main()
     expand_bare_interactions = false
 
     neval = 5e8
-    max_order = 3
-    max_order_plot = 3
+    max_order = 4
+    max_order_plot = 4
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -29,8 +29,16 @@ function main()
     # Include unscreened bare result
     plot_bare = true
 
-    plotparam =
+    plotparams =
         UEG.ParaMC(; order=max_order, rs=rs, beta=beta, mass2=mass2, isDynamic=false)
+
+    plotsettings = DiagGen.Settings(;
+        observable=DiagGen.c1bL,
+        n_order=max_order,
+        expand_bare_interactions=expand_bare_interactions,
+        filter=[NoHartree],
+        interaction=[FeynmanDiagram.Interaction(ChargeCharge, Instant)],  # Yukawa-type interaction
+    )
 
     # Distinguish results with fixed vs re-expanded bare interactions
     intn_str = ""
@@ -54,17 +62,27 @@ function main()
     # colors = ["orchid", "cornflowerblue", "turquoise", "chartreuse", "greenyellow"]
     # markers = ["-", "-", "-", "-", "-"]
 
-    # Load the results from JLD2
-    savename =
-        "results/data/c1bL_n=$(max_order)_rs=$(rs)_" *
+    # Load the results from multiple JLD2 files
+    data_fixed_orders = [3, 4]
+    filenames = [
+        "results/data/c1bL_n=$(order)_rs=$(rs)_" *
         "beta_ef=$(beta)_lambda=$(mass2)_" *
-        "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)"
-    settings, param, kgrid, partitions, res = jldopen("$savename.jld2", "a+") do f
-        key = "$(UEG.short(plotparam))"
-        return f[key]
-    end
+        "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)" for
+        order in data_fixed_orders
+    ]
+    settings, param, kgrid, partitions_list, res_list =
+        merge_fixed_order_data(filenames, plotsettings, plotparams)
+
+    # Convert fixed-order data to dictionary
+    data = restodict(res_list, partitions_list)
+
     # Get dimensionless k-grid (k / kF)
     k_kf_grid = kgrid / param.kF
+
+    println(settings)
+    println(UEG.paraid(param))
+    println(res_list)
+    println(partitions_list)
 
     println(settings)
     println(UEG.paraid(param))

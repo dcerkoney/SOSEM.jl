@@ -228,13 +228,13 @@ function main()
     # Convert fixed-order data to dictionary
     data = restodict(res_list, partitions_list)
 
+    # Get dimensionless k-grid (k / kF)
+    k_kf_grid = kgrid / param.kF
+
     println(settings)
     println(UEG.paraid(param))
     println(res_list)
     println(partitions_list)
-
-    # Get dimensionless k-grid (k / kF)
-    k_kf_grid = kgrid / param.kF
 
     # Plot the results
     fig, ax = plt.subplots()
