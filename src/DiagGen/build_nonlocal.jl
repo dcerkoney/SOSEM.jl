@@ -1,8 +1,9 @@
 """
 Construct diagram and expression trees for a non-local second-order moment (SOSEM) diagram derived 
-from Σ₂[G, V, Γⁱ₃ = Γ₀] (or Σ₂ itself) to O(Vⁿ) for a statically-screened interaction V[λ].
+from Σ₂[G, V, Γⁱ₃ = Γ₀] (or Σ₂ itself) at O(Vⁿ) for a statically-screened interaction V[λ].
 """
-function build_nonlocal(s::Settings)
+function build_nonlocal_fixed_order(s::Settings)
+    @assert s.min_order == s.max_order
     DiagTree.uidreset()
     # Construct the self-energy diagram tree without counterterms
     diagparam, diagtree = build_diagtree(s)
@@ -13,28 +14,42 @@ function build_nonlocal(s::Settings)
 end
 
 """
-Construct a list of all expression trees for non-local second-order moment (SOSEM) diagrams derived from
-Σ₂[G, V, Γⁱ₃ = Γ₀] (or Σ₂ itself) to O(ξⁿ) for a statically-screened interaction V[λ] with counterterms.
-
-If `fixed_order` is true, generate partitions at fixed order N = `s.n_order`.
-Otherwise, generate all counterterm partitions up to max order N.
+Construct diagram and expression trees for a non-local second-order moment (SOSEM) diagram derived from 
+Σ₂[G, V, Γⁱ₃ = Γ₀] (or Σ₂ itself) between orders n_min and n_max in a statically-screened interaction V[λ].
 """
-function build_nonlocal_with_ct(
-    s::Settings;
-    fixed_order=true,
-    renorm_mu=false,
-    renorm_lambda=true,
-)
+function build_nonlocal(s::Settings)
     DiagTree.uidreset()
-    valid_partitions = Tuple{Int,Int,Int}[]
     diagparams = Vector{DiagParaF64}()
     diagtrees = Vector{DiagramF64}()
     exprtrees = Vector{ExprTreeF64}()
+    # Loop over all orders for the given SOSEM observable settings
+    for n_loop in (s.min_order):(s.max_order)
+        # Build diagram tree for this loop order
+        @debug "Loop order n = $n_loop:"
+        diagparam, diagtree = build_diagtree(s; n_loop=n_loop)
+        
+        # Compile to expression tree and save results for this loop order
+        exprtree = ExprTree.build([diagtree])
+        push!(diagparams, diagparam)
+        push!(exprtrees, exprtree)
+        push!(diagtrees, diagtree)
+    end
+    return diagparams, diagtrees, exprtrees
+end
 
-    # Either generate all counterterm partitions up to max order N
-    # or generate partitions at fixed order N, where N = s.n_order.
-    partitions = fixed_order ? counterterm_partitions_fixed_order : counterterm_partitions
-    for p in partitions(s; renorm_mu=renorm_mu, renorm_lambda=renorm_lambda)
+"""
+Construct a list of all expression trees for non-local second-order moment (SOSEM) diagrams derived from
+Σ₂[G(μ), V(λ), Γⁱ₃ = Γ₀] (or Σ₂ itself) between orders n_min and n_max in ξ (loop + CT orders),
+including counterterms in μ and/or λ.
+"""
+function build_nonlocal_with_ct(s::Settings; renorm_mu=false, renorm_lambda=true)
+    DiagTree.uidreset()
+    valid_partitions = Vector{PartitionType}()
+    diagparams = Vector{DiagParaF64}()
+    diagtrees = Vector{DiagramF64}()
+    exprtrees = Vector{ExprTreeF64}()
+    # Loop over all counterterm partitions for the given SOSEM observable settings
+    for p in counterterm_partitions(s; renorm_mu=renorm_mu, renorm_lambda=renorm_lambda)
         # Build diagram tree for this partition
         @debug "Partition (n_loop, n_ct_mu, n_ct_lambda): $p"
         diagparam, diagtree = build_diagtree(s; n_loop=p[1])
@@ -63,14 +78,14 @@ Generate a diagram tree for the one-crossing Σ₂[G, V, Γⁱ₃ = Γ₀] diagr
 (without dashed G-lines) to O(Vⁿ) for a statically-screened interaction V[λ].
 """
 function build_sigma2_nonlocal(s::Settings)
-    @assert isempty(s.indices_g_dash) && return build_nonlocal(s)
+    @assert isempty(s.indices_g_dash) && return build_nonlocal_fixed_order(s)
 end
 
 """
 Construct a diagram tree for a non-local second-order 
 moment (SOSEM) observable at the given loop order.
 """
-function build_diagtree(s::Settings; n_loop::Int=s.n_order)
+function build_diagtree(s::Settings; n_loop::Int=s.max_order)
     # Initialize DiagGen configuration containing diagram parameters, partition,
     # propagator and vertex momentum/time data, (expansion) order info, etc.
     cfg = Config(s, n_loop)

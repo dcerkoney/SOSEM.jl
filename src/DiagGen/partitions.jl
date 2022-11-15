@@ -1,5 +1,5 @@
 """
-Get all counterterm partitions (n1, n2, n3) satisfying the following constraints:
+Get all (μ and/or λ) counterterm partitions (n1, n2, n3) satisfying the following constraints:
 
     (1) n1 ≥ n_lowest
     (2) n_min <= n1 + n2 + n3 <= n_max
@@ -13,13 +13,13 @@ Similarly, if `renorm_lambda` is false, then n_ct_lambda = 0.
 By default, generates partitions with interaction counterterms only.
 """
 function counterterm_partitions(
-    n_max::Int,
-    n_min::Int;
+    n_min::Int,
+    n_max::Int;
     n_lowest::Int,
     renorm_mu=false,
     renorm_lambda=true,
 )
-    partitions = Tuple{Int,Int,Int}[]
+    partitions = Vector{PartitionType}()
     if n_max < n_min
         return partitions
     end
@@ -48,45 +48,44 @@ function counterterm_partitions(
 end
 
 """
-Get all counterterm partitions (n1, n2, n3) up to a maximum order n = n1 + n2 + n3
-for a SOSEM measurement specified by the given settings. 
+Get all (μ and/or λ) counterterm partitions (n1, n2, n3) satisfying the constraint
+s.min_order ≤ n1 + n2 + n3 ≤ s.max_order for the given SOSEM measurement settings. 
 If `renorm_mu` is false, then n_ct_mu = 0. 
 """
 function counterterm_partitions(s::Settings; renorm_mu=false, renorm_lambda=true)
-    n_min = _get_lowest_loop_order(s.observable)  # Lowest loop order depends on the observable
     return counterterm_partitions(
-        s.n_order,
-        n_min;
-        n_lowest=n_min,
+        s.min_order,
+        s.max_order;
+        n_lowest=_get_lowest_loop_order(s.observable),  # Lowest loop order depends on the observable
         renorm_mu=renorm_mu,
         renorm_lambda=renorm_lambda,
     )
 end
 
-"""
-Get all counterterm partitions (n1, n2, n3) at fixed order n = n1 + n2 + n3
-for a SOSEM measurement specified by the given settings. 
-If `renorm_mu` is false, then n_ct_mu = 0. 
-"""
-function counterterm_partitions_fixed_order(
-    s::Settings;
-    renorm_mu=false,
-    renorm_lambda=true,
-)
-    return counterterm_partitions(
-        s.n_order,
-        s.n_order;
-        n_lowest=_get_lowest_loop_order(s.observable),
-        renorm_mu=renorm_mu,
-        renorm_lambda=renorm_lambda,
-    )
-end
+# """
+# Get all counterterm partitions (n1, n2, n3) at fixed order n = n1 + n2 + n3
+# for a SOSEM measurement specified by the given settings. 
+# If `renorm_mu` is false, then n_ct_mu = 0. 
+# """
+# function counterterm_partitions_fixed_order(
+#     s::Settings;
+#     renorm_mu=false,
+#     renorm_lambda=true,
+# )
+#     return counterterm_partitions(
+#         s.min_order,
+#         s.max_order;
+#         n_lowest=_get_lowest_loop_order(s.observable),
+#         renorm_mu=renorm_mu,
+#         renorm_lambda=renorm_lambda,
+#     )
+# end
 
 """
 Generate weak compositions of size 2 of an integer n
 (i.e., the cycle (n, 0), (n-1, 1), ..., (0, n)), where
 (n_order, n_ct_lambda) = (i, j) with an additional constraint
-that n_order ≥ 2 (the minimum order for SOSEM observables).
+that max_order ≥ 2 (the minimum order for SOSEM observables).
 `n_lowest` is the lowest valid loop order for the given observable.
 """
 function counterterm_single_split(n::Int, n_lowest::Int=2)

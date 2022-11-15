@@ -11,143 +11,7 @@ using SOSEM
 @pyimport numpy as np
 @pyimport matplotlib.pyplot as plt
 
-# Type signature for partitions
-const PartitionType = Vector{Tuple{Int,Int,Int}}
-
 # NOTE: Call from main project directory as: julia examples/c1b0/plot_c1b0_ct_check.jl
-
-"""Convert a list of MCIntegration results for partitions {P} to a Dict of measurements."""
-function restodict(res::Result, partitions::PartitionType)
-    data = Dict()
-    for (i, p) in enumerate(partitions)
-        data[p] = measurement.(res.mean[i], res.stdev[i])
-    end
-    return data
-end
-function restodict(res_list::Vector{Result}, partitions_list::Vector{PartitionType})
-    @assert length(res_list) == length(partitions_list)
-    data = Dict()
-    for o in eachindex(partitions_list)
-        for (i, p) in enumerate(partitions_list[o])
-            data[p] = measurement.(res_list[o].mean[i], res_list[o].stdev[i])
-        end
-    end
-    return data
-end
-
-function merge_fixed_order_data(
-    filenames,
-    plotsettings::DiagGen.Settings,
-    plotparams::UEG.ParaMC,
-)
-    # TODO: Refactor---what is the cleanest way to merge the data? 
-    #       Should we compose the MCIntegration.Result structs?
-
-    # ParaMC fields for which we require equality between the different JLD2 data
-    required_param = [:rs, :beta, :mass2, :isDynamic]
-
-    # Settings fields for which we require equality between the different JLD2 data
-    required_settings = [:filter, :interaction, :expand_bare_interactions]
-
-    # Merge JDL2 data from different fixed-order calculations
-    local settings, params, kgrid
-    res_list = Vector{Result}()
-    partitions_list = Vector{PartitionType}()
-    for (i, savename) in enumerate(filenames)
-        _settings, _params, _kgrid, _partitions, _res = jldopen("$savename.jld2", "a+") do f
-            key = "$(UEG.short(plotparams))"
-            return f[key]
-        end
-        # TODO: relax requirement that kgrid is the same for all data
-        if i == 1
-            kgrid = _kgrid
-        else
-            @assert kgrid ≈ _kgrid
-        end
-        # Make sure that required settings are the same for all data
-        for field in required_settings
-            data_setting = getfield(_settings, field)
-            plot_setting = getfield(plotsettings, field)
-            if data_setting != plot_setting
-                @warn (
-                    "Skipping file '$savename': DiagGen settings" *
-                    " differ from current plot settings:"
-                ) maxlog = 1
-                @warn (
-                    " • Data setting: $data_setting" * "\n • Plot setting: $plot_setting"
-                )
-            end
-        end
-        # Make sure that required parameters are the same for all data
-        for field in required_param
-            data_param = getfield(_params, field)
-            plot_param = getfield(plotparams, field)
-            if data_param != plot_param
-                @warn (
-                    "Skipping file '$savename': MC params differ from current plot params:"
-                ) maxlog = 1
-                @warn (" • Data param: $data_param" * "\n • Plot param: $plot_param")
-            end
-        end
-        # Pick param & settings from max order
-        if i == length(filenames)
-            params = _params
-            settings = _settings
-        end
-        # Add the current results and partitions to the lists
-        push!(res_list, _res)
-        push!(partitions_list, _partitions)
-    end
-    return (settings, params, kgrid, partitions_list, res_list)
-end
-
-function load_z_mu(
-    param::UEG.ParaMC,
-    parafilename="para.csv",
-    ct_filename="examples/counterterms/data_Z.jld2",
-)
-    # Load μ from csv
-    local ct_data
-    filefound = false
-    f = jldopen(ct_filename, "r")
-    for key in keys(f)
-        if UEG.paraid(f[key][1]) == UEG.paraid(param)
-            ct_data = f[key]
-            filefound = true
-        end
-    end
-    if !filefound
-        throw(KeyError(UEG.paraid(param)))
-    end
-
-    df = CounterTerm.fromFile(parafilename)
-    para, _, _, data = ct_data
-    printstyled(UEG.short(para); color=:yellow)
-    println()
-
-    function zfactor(data, β)
-        return @. (imag(data[2, 1]) - imag(data[1, 1])) / (2π / β)
-    end
-
-    function mu(data)
-        return real(data[1, 1])
-    end
-
-    for p in sort([k for k in keys(data)])
-        println("$p: μ = $(mu(data[p]))   z = $(zfactor(data[p], para.β))")
-    end
-
-    μ = Dict()
-    for (p, val) in data
-        μ[p] = mu(val)
-    end
-    z = Dict()
-    for (p, val) in data
-        z[p] = zfactor(val, para.β)
-    end
-
-    return z, μ
-end
 
 function main()
     rs = 1.0
@@ -158,10 +22,15 @@ function main()
     expand_bare_interactions = false
 
     neval = 5e8
+    min_order = 3
     max_order = 4
     min_order_plot = 4
     max_order_plot = 4
     @assert max_order ≥ 3
+    @assert min_order_plot ≥ min_order && max_order_plot ≤ max_order
+
+    # Load data from multiple fixed-order runs
+    fixed_orders = collect(min_order:max_order)
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -171,12 +40,15 @@ function main()
     # Include unscreened bare result
     plot_bare = false
 
-    plotparams =
-        UEG.ParaMC(; order=max_order, rs=rs, beta=beta, mass2=mass2, isDynamic=false)
+    plotparams = [
+        UEG.ParaMC(; order=order, rs=rs, beta=beta, mass2=mass2, isDynamic=false) for
+        order in fixed_orders
+    ]
 
     plotsettings = DiagGen.Settings(;
-        observable=DiagGen.c1bL0,
-        n_order=max_order,
+        observable=DiagGen.c1bL,
+        min_order=min_order,
+        max_order=max_order,
         expand_bare_interactions=expand_bare_interactions,
         filter=[NoHartree],
         interaction=[FeynmanDiagram.Interaction(ChargeCharge, Instant)],  # Yukawa-type interaction
@@ -223,10 +95,10 @@ function main()
         order in data_fixed_orders
     ]
     settings, param, kgrid, partitions_list, res_list =
-        merge_fixed_order_data(filenames, plotsettings, plotparams)
+        UEG_MC.load_fixed_order_data_jld2(filenames, plotsettings, plotparams)
 
     # Convert fixed-order data to dictionary
-    data = restodict(res_list, partitions_list)
+    data = UEG_MC.restodict(res_list, partitions_list)
 
     # Get dimensionless k-grid (k / kF)
     k_kf_grid = kgrid / param.kF
@@ -265,7 +137,8 @@ function main()
 
     # Next available color for plotting
     next_color = 4
-    for partitions in partitions_list
+    for partitions in []
+    # for partitions in partitions_list
         for p in partitions
             if !(min_order_plot <= sum(p) <= max_order_plot)
                 continue
@@ -308,7 +181,7 @@ function main()
     println([k for (k, _) in merged_data])
 
     # Reexpand merged data in powers of μ
-    z, μ = load_z_mu(param)
+    z, μ = UEG_MC.load_z_mu(param)
     δz, δμ = CounterTerm.sigmaCT(max_order - 2, μ, z; verbose=1)
     println("Computed δμ: ", δμ)
     c1b0 = UEG_MC.chemicalpotential_renormalization(
@@ -368,8 +241,8 @@ function main()
 
     # Plot the counterterm cancellation at next-leading order in δμ
     if max_order_plot ≥ 4
-        c1b04_means = Measurements.value.(c1b0[3])
-        c1b04_errs = Measurements.uncertainty.(c1b0[3])
+        c1b04_means = Measurements.value.(c1b0[4])
+        c1b04_errs = Measurements.uncertainty.(c1b0[4])
         ax.plot(
             k_kf_grid,
             c1b04_means,

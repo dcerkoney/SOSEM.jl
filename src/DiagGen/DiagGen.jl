@@ -6,7 +6,7 @@ using ..ElectronLiquid
 using ..FeynmanDiagram
 using ..Logging
 using ..Parameters
-using ..SOSEM: @todo, DiagramF64, ExprTreeF64
+using ..SOSEM: @todo, DiagramF64, ExprTreeF64, PartitionType, MergedPartitionType
 
 # Convenience typedefs for Settings and Config
 const VFloat64 = Vector{Float64}
@@ -25,7 +25,7 @@ include("properties.jl")
 export Gamma3InsertionSide, left, right
 export DiscontSide, negative, positive, both
 export Observables, sigma20, sigma2, c1a, c1bL0, c1bR0, c1bL, c1bR, c1c, c1d
-export get_bare_string, get_exact_k0, getID, propagator_param
+export get_observable_name, get_bare_string, get_exact_k0, getID, propagator_param
 
 include("common.jl")
 export Verbosity, quiet, info, verbose

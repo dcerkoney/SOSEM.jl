@@ -63,6 +63,7 @@ function main()
         key = "$(UEG.short(plotparam))"
         return f[key]
     end
+    
     # Get dimensionless k-grid (k / kF)
     k_kf_grid = kgrid / param.kF
 

@@ -77,6 +77,17 @@ const observable_to_obs_sign = Dict(
     c1c     => -1,
     c1d     => 1,  # Since (Θ₋₁(τ))² = Θ(-τ)
 )
+const observable_to_name = Dict(
+    sigma20 => "sigma20",
+    sigma2  => "sigma2",
+    c1a     => "c1a",
+    c1bL0   => "c1bL0",
+    c1bR0   => "c1bR0",
+    c1bL    => "c1bL",
+    c1bR    => "c1bR",
+    c1c     => "c1c",
+    c1d     => "c1d",
+)
 const observable_to_string = Dict(
     sigma20 => "Σ₂[G, V, Γⁱ₃ = Γ₀]",
     sigma2  => "Σ₂[G, V, Γⁱ₃ > Γ₀]",
@@ -97,6 +108,11 @@ const bare_observable_to_string = Dict(
 )
 """Overload print operator for string representations of observables."""
 Base.print(io::IO, obs::Observables) = print(io, observable_to_string[obs])
+
+"""Print the string representation of a (non-local) bare observable."""
+@inline function get_observable_name(obs::DiagGen.Observables)
+    return observable_to_name[obs]
+end
 
 """Print the string representation of a (non-local) bare observable."""
 @inline function get_bare_string(obs::DiagGen.Observables)

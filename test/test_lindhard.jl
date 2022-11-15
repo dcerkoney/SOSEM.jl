@@ -85,17 +85,27 @@ end
 
 @testset "Lindhard function improper integration" begin
     test_solvers = [:vegas, :vegasmc]
-    for solver in test_solvers
-        # vegas/vegasmc solvers break down due to tail round-off error
-        @test_throws str -> any(
+    # vegas/vegasmc solvers break down due to tail round-off error
+    match_vegas_errmsgs =
+        str -> any(
             occursin(s, str) for s in [
-                r"normalization of block \d+ is NaN, which is not positively defined!",
-                "AssertionError: histogram should be all finite",
+                r"block .?\d+.? is NaN",
+                r"AssertionError.*?histogram.*?finite",
+                r"UndefVarError.*?i",  # new error in v0.3.2
             ]
-        ) integrate_lindhard(taylor_expand=false, mcprint=-2, solver=solver)
-
+        )
+    # vegas/vegasmc solvers break down due to tail round-off error
+    for solver in test_solvers
+        @test_throws match_vegas_errmsgs integrate_lindhard(;
+            taylor_expand=false,
+            mcprint=-2,
+            solver=solver,
+        )
         # Taylor expansion of F(x) for large x resolves this issue
-        mcprint = (solver == :vegas) ? -1 : -2
-        @test integrate_lindhard(taylor_expand=true, mcprint=mcprint, solver=solver)
+        @test integrate_lindhard(;
+            taylor_expand=true,
+            mcprint=(solver == :vegas) ? -1 : -2,
+            solver=solver,
+        )
     end
 end

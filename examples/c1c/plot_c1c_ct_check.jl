@@ -11,15 +11,6 @@ using SOSEM
 
 # NOTE: Call from main project directory as: julia examples/c1c/plot_c1c_ct_check.jl
 
-"""Convert a list of MCIntegration results for partitions {P} to a Dict of measurements."""
-function restodict(res, partitions)
-    data = Dict()
-    for (i, p) in enumerate(partitions)
-        data[p] = measurement.(res.mean[i], res.stdev[i])
-    end
-    return data
-end
-
 function load_z_mu(
     param::UEG.ParaMC,
     parafilename="para.csv",

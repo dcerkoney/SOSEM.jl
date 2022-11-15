@@ -18,7 +18,8 @@ function main()
 
     settings = DiagGen.Settings(;
         observable=DiagGen.c1d,
-        n_order=3,
+        min_order=3,  # TODO: write special-purpose integrator for (2,0,0) partition
+        max_order=4,
         verbosity=DiagGen.quiet,
         expand_bare_interactions=false,
         filter=[NoHartree],
@@ -31,7 +32,8 @@ function main()
     @assert settings.expand_bare_interactions == false
 
     # UEG parameters for MC integration
-    param = ParaMC(; order=settings.n_order, rs=1.0, beta=200.0, mass2=2.0, isDynamic=false)
+    param =
+        ParaMC(; order=settings.max_order, rs=1.0, beta=200.0, mass2=2.0, isDynamic=false)
     @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)"
 
     # K-mesh for measurement
@@ -46,7 +48,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 5e8
+    neval = 1e9
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -55,7 +57,6 @@ function main()
     # Build diagram and expression trees for all loop and counterterm partitions
     partitions, diagparams, diagtrees, exprtrees = DiagGen.build_nonlocal_with_ct(
         settings;
-        fixed_order=true,  # TODO: special-purpose integrator for (2,0,0) partition
         renorm_mu=renorm_mu,
         renorm_lambda=renorm_lambda,
     )
@@ -100,16 +101,24 @@ function main()
     # Save to JLD2 on main thread
     if !isnothing(res)
         savename =
-            "results/data/c1d_n=$(param.order)_rs=$(param.rs)_" *
-            "beta_ef=$(param.beta)_lambda=$(param.mass2)_" *
-            "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)"
+            "results/data/rs=$(param.rs)_beta_ef=$(param.beta)_" *
+            "lambda=$(param.mass2)_$(intn_str)$(solver)_$(ct_string)"
+        # "results/data/c1d_n_min=$(settings.min_order)_n_max=$(settings.max_order)_" *
+        # "rs=$(param.rs)_beta_ef=$(param.beta)_lambda=$(param.mass2)_" *
+        # "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)"
         jldopen("$savename.jld2", "a+") do f
-            key = "$(short(param))"
+            # key = "$(short(param))"
+            key = "c1d_n_min=$(settings.min_order)_n_max=$(settings.max_order)_neval=$(neval)"
             if haskey(f, key)
                 @warn("replacing existing data for $key")
                 delete!(f, key)
             end
-            return f[key] = (settings, param, kgrid, partitions, res)
+            f["$key/res"] = res
+            f["$key/settings"] = settings
+            f["$key/param"] = param
+            f["$key/kgrid"] = kgrid
+            f["$key/partitions"] = partitions
+            return
         end
 
         if plot
@@ -170,8 +179,8 @@ function main()
             ax.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
             plt.tight_layout()
             fig.savefig(
-                "results/c1d/n=$(param.order)/c1d_n=$(param.order)_rs=$(param.rs)_" *
-                "beta_ef=$(param.beta)_lambda=$(param.mass2)_" *
+                "results/c1d/n=$(settings.max_order)/c1d_n=$(settings.max_order)_" *
+                "rs=$(param.rs)_beta_ef=$(param.beta)_lambda=$(param.mass2)_" *
                 "neval=$(neval)_$(intn_str)$(solver)_$(ct_string).pdf",
             )
             plt.close("all")

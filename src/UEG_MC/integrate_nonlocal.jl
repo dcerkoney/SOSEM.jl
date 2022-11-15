@@ -1,6 +1,3 @@
-using ..DiagGen
-using ..UEG_MC
-
 function integrate_nonlocal_with_ct(
     settings::Settings,
     mcparam::UEG.ParaMC,

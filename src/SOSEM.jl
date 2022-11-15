@@ -11,6 +11,11 @@ const DiagramF64 = Diagram{Float64}
 const ExprTreeF64 = ElectronLiquid.ExprTreeF64
 export DiagramF64, ExprTreeF64
 
+# Convenience typedefs for counterterm partitions
+const PartitionType = Tuple{Int,Int,Int}
+const MergedPartitionType = Tuple{Int,Int}
+export PartitionType, MergedPartitionType
+
 macro todo()
     return :(error("Not yet implemented!"))
 end

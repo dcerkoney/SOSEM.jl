@@ -12,16 +12,23 @@ function bare_integral_k0(;
     # Settings for diagram generation
     settings = DiagGen.Settings(;
         observable=observable,
-        n_order=2,
         verbosity=verbosity,
         expand_bare_interactions=false,
     )
 
     # UEG parameters for MC integration
-    param = ParaMC(; order=settings.n_order, rs=2.0, beta=beta, isDynamic=false)
+    param = ParaMC(; order=settings.max_order, rs=2.0, beta=beta, isDynamic=false)
 
-    # Generate the diagrams
-    diagparam, diagtree, exprtree = DiagGen.build_nonlocal(settings)
+    # Generate the diagrams for the implicitly fixed-order calculation
+    
+    # Test against explicit fixed-order calculation
+    diagparam, diagtree, exprtree = DiagGen.build_nonlocal_fixed_order(settings)
+    diagparam_v2, _, _ = DiagGen.build_nonlocal(settings)
+
+    # Check that explicit/implicit fixed-order calculations 
+    # both give the same generated diagram parameters
+    @test diagparam == diagparam_v2[1]
+
     DiagGen.checktree(diagtree, settings)
     @test length(exprtree.root) == 1
 
@@ -75,13 +82,13 @@ function bare_integral_k0_multipartition(;
     # Settings for diagram generation
     settings = DiagGen.Settings(;
         observable=observable,
-        n_order=2,
+        max_order=2,
         verbosity=verbosity,
         expand_bare_interactions=false,
     )
 
     # UEG parameters for MC integration
-    param = ParaMC(; order=settings.n_order, rs=2.0, beta=beta, isDynamic=false)
+    param = ParaMC(; order=settings.max_order, rs=2.0, beta=beta, isDynamic=false)
 
     # Build diagram and expression trees for all loop and counterterm partitions
     partitions, diagparams, diagtrees, exprtrees =

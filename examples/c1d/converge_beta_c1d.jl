@@ -23,7 +23,8 @@ function main()
     # Settings for diagram generation
     settings = DiagGen.Settings(;
         observable=DiagGen.c1d,
-        n_order=2,
+        min_order=2,
+        max_order=2,
         verbosity=DiagGen.quiet,
         expand_bare_interactions=false,
     )
@@ -59,11 +60,11 @@ function main()
     for beta in beta_grid
         # UEG parameters for MC integration
         param =
-            ParaMC(; order=settings.n_order, rs=2.0, isDynamic=false, beta=beta, mass2=0.1)
+            ParaMC(; order=settings.max_order, rs=2.0, isDynamic=false, beta=beta, mass2=0.1)
         @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)" maxlog = 1
 
         # Generate the diagrams
-        diagparam, diagtree, exprtree = DiagGen.build_nonlocal(settings)
+        diagparam, diagtree, exprtree = DiagGen.build_nonlocal_fixed_order(settings)
 
         # Check the diagram tree
         DiagGen.checktree(diagtree, settings)

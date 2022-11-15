@@ -14,143 +14,7 @@ using SOSEM
 @pyimport numpy as np
 @pyimport matplotlib.pyplot as plt
 
-# Type signature for partitions
-const PartitionType = Vector{Tuple{Int,Int,Int}}
-
 # NOTE: Call from main project directory as: julia examples/c1b/plot_c1b_ct_check.jl
-
-"""Convert a list of MCIntegration results for partitions {P} to a Dict of measurements."""
-function restodict(res, partitions)
-    data = Dict()
-    for (i, p) in enumerate(partitions)
-        data[p] = measurement.(res.mean[i], res.stdev[i])
-    end
-    return data
-end
-function restodict(res_list::Vector{Result}, partitions_list::Vector{PartitionType})
-    @assert length(res_list) == length(partitions_list)
-    data = Dict()
-    for o in eachindex(partitions_list)
-        for (i, p) in enumerate(partitions_list[o])
-            data[p] = measurement.(res_list[o].mean[i], res_list[o].stdev[i])
-        end
-    end
-    return data
-end
-
-function merge_fixed_order_data(
-    filenames,
-    plotsettings::DiagGen.Settings,
-    plotparams::UEG.ParaMC,
-)
-    # TODO: Refactor---what is the cleanest way to merge the data? 
-    #       Should we compose the MCIntegration.Result structs?
-
-    # ParaMC fields for which we require equality between the different JLD2 data
-    required_param = [:rs, :beta, :mass2, :isDynamic]
-
-    # Settings fields for which we require equality between the different JLD2 data
-    required_settings = [:filter, :interaction, :expand_bare_interactions]
-
-    # Merge JDL2 data from different fixed-order calculations
-    local settings, params, kgrid
-    res_list = Vector{Result}()
-    partitions_list = Vector{PartitionType}()
-    for (i, savename) in enumerate(filenames)
-        _settings, _params, _kgrid, _partitions, _res = jldopen("$savename.jld2", "a+") do f
-            key = "$(UEG.short(plotparams))"
-            return f[key]
-        end
-        # TODO: relax requirement that kgrid is the same for all data
-        if i == 1
-            kgrid = _kgrid
-        else
-            @assert kgrid ≈ _kgrid
-        end
-        # Make sure that required settings are the same for all data
-        for field in required_settings
-            data_setting = getfield(_settings, field)
-            plot_setting = getfield(plotsettings, field)
-            if data_setting != plot_setting
-                @warn (
-                    "Skipping file '$savename': DiagGen settings" *
-                    " differ from current plot settings:"
-                ) maxlog = 1
-                @warn (
-                    " • Data setting: $data_setting" * "\n • Plot setting: $plot_setting"
-                )
-            end
-        end
-        # Make sure that required parameters are the same for all data
-        for field in required_param
-            data_param = getfield(_params, field)
-            plot_param = getfield(plotparams, field)
-            if data_param != plot_param
-                @warn (
-                    "Skipping file '$savename': MC params differ from current plot params:"
-                ) maxlog = 1
-                @warn (" • Data param: $data_param" * "\n • Plot param: $plot_param")
-            end
-        end
-        # Pick param & settings from max order
-        if i == length(filenames)
-            params = _params
-            settings = _settings
-        end
-        # Add the current results and partitions to the lists
-        push!(res_list, _res)
-        push!(partitions_list, _partitions)
-    end
-    return (settings, params, kgrid, partitions_list, res_list)
-end
-
-function load_z_mu(
-    param::UEG.ParaMC,
-    parafilename="para.csv",
-    ct_filename="examples/counterterms/data_Z.jld2",
-)
-    # Load μ from csv
-    local ct_data
-    filefound = false
-    f = jldopen(ct_filename, "r")
-    for key in keys(f)
-        if UEG.paraid(f[key][1]) == UEG.paraid(param)
-            ct_data = f[key]
-            filefound = true
-        end
-    end
-    if !filefound
-        throw(KeyError(UEG.paraid(param)))
-    end
-
-    df = CounterTerm.fromFile(parafilename)
-    para, _, _, data = ct_data
-    printstyled(UEG.short(para); color=:yellow)
-    println()
-
-    function zfactor(data, β)
-        return @. (imag(data[2, 1]) - imag(data[1, 1])) / (2π / β)
-    end
-
-    function mu(data)
-        return real(data[1, 1])
-    end
-
-    for p in sort([k for k in keys(data)])
-        println("$p: μ = $(mu(data[p]))   z = $(zfactor(data[p], para.β))")
-    end
-
-    μ = Dict()
-    for (p, val) in data
-        μ[p] = mu(val)
-    end
-    z = Dict()
-    for (p, val) in data
-        z[p] = zfactor(val, para.β)
-    end
-
-    return z, μ
-end
 
 function main()
     rs = 1.0
@@ -161,10 +25,15 @@ function main()
     expand_bare_interactions = false
 
     neval = 5e8
+    min_order = 3
     max_order = 4
     min_order_plot = 4
     max_order_plot = 4
-    @assert max_order ≥ 3
+    @assert max_order ≥ 4
+    @assert min_order_plot ≥ min_order && max_order_plot ≤ max_order
+
+    # Load data from multiple fixed-order runs
+    fixed_orders = collect(min_order:max_order)
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -174,12 +43,15 @@ function main()
     # Include unscreened bare result
     plot_bare = false
 
-    plotparams =
-        UEG.ParaMC(; order=max_order, rs=rs, beta=beta, mass2=mass2, isDynamic=false)
+    plotparams = [
+        UEG.ParaMC(; order=order, rs=rs, beta=beta, mass2=mass2, isDynamic=false) for
+        order in fixed_orders
+    ]
 
     plotsettings = DiagGen.Settings(;
         observable=DiagGen.c1bL,
-        n_order=max_order,
+        min_order=min_order,
+        max_order=max_order,
         expand_bare_interactions=expand_bare_interactions,
         filter=[NoHartree],
         interaction=[FeynmanDiagram.Interaction(ChargeCharge, Instant)],  # Yukawa-type interaction
@@ -208,18 +80,16 @@ function main()
     # markers = ["-", "-", "-", "-", "-"]
 
     # Load the results from multiple JLD2 files
-    data_fixed_orders = [3, 4]
     filenames = [
         "results/data/c1bL_n=$(order)_rs=$(rs)_" *
         "beta_ef=$(beta)_lambda=$(mass2)_" *
-        "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)" for
-        order in data_fixed_orders
+        "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)" for order in fixed_orders
     ]
     settings, param, kgrid, partitions_list, res_list =
-        merge_fixed_order_data(filenames, plotsettings, plotparams)
+        UEG_MC.load_fixed_order_data_jld2(filenames, plotsettings, plotparams)
 
     # Convert fixed-order data to dictionary
-    data = restodict(res_list, partitions_list)
+    data = UEG_MC.restodict(res_list, partitions_list)
 
     # Get dimensionless k-grid (k / kF)
     k_kf_grid = kgrid / param.kF
@@ -272,7 +142,7 @@ function main()
     end
 
     # Next available color for plotting
-    next_color = 4
+    next_color = 0
     for partitions in partitions_list
         for p in partitions
             if !(min_order_plot <= sum(p) <= max_order_plot)
@@ -285,7 +155,7 @@ function main()
             stdevs = 2 * Measurements.uncertainty.(data[p])
             # Data gets noisy above 1st Green's function counterterm order
             # marker =
-            #     (partitions[o][2] > 1 || (partitions[o][1] > 3 && partitions[o][2] > 0)) ?
+            #     (p[2] > 1 || (p[1] > 3 && p[2] > 0)) ?
             #     "o-" : "-"
             marker = "-"
             ax.plot(
@@ -293,21 +163,21 @@ function main()
                 means,
                 marker;
                 markersize=2,
-                color=next_color == 3 ? "C0" : "C$next_color",
-                # color="C$next_color",
-                label="\$\\widetilde{C}^{(1b)}_{$(partitions[o])}\$",
-                # label="\$\\widetilde{C}^{(1b)}_{$(partitions[o])}\$ ($solver)",
-                # label="\$\\mathcal{P}=$(partitions[o])\$ ($solver)",
+                # color=next_color == 3 ? "C0" : "C$next_color",
+                color="C$next_color",
+                label="\$\\widetilde{C}^{(1b)}_{$p}\$",
+                # label="\$\\widetilde{C}^{(1b)}_{$p}\$ ($solver)",
+                # label="\$\\mathcal{P}=$p\$ ($solver)",
             )
             ax.fill_between(
                 k_kf_grid,
                 means - stdevs,
                 means + stdevs;
-                color=next_color == 3 ? "C0" : "C$next_color",
-                # color="C$next_color",
+                # color=next_color == 3 ? "C0" : "C$next_color",
+                color="C$next_color",
                 alpha=0.4,
             )
-            next_color -= 1
+            next_color += 1
         end
     end
 
@@ -316,43 +186,45 @@ function main()
     println([k for (k, _) in merged_data])
 
     # Reexpand merged data in powers of μ
-    z, μ = load_z_mu(param)
+    z, μ = UEG_MC.load_z_mu(param)
     δz, δμ = CounterTerm.sigmaCT(max_order - 2, μ, z; verbose=1)
     println("Computed δμ: ", δμ)
-    c1b = UEG_MC.chemicalpotential_renormalization(
+    c1bL = UEG_MC.chemicalpotential_renormalization(
         merged_data,
         δμ;
+        lowest_order=3,  # there is no second order for this observable
         min_order=min_order_plot,
         max_order=max_order_plot,
     )
 
     # Test manual renormalization with exact lowest-order chemical potential;
     # the first-order counterterm is: δμ1= ReΣ₁[λ](kF, 0)
-    δμ1_exact = UEG_MC.delta_mu1(param)
-    # C⁽¹⁾₃ = C⁽¹⁾_{3,0} + δμ₁ C⁽¹⁾_{2,1} (exact δμ₁)
-    c1b3_exact = merged_data[(3, 0)] + δμ1_exact * merged_data[(2, 1)]
-    c1b3_means_exact = Measurements.value.(c1b3_exact)
-    c1b3_errs_exact = Measurements.uncertainty.(c1b3_exact)
-    println("Largest magnitude of C^{(1b)}_{n=3}(k): $(maximum(abs.(c1b3_exact)))")
-    # C⁽¹⁾₃ = C⁽¹⁾_{3,0} + δμ₁ C⁽¹⁾_{2,1} (calc δμ₁)
-    c1b3 = c1b[2]  # c1b = [c1b2, c1b3, ...]
-    c1b3_means = Measurements.value.(c1b3)
-    c1b3_errs = Measurements.uncertainty.(c1b3)
-    stdscores = stdscore.(c1b3, c1b3_exact)
+    # NOTE: For this observable, there is no second-order
+    δμ1_exact = UEG_MC.delta_mu1(param)  # = ReΣ₁[λ](kF, 0)
+    # C⁽¹ᵇ⁾₄ = 2(C⁽¹ᵇ⁾ᴸ_{4,0} + δμ₁ C⁽¹ᵇ⁾ᴸ_{3,1})
+    c1bL4_exact = merged_data[(4, 0)] + δμ1_exact * merged_data[(3, 1)]
+    c1b4_means_exact = 2 * Measurements.value.(c1bL4_exact)
+    c1b4_errs_exact = 2 * Measurements.uncertainty.(c1bL4_exact)
+    println("Largest magnitude of C^{(1b)}_{n=3}(k): $(2 * maximum(abs.(c1bL4_exact)))")
+    # C⁽¹ᵇ⁾₄ = 2(C⁽¹ᵇ⁾ᴸ_{4,0} + δμ₁ C⁽¹ᵇ⁾ᴸ_{3,1}) (calc δμ₁)
+    c1bL4 = c1bL[3]  # c1bL = [undef, c1bL3, c1bL4, ...]
+    c1b4_means = 2 * Measurements.value.(c1bL4)
+    c1b4_errs = 2 * Measurements.uncertainty.(c1bL4)
+    stdscores = stdscore.(c1bL4, c1bL4_exact)
     worst_score = argmax(abs, stdscores)
     println("Exact δμ₁: ", δμ1_exact)
     println("Computed δμ₁: ", δμ[1])
     println(
-        "Worst standard score for total result to 3rd " *
+        "Worst standard score for result at 4th " *
         "order (auto vs exact+manual): $worst_score",
     )
 
     # Check the counterterm cancellation to leading order in δμ
-    if min_order_plot ≤ 3
-        c1b3_kind = ["exact", "calc."]
-        c1b3_kind_means = [c1b3_means_exact, c1b3_means]
-        c1b3_kind_errs = [c1b3_errs_exact, c1b3_errs]
-        for (kind, means, errs) in zip(c1b3_kind, c1b3_kind_means, c1b3_kind_errs)
+    if min_order_plot ≤ 4
+        c1b4_kind = ["exact", "calc."]
+        c1b4_kind_means = [c1b4_means_exact, c1b4_means]
+        c1b4_kind_errs = [c1b4_errs_exact, c1b4_errs]
+        for (kind, means, errs) in zip(c1b4_kind, c1b4_kind_means, c1b4_kind_errs)
             ax.plot(
                 k_kf_grid,
                 means,
@@ -360,8 +232,8 @@ function main()
                 # "o-";
                 markersize=2,
                 color="C$next_color",
-                label="\$\\widetilde{C}^{(1b)}_{n=3} = \\widetilde{C}^{(1b)}_{(3,0)} " *
-                      " + \\delta\\mu_1 \\widetilde{C}^{(1b)}_{(2,1)}\$ ($kind \$\\delta\\mu\$, $solver)",
+                label="\$\\widetilde{C}^{(1b)}_{n=4} = \\widetilde{C}^{(1b)}_{(4,0)} " *
+                      " + \\delta\\mu_1 \\widetilde{C}^{(1b)}_{(3,1)}\$ ($kind \$\\delta\\mu\$, $solver)",
             )
             ax.fill_between(
                 k_kf_grid,
@@ -372,42 +244,6 @@ function main()
             )
             next_color += 1
         end
-    end
-    # Plot the counterterm cancellation at next-leading order in δμ
-    if max_order_plot ≥ 4
-        c1b4_means = Measurements.value.(c1b[3])
-        c1b4_errs = Measurements.uncertainty.(c1b[3])
-        ax.plot(
-            k_kf_grid,
-            c1b4_means,
-            "-";
-            # "o-";
-            # markersize=3,
-            linewidth=2,
-            color=next_color == 0 ? "r" : "C$next_color",
-            label="\$\\widetilde{C}^{(1b)}_{n=4}\$",
-        )
-        ax.fill_between(
-            k_kf_grid,
-            c1b4_means - c1b4_errs,
-            c1b4_means + c1b4_errs;
-            color=next_color == 0 ? "r" : "C$next_color",
-            alpha=0.4,
-        )
-        ax.text(
-            0.1025,
-            -0.5,
-            "\$\\widetilde{C}^{(1b)}_{n=4} = \\widetilde{C}^{(1b)}_{(4,0)} + " *
-            "\\delta\\mu_1 \\widetilde{C}^{(1b)}_{(3,1)}\$";
-            fontsize=12,
-        )
-        ax.text(
-            0.31,
-            -0.775,
-            "\$ + \\delta\\mu^2_1 \\widetilde{C}^{(1b)}_{(2,2)} + " *
-            "\\delta\\mu_2 \\widetilde{C}^{(1b)}_{(2,1)}\$";
-            fontsize=12,
-        )
     end
 
     # Plot labels and legend

@@ -1,5 +1,6 @@
 using ElectronLiquid
 using ElectronGas
+using Interpolations
 using JLD2
 using PyCall
 using SOSEM
@@ -32,14 +33,6 @@ function main()
     plotparams =
         UEG.ParaMC(; order=max_order, rs=rs, beta=beta, mass2=mass2, isDynamic=false)
 
-    plotsettings = DiagGen.Settings(;
-        observable=DiagGen.c1bL,
-        n_order=max_order,
-        expand_bare_interactions=expand_bare_interactions,
-        filter=[NoHartree],
-        interaction=[FeynmanDiagram.Interaction(ChargeCharge, Instant)],  # Yukawa-type interaction
-    )
-
     # Distinguish results with fixed vs re-expanded bare interactions
     intn_str = ""
     if expand_bare_interactions
@@ -62,27 +55,23 @@ function main()
     # colors = ["orchid", "cornflowerblue", "turquoise", "chartreuse", "greenyellow"]
     # markers = ["-", "-", "-", "-", "-"]
 
-    # Load the results from multiple JLD2 files
-    data_fixed_orders = [3, 4]
-    filenames = [
-        "results/data/c1bL_n=$(order)_rs=$(rs)_" *
+    # Load the results from JLD2
+    savename =
+        "results/data/c1bL_n=$(max_order)_rs=$(rs)_" *
         "beta_ef=$(beta)_lambda=$(mass2)_" *
-        "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)" for
-        order in data_fixed_orders
-    ]
-    settings, param, kgrid, partitions_list, res_list =
-        merge_fixed_order_data(filenames, plotsettings, plotparams)
-
-    # Convert fixed-order data to dictionary
-    data = restodict(res_list, partitions_list)
+        "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)"
+    settings, param, kgrid, partitions, res = jldopen("$savename.jld2", "a+") do f
+        key = "$(UEG.short(plotparams))"
+        return f[key]
+    end
 
     # Get dimensionless k-grid (k / kF)
     k_kf_grid = kgrid / param.kF
 
-    println(settings)
-    println(UEG.paraid(param))
-    println(res_list)
-    println(partitions_list)
+    # println(settings)
+    # println(UEG.paraid(param))
+    # println(res_list)
+    # println(partitions_list)
 
     println(settings)
     println(UEG.paraid(param))
@@ -99,6 +88,7 @@ function main()
     param_lo = Parameter.atomicUnit(0, rs_lo)    # (dimensionless T, rs)
     eTF_lo = param_lo.qTF^2 / (2 * param_lo.me)
     c1b_lo_quad = sosem_lo.get("bare_b") / eTF_lo^2
+    k_kf_grid_quad = np.linspace(0.0, 3.0; num=600)
     # delta RPA results for class (b) moment
     delta_c1b_rpa = sosem_lo.get("delta_rpa_b_vegas_N=1e+07.npy") / eTF_lo^2
     delta_c1b_rpa_err = sosem_lo.get("delta_rpa_b_err_vegas_N=1e+07.npy") / eTF_lo^2
@@ -106,13 +96,7 @@ function main()
     delta_c1b_rpa_fl = sosem_lo.get("delta_rpa+fl_b_vegas_N=1e+07.npy") / eTF_lo^2
     delta_c1b_rpa_fl_err = sosem_lo.get("delta_rpa+fl_b_err_vegas_N=1e+07.npy") / eTF_lo^2
     if plot_bare
-        # ax.plot(
-        #     k_kf_grid_quad,
-        #     c1b_lo_quad,
-        #     "k";
-        #     linestyle="--",
-        #     label="LO (quad)",
-        # )
+        ax.plot(k_kf_grid_quad, c1b_lo_quad, "C0"; linestyle="-", label="\$N=2\$ (quad)")
         ax.plot(k_kf_grid, delta_c1b_rpa, "k"; linestyle="--", label="RPA (vegas)")
         ax.fill_between(
             k_kf_grid,

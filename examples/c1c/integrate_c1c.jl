@@ -18,7 +18,7 @@ function main()
 
     settings = DiagGen.Settings(;
         observable=DiagGen.c1c,
-        n_order=4,
+       max_order=4,
         verbosity=DiagGen.quiet,
         expand_bare_interactions=false,
         filter=[NoHartree],
@@ -27,7 +27,7 @@ function main()
     )
 
     # UEG parameters for MC integration
-    param = ParaMC(; order=settings.n_order, rs=1.0, beta=200.0, mass2=2.0, isDynamic=false)
+    param = ParaMC(; order=settings.max_order, rs=1.0, beta=200.0, mass2=2.0, isDynamic=false)
     @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)"
 
     # K-mesh for measurement
@@ -51,7 +51,6 @@ function main()
     # Build diagram and expression trees for all loop and counterterm partitions
     partitions, diagparams, diagtrees, exprtrees = DiagGen.build_nonlocal_with_ct(
         settings;
-        fixed_order=false,
         renorm_mu=renorm_mu,
         renorm_lambda=renorm_lambda,
     )

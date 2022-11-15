@@ -1,5 +1,6 @@
 using ElectronLiquid
 using ElectronGas
+using Interpolations
 using JLD2
 using Measurements
 using PyCall
@@ -9,49 +10,22 @@ using SOSEM
 @pyimport numpy as np
 @pyimport matplotlib.pyplot as plt
 
-# NOTE: Call from main project directory as: julia examples/c1c/plot_c1c.jl
-
-"""Convert a list of MCIntegration results for partitions {P} to a Dict of measurements."""
-function restodict(res, partitions)
-    data = Dict()
-    for (i, p) in enumerate(partitions)
-        data[p] = measurement.(res.mean[i], res.stdev[i])
-    end
-    return data
-end
-
-"""
-Aggregate the measurements for C⁽¹ᶜ⁾ up to order N for nmin ≤ N ≤ nmax.
-Assumes the input data has already been merged by interaction order and, 
-if applicable, reexpanded in μ.
-"""
-function aggregate_results_c1cN(merged_data; nmax, nmin=2)
-    c1cN = Dict()
-    for n in nmin:nmax
-        c1cN[n] = zero(merged_data[(n, 0)])
-        println(n)
-        for (p, meas) in merged_data
-            if p[1] <= n
-                c1cN[n] += meas
-            end
-        end
-    end
-    return c1cN
-end
+# NOTE: Call from main project directory as: julia examples/c1d/plot_c1d_total.jl
 
 function main()
-    rs = 2.0
+    rs = 1.0
     beta = 200.0
-    mass2 = 0.1
+    mass2 = 2.0
     solver = :vegasmc
-    expand_bare_interactions = true
+    expand_bare_interactions = false
 
-    neval = 5e8
-    min_order = 2
-    max_order = 4
+    neval_c1d = 1e9
+    neval_rest = 5e8
+    neval = max(neval_c1d, neval_rest)
 
-    plotparam =
-        UEG.ParaMC(; order=max_order, rs=rs, beta=beta, mass2=mass2, isDynamic=false)
+    # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
+    min_order_plot = 3
+    max_order_plot = 4
 
     # Distinguish results with fixed vs re-expanded bare interactions
     intn_str = ""
@@ -66,102 +40,132 @@ function main()
     # colors = ["orchid", "cornflowerblue", "turquoise", "chartreuse", "greenyellow"]
     # markers = ["-", "-", "-", "-", "-"]
 
-    # Load the results from JLD2
-    savename =
-        "results/data/c1c_n=$(max_order)_rs=$(rs)_" *
-        "beta_ef=$(beta)_lambda=$(mass2)_" *
-        "neval=$(neval)_$(intn_str)$(solver)_with_ct"
-    settings, param, kgrid, partitions, res = jldopen("$savename.jld2", "a+") do f
-        key = "$(UEG.short(plotparam))"
-        return f[key]
-    end
-    # Get dimensionless k-grid (k / kF)
-    k_kf_grid = kgrid / param.kF
+    # Filename for new JLD2 format
+    filename =
+        "results/data/rs=$(rs)_beta_ef=$(beta)_" *
+        "lambda=$(mass2)_$(intn_str)$(solver)_with_ct_mu_lambda"
 
-    # Convert results to a Dict of measurements at each order with interaction counterterms merged
-    data = restodict(res, partitions)
-    merged_data = CounterTerm.mergeInteraction(data)
-
-    # Aggregate the full results for C⁽¹ᶜ⁾
-    c1cN = aggregate_results_c1cN(merged_data, nmax=max_order, nmin=min_order)
-
-    println(settings)
-    println(UEG.paraid(param))
-    println(partitions)
-    println(res)
-
-    # Plot the results
-    fig, ax = plt.subplots()
-    # Compare with the bare quadrature results (stored in Hartree a.u.)
-    # Since the bare result is independent of rs after non-dimensionalization, we
-    # are free to mix rs of the current MC calculation with this result at rs = 2.
-    # Similarly, the bare results were calculated at zero temperature (beta is arb.)
-    rs_quad = 2.0
-    sosem_quad = np.load("results/data/soms_rs=$(rs_quad)_beta_ef=200.0.npz")
-    # np.load("results/data/soms_rs=$(Float64(param.rs))_beta_ef=$(param.beta).npz")
-    k_kf_grid_quad = np.linspace(0.0, 3.0; num=600)
+    # Non-dimensionalize bare and RPA+FL non-local moments
+    rs_lo = 1.0
+    sosem_lo = np.load("results/data/soms_rs=$(rs_lo)_beta_ef=200.0.npz")
     # Non-dimensionalize rs = 2 quadrature results by Thomas-Fermi energy
-    param_quad = Parameter.atomicUnit(0, rs_quad)    # (dimensionless T, rs)
-    eTF_quad = param_quad.qTF^2 / (2 * param_quad.me)
-    c1c_quad_dimless = sosem_quad.get("bare_c") / eTF_quad^2
-    ax.plot(k_kf_grid_quad, c1c_quad_dimless, "k"; label="\$N = 2\$ (bare, quad)")
-    # Plot for each aggregate order
-    for N in min_order:max_order
+    param_lo = Parameter.atomicUnit(0, rs_lo)    # (dimensionless T, rs)
+    eTF_lo = param_lo.qTF^2 / (2 * param_lo.me)
+
+    # Bare and RPA(+FL) results (stored in Hartree a.u.)
+    k_kf_grid_quad = np.linspace(0.0, 3.0; num=600)
+    c1nl_lo =
+        (sosem_lo.get("bare_b") + sosem_lo.get("bare_c") + sosem_lo.get("bare_d")) /
+        eTF_lo^2
+    c1nl_rpa =
+        (sosem_lo.get("rpa_b") + sosem_lo.get("bare_c") + sosem_lo.get("bare_d")) / eTF_lo^2
+    c1nl_rpa_fl =
+        (sosem_lo.get("rpa+fl_b") + sosem_lo.get("bare_c") + sosem_lo.get("bare_d")) /
+        eTF_lo^2
+    # RPA(+FL) means are error bars
+    c1nl_rpa_means, c1nl_rpa_stdevs =
+        Measurements.value.(c1nl_rpa), Measurements.uncertainty.(c1nl_rpa)
+    c1nl_rpa_fl_means, c1nl_rpa_fl_stdevs =
+        Measurements.value.(c1nl_rpa_fl), Measurements.uncertainty.(c1nl_rpa_fl)
+
+    # Plot the results for each order ξ and compare to RPA(+FL)
+    fig, ax = plt.subplots()
+    for (i, N) in enumerate(min_order_plot:max_order_plot)
+        # Load the data for each observable
+        f = jldopen("$filename.jld2", "r")
+        param = f["c1d/N=$N/neval=$neval_c1d/param"]
+        kgrid = f["c1d/N=$N/neval=$neval_c1d/kgrid"]
+        c1nl_N_total =
+            f["c1b0/N=$N/neval=$neval_rest/meas"] +
+            f["c1b/N=$N/neval=$neval_rest/meas"] +
+            f["c1c/N=$N/neval=$neval_rest/meas"] +
+            f["c1d/N=$N/neval=$neval_c1d/meas"]
+        close(f)  # close file
+
+        # Get dimensionless k-grid (k / kF)
+        k_kf_grid = kgrid / param.kF
+
         # Get means and error bars from the result up to this order
-        means = Measurements.value.(c1cN[N])
-        stdevs = Measurements.uncertainty.(c1cN[N])
-        # Data gets noisy above 3rd loop order
-        marker = N > 3 ? "o-" : "-"
-        ax.plot(
-            k_kf_grid,
-            means,
-            marker;
-            markersize=2,
-            color="C$(N - 2)",
-            label="\$N=$N\$ ($solver)",
-        )
+        c1nl_N_means, c1nl_N_stdevs =
+            Measurements.value.(c1nl_N_total), Measurements.uncertainty.(c1nl_N_total)
+        @assert length(k_kf_grid) == length(c1nl_N_means) == length(c1nl_N_stdevs)
+
+        if i == 1
+            ax.plot(
+                k_kf_grid_quad,
+                c1nl_rpa_means,
+                "k";
+                linestyle="--",
+                label="RPA (vegas)",
+            )
+            ax.fill_between(
+                k_kf_grid_quad,
+                (c1nl_rpa_means - c1nl_rpa_stdevs),
+                (c1nl_rpa_means + c1nl_rpa_stdevs);
+                color="k",
+                alpha=0.3,
+            )
+            ax.plot(k_kf_grid_quad, c1nl_rpa_fl_means, "k"; label="RPA\$+\$FL (vegas)")
+            ax.fill_between(
+                k_kf_grid_quad,
+                (c1nl_rpa_fl_means - c1nl_rpa_fl_stdevs),
+                (c1nl_rpa_fl_means + c1nl_rpa_fl_stdevs);
+                color="r",
+                alpha=0.3,
+            )
+            ax.plot(k_kf_grid_quad, c1nl_lo, "C0"; linestyle="-", label="\$N=2\$ (quad)")
+        end
+        ax.plot(k_kf_grid, c1nl_N_means, "C$i"; label="\$N=$N\$ ($solver)")
         ax.fill_between(
             k_kf_grid,
-            means - stdevs,
-            means + stdevs;
-            color="C$(N - 2)",
-            alpha=0.4,
+            (c1nl_N_means - c1nl_N_stdevs),
+            (c1nl_N_means + c1nl_N_stdevs);
+            color="C$i",
+            alpha=0.3,
         )
+        ax.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
     end
-    ax.legend(; loc="lower right")
-    ax.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
+    # ax.set_xlim(minimum(k_kf_grid), 2.0)
+    ax.set_ylim(top=-0.195)
+    ax.legend(; loc="best")
     ax.set_xlabel("\$k / k_F\$")
     ax.set_ylabel(
-        "\$C^{(1c)}_{N}(\\mathbf{k}) \\,/\\, {\\epsilon}^{\\hspace{0.1em}2}_{\\mathrm{TF}}\$",
+        "\$C^{(1)nl}(k) \\,/\\, {\\epsilon}^{\\hspace{0.1em}2}_{\\mathrm{TF}}\$",
     )
-    yoffset = -0.15
+    # xloc = 0.5
+    # yloc = -0.075
+    # ydiv = -0.009
+    xloc = 1.7
+    yloc = -0.5
+    ydiv = -0.05
     ax.text(
-        1.75,
-        -0.425 + yoffset,
-        "\$r_s = 2,\\, \\beta \\hspace{0.1em} \\epsilon_F = 200,\$";
+        xloc,
+        yloc,
+        "\$r_s = 1,\\, \\beta \\hspace{0.1em} \\epsilon_F = 200,\$";
         fontsize=14,
     )
     ax.text(
-        1.75,
-        -0.525 + yoffset,
-        "\$\\lambda = \\frac{\\epsilon_{\\mathrm{Ry}}}{10},\\, N_{\\mathrm{eval}} = \\mathrm{5e8},\$";
+        xloc,
+        yloc + ydiv,
+        "\$\\lambda = 2\\epsilon_{\\mathrm{Ry}},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)},\$";
+        # "\$\\lambda = \\frac{\\epsilon_{\\mathrm{Ry}}}{10},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)},\$";
         fontsize=14,
     )
     ax.text(
-        1.75,
-        -0.625 + yoffset,
+        xloc,
+        yloc + 2 * ydiv,
         "\${\\epsilon}_{\\mathrm{TF}}\\equiv\\frac{\\hbar^2 q^2_{\\mathrm{TF}}}{2 m_e}=2\\pi\\mathcal{N}_F\$ (a.u.)";
         fontsize=12,
     )
     # plt.title("Using fixed bare Coulomb interactions \$V_1\$, \$V_2\$")
-    plt.title(
-        "Using re-expanded Coulomb interactions \$V_1[V_\\lambda]\$, \$V_2[V_\\lambda]\$",
-    )
+    # plt.title(
+    #     "Using re-expanded Coulomb interactions \$V_1[V_\\lambda]\$, \$V_2[V_\\lambda]\$",
+    # )
     plt.tight_layout()
     fig.savefig(
-        "results/c1c/c1c_N=$(param.order)_rs=$(param.rs)_" *
-        "beta_ef=$(param.beta)_lambda=$(param.mass2)_" *
-        "neval=$(neval)_$(intn_str)$(solver)_total_jld2.pdf",
+        "results/c1nl/c1nl_N=$(max_order_plot)_rs=$(rs)_" *
+        "beta_ef=$(beta)_lambda=$(mass2)_" *
+        "neval=$(neval)_$(intn_str)$(solver)_total.pdf",
     )
     plt.close("all")
     return

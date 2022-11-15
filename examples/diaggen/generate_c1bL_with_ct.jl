@@ -7,7 +7,7 @@ end
 
 settings = DiagGen.Settings(;
     observable=DiagGen.c1bL,
-    n_order=4,
+   max_order=4,
     verbosity=DiagGen.info,
     expand_bare_interactions=false,
 )

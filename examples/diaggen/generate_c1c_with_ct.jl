@@ -7,14 +7,15 @@ end
 
 settings = DiagGen.Settings(;
     observable=DiagGen.c1c,
-    n_order=3,
+    min_order=2,
+    max_order=3,
     verbosity=DiagGen.info,
     expand_bare_interactions=false,
 )
 
 # Build diagram and expression trees for all sigma_2 diagrams at order n with interaction counterterms
 partitions, diagparams, diagtrees, exprtrees =
-    DiagGen.build_nonlocal_with_ct(settings; renorm_mu=false, fixed_order=false);
+    DiagGen.build_nonlocal_with_ct(settings; renorm_mu=false);
 
 println(partitions)
 println(diagtrees)

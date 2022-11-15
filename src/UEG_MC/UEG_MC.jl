@@ -1,18 +1,31 @@
 """Monte-Carlo (MC) evaluation of second-order self-energy moments for the uniform electron gas (UEG)."""
 module UEG_MC
 
+using DataStructures: SortedDict
+using ..DiagGen: Settings, Config
 using ElectronGas
 using ..ElectronLiquid
 using ..FeynmanDiagram
+using JLD2
 using Lehmann
 using LinearAlgebra
 using MCIntegration
+using Measurements
 using ..Parameters
-using ..SOSEM: @todo, DiagramF64, ExprTreeF64
+using ..SOSEM: @todo, DiagramF64, ExprTreeF64, PartitionType, MergedPartitionType
+
+# Convenience typedefs for measurement data
+const MeasType = Dict{PartitionType,Vector{Measurement}}
+const MergedMeasType = Dict{MergedPartitionType,Vector{Measurement}}
+const RenormMeasType = SortedDict{Int,Vector{Measurement}}
+const TotalMeasType = Dict{Int,Vector{Measurement}}
+
+include("common.jl")
+export restodict, load_fixed_order_data_jld2, aggregate_orders
 
 # Chemical potential renormalization for Monte-Carlo with counterterms
 include("renormalization.jl")
-export chemicalpotential_renormalization, delta_mu1
+export load_z_mu, chemicalpotential_renormalization, delta_mu1
 
 # Dimensionless Lindhard functions for the bare and statically-screened UEG theories
 include("lindhard.jl")

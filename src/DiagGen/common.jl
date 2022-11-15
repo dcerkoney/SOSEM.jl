@@ -5,10 +5,11 @@
     verbose  # = 2
 end
 
-"""Settings for diagram generation of Σ₂[G, V, Γⁱ₃] and derived second-order moments."""
+"""Settings for diagram generation/integration of Σ₂[G, V, Γⁱ₃] and derived second-order moments."""
 @with_kw struct Settings
     observable::Observables = sigma20
-    n_order::Int = 2  # Total order ξ (loops + CTs)
+    min_order::Int = _get_lowest_loop_order(observable)  # Minimum allowed total order ξ (loops + CTs)
+    max_order::Int = _get_lowest_loop_order(observable)  # Maximum allowed total order ξ (loops + CTs)
     verbosity::Verbosity = quiet
     expand_bare_interactions::Bool = false
     filter::Vector{Filter} = [NoHartree]
@@ -61,7 +62,8 @@ Configuration bundling physical properties and fixed variables for a Σ₂[G, V,
     n_g::Int = 3
     n_v::Int = 2
     # Expansion order info
-    n_order::Int                      # Total order ξ (loops + CTs)
+    min_order::Int                    # Minimum allowed total order ξ (loops + CTs)
+    max_order::Int                    # Maximum allowed total order ξ (loops + CTs)
     n_loop::Int                       # Loop order
     n_expand::Int = n_loop - n_v      # Expansion order for internal lines/vertices
     n_expandable::Int
@@ -85,7 +87,7 @@ end
 """Construct a Config struct via diagram parameters with/without Γⁱ₃ insertion."""
 function Config(
     settings::Settings,
-    n_loop=settings.n_order;
+    n_loop=settings.max_order;
     g_names=(:G₁, :G₂, :G₃),
     v_names=(:V₁, :V₂),
     gamma3_name=:Γ₃,
@@ -171,7 +173,8 @@ function _Config(settings::Settings, n_loop, g_names, v_names)
     # Config struct for low-order case
     return Config(;
         param=param,
-        n_order=settings.n_order,
+        min_order=settings.min_order,
+        max_order=settings.max_order,
         n_loop=n_loop,
         n_expand=n_expand,
         n_expandable=n_expandable,
@@ -196,7 +199,7 @@ function _Config(settings::Settings, n_loop, g_names, v_names, gamma3_name)
     # Get diagram parameters
     param = _getparam(n_loop; filter=settings.filter, interaction=settings.interaction)
 
-    # Total size of the SOSEM loop basis dimension (= n_order + 1)
+    # Total size of the SOSEM loop basis dimension (= max_order + 1)
     nk = param.totalLoopNum
     # Biggest tau index
     nt = param.totalTauNum
@@ -270,7 +273,8 @@ function _Config(settings::Settings, n_loop, g_names, v_names, gamma3_name)
     # Config struct for high-order case
     return Config(;
         param=param,
-        n_order=settings.n_order,
+        min_order=settings.min_order,
+        max_order=settings.max_order,
         n_loop=n_loop,
         n_expand=n_expand,
         n_expandable=n_expandable,
