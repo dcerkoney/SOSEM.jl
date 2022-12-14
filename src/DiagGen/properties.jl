@@ -15,7 +15,7 @@ the left or the right of the discontinuity at τ = 0.
 end
 
 """Classes of observables for different second-order moment (SOSEM) measurements."""
-@enum Observables begin
+@enum Observable begin
     sigma20  # second-order self-energy
     sigma2
     c1a      # local SOSEM class:          C⁽¹⁾ˡ = C⁽¹ᵃ⁾
@@ -26,17 +26,94 @@ end
     c1c      #                                 + C⁽¹ᶜ⁾
     c1d      #                                 + C⁽¹ᵈ⁾
 end
+
+"""
+Returns the exact value of a specified low-order SOSEM observable to O(V²) at k = 0
+(after nondimensionalization by E²_{TF})).
+"""
+@inline function get_exact_k0(obs::Observable)
+    return bare_observable_to_exact_k0[obs]
+end
 const bare_observable_to_exact_k0 = Dict(
-    c1a   => Inf,  # The bare local moment is divergent
+    c1a   => Inf,      # The bare local moment is divergent
+    c1bL  => 0,        # No vertex corrections to order n=2 => bare contribution is zero
+    c1bR  => 0,        # No vertex corrections to order n=2 => bare contribution is zero
     c1bL0 => (1 / 4 - pi^2 / 16),
     c1bR0 => (1 / 4 - pi^2 / 16),
     c1c   => -1,
     c1d   => pi^2 / 8,
 )
+
+"""Composite of observables for different second-order moment (SOSEM) measurements."""
+@with_kw struct CompositeObservable
+    name::String
+    factors::Vector{Int}                # Multiplicative factor(s)
+    exact_unif::Union{Nothing,Float64}  # Exact uniform (k = 0) value, if available
+    observables::Vector{Observable}
+end
+function CompositeObservable(observables; factors=ones(size(observables)), name="")
+    exact_unif = sum(get_exact_k0.(observables))
+    return CompositeObservable(;
+        name=name,
+        factors=factors,
+        exact_unif=exact_unif,
+        observables=observables,
+    )
+end
+
+# Total class (b) contribution (with/without vertex corrections):  C⁽¹ᵇ⁰⁾ᴸ + C⁽¹ᵇ⁾ᴸ + (L -> R)
+const c1b_total = CompositeObservable([c1bL0, c1bR0, c1bL, c1bR]; name="c1b_total")
+
+# Non-local SOSEM without vertex corrections: 
+#     C⁽¹⁾ⁿˡ⁰ = C⁽¹ᵇ⁰⁾ᴸ + C⁽¹ᵇ⁰⁾ᴿ + C⁽¹ᶜ⁾ + C⁽¹ᵈ⁾
+const c1nl0 = CompositeObservable([c1bL0, c1bR0, c1c, c1d]; name="c1nl0")
+
+# Total non-local SOSEM:  C⁽¹⁾ⁿˡ = C⁽¹ᵇ⁰⁾ᴸ + C⁽¹ᵇ⁰⁾ᴿ + C⁽¹ᵇ⁾ᴸ + C⁽¹ᵇ⁾ᴿ + C⁽¹ᶜ⁾ + C⁽¹ᵈ⁾
+const c1nl = CompositeObservable([c1bL0, c1bR0, c1bL, c1bR, c1c, c1d]; name="c1nl")
+
+# Total class (b) contribution for the UEG (with/without vertex corrections):  2C⁽¹ᵇ⁰⁾ᴸ + 2C⁽¹ᵇ⁾ᴸ
+const c1b_total_ueg =
+    CompositeObservable([c1bL0, c1bL]; factors=[2.0, 2.0], name="c1b_total_ueg")
+
+# Non-local SOSEM for the UEG without vertex corrections (assuming TRS): 
+#     C⁽¹⁾ⁿˡ⁰ = 2C⁽¹ᵇ⁰⁾ᴸ + C⁽¹ᶜ⁾ + C⁽¹ᵈ⁾
+const c1nl0_ueg =
+    CompositeObservable([c1bL0, c1c, c1d]; factors=[2.0, 1.0, 1.0], name="c1nl0_ueg")
+
+# Total non-local SOSEM for the UEG (assuming TRS):  C⁽¹⁾ⁿˡ = 2C⁽¹ᵇ⁰⁾ᴸ + 2C⁽¹ᵇ⁾ᴸ + C⁽¹ᶜ⁾ + C⁽¹ᵈ⁾
+const c1nl_ueg = CompositeObservable(
+    [c1bL0, c1bL, c1c, c1d];
+    factors=[2.0, 2.0, 1.0, 1.0],
+    name="c1nl_ueg",
+)
+
+# Convenience typedef for atomic/composite observable types
+const ObsType = Union{Observable,CompositeObservable}
+
+"""Overload print operator for string representations of observables."""
+Base.print(io::IO, obs::ObsType) = print(io, observable_to_string[obs])
+
+"""Print the string representation of a (non-local) bare observable."""
+@inline function get_observable_name(obs::ObsType)
+    return observable_to_name[obs]
+end
+
+"""Print the string representation of a (non-local) bare observable."""
+@inline function get_bare_string(obs::Observable)
+    @assert obs in [c1a, c1bL0, c1bR0, c1c, c1d]
+    return bare_observable_to_string[obs]
+end
+@inline function get_bare_string(obs::CompositeObservable)
+    @assert all(o in [c1a, c1bL0, c1bR0, c1c, c1d] for o in obs.observables)
+    return bare_observable_to_string[obs]
+end
+
+# Maps for immutable observable properties
 const observable_to_lowest_loop_order = Dict(
     sigma20 => 2,
     sigma2  => 3,  # Γⁱ₃ > Γ₀ insertion ⟹ one additional loop
     c1a     => 2,
+    c1nl0   => 2,
     c1bL0   => 2,
     c1bR0   => 2,
     c1bL    => 3,  # Γⁱ₃ > Γ₀ insertion ⟹ one additional loop
@@ -59,6 +136,7 @@ const observable_to_discont_side = Dict(
     sigma20 => both,
     sigma2  => both,
     c1a     => positive,
+    c1nl0   => both,
     c1bL0   => positive,
     c1bR0   => positive,
     c1bL    => positive,
@@ -70,6 +148,7 @@ const observable_to_obs_sign = Dict(
     sigma20 => 0,  # Direct measurement not yet implemented
     sigma2  => 0,  # Direct measurement not yet implemented
     c1a     => 1,
+    c1nl0   => 0,  # Direct measurement not yet implemented
     c1bL0   => 1,
     c1bR0   => 1,
     c1bL    => 1,
@@ -81,6 +160,7 @@ const observable_to_name = Dict(
     sigma20 => "sigma20",
     sigma2  => "sigma2",
     c1a     => "c1a",
+    c1nl0   => "c1nl0",
     c1bL0   => "c1bL0",
     c1bR0   => "c1bR0",
     c1bL    => "c1bL",
@@ -92,6 +172,7 @@ const observable_to_string = Dict(
     sigma20 => "Σ₂[G, V, Γⁱ₃ = Γ₀]",
     sigma2  => "Σ₂[G, V, Γⁱ₃ > Γ₀]",
     c1a     => "C⁽¹ᵃ⁾[G, V, Γⁱ₃ ≥ Γ₀]",
+    c1nl0   => "C⁽¹⁾ⁿˡ⁰[G, V, Γⁱ₃ = Γ₀]",
     c1bL0   => "C⁽¹ᵇ⁾ᴸ[G, V, Γⁱ₃ = Γ₀]",
     c1bR0   => "C⁽¹ᵇ⁾ᴿ[G, V, Γⁱ₃ = Γ₀]",
     c1bL    => "C⁽¹ᵇ⁾ᴸ[G, V, Γⁱ₃ > Γ₀]",
@@ -101,37 +182,17 @@ const observable_to_string = Dict(
 )
 const bare_observable_to_string = Dict(
     c1a   => "C₂⁽¹ᵃ⁾",   # Divergent, but we provide a string representation anyway
+    c1nl0 => "C₂⁽¹⁾ⁿˡ⁰",
     c1bL0 => "C₂⁽¹ᵇ⁾ᴸ",
     c1bR0 => "C₂⁽¹ᵇ⁾ᴿ",
     c1c   => "C₂⁽¹ᶜ⁾",
     c1d   => "C₂⁽¹ᵈ⁾",
 )
-"""Overload print operator for string representations of observables."""
-Base.print(io::IO, obs::Observables) = print(io, observable_to_string[obs])
-
-"""Print the string representation of a (non-local) bare observable."""
-@inline function get_observable_name(obs::DiagGen.Observables)
-    return observable_to_name[obs]
-end
-
-"""Print the string representation of a (non-local) bare observable."""
-@inline function get_bare_string(obs::DiagGen.Observables)
-    @assert obs in [c1a, c1bL0, c1bR0, c1c, c1d]
-    return bare_observable_to_string[obs]
-end
-
-"""
-Returns the exact value of a specified low-order SOSEM observable to O(V²) at k = 0
-(after nondimensionalization by E²_{TF})).
-"""
-@inline function get_exact_k0(observable::DiagGen.Observables)
-    return bare_observable_to_exact_k0[observable]
-end
 
 """
 Returns the lowest valid loop order for the given SOSEM observable.
 """
-@inline function _get_lowest_loop_order(observable::DiagGen.Observables)
+@inline function _get_lowest_loop_order(observable::ObsType)
     return observable_to_lowest_loop_order[observable]
 end
 
@@ -139,7 +200,7 @@ end
 Returns the side of the discontinuity at τ = 0 giving 
 a non-zero contribution for this SOSEM observable.
 """
-@inline function _get_discont_side(observable::Observables)
+@inline function _get_discont_side(observable::ObsType)
     return observable_to_discont_side[observable]
 end
 
@@ -147,9 +208,9 @@ end
 Return the sign of the outgoing external time τ for a given SOSEM observable 
 (each observable contributes from one side of the discontinuity at τ = 0 only).
 """
-@inline function _get_obs_sign(observable::Observables)
+@inline function _get_obs_sign(observable::ObsType)
     # Direct self-energy measurement not yet implemented
-    if observable in [sigma20, sigma2]
+    if observable in [sigma20, sigma2, c1nl0]
         @todo
     end
     return observable_to_obs_sign[observable]
@@ -173,17 +234,17 @@ Return the sign of the outgoing external time τ for a given SOSEM observable
 end
 
 """Deduce whether this observable has a Γⁱ₃ insertion."""
-@inline function _has_gamma3(observable::Observables)
+@inline function _has_gamma3(observable::ObsType)
     return observable in [c1bL, c1bR]
 end
 
 """Returns the indices for dashed Green's function line(s), if any, for the given observable."""
-@inline function _get_dash_indices(observable::Observables)
+@inline function _get_dash_indices(observable::Observable)
     return observable_to_dash_indices[observable]
 end
 
 """Deduce the insertion side for observables with Γⁱ₃ insertions."""
-@inline function _get_insertion_side(observable::Observables)
+@inline function _get_insertion_side(observable::Observable)
     # These are the only two observables with Γⁱ₃ insertions
     @assert _has_gamma3(observable)
     # If the dashed line is to the left, the Γⁱ₃ insertion is on the right side (and vice-versa)

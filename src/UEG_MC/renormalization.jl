@@ -2,13 +2,7 @@
 Same as CounterTerm.chemicalpotential_renormalization, but with lowest loop 
 orders increased by 1 everywhere (SOSEM observables start at 2nd loop order).
 """
-function chemicalpotential_renormalization(
-    data,
-    δμ;
-    lowest_order=2,
-    min_order=2,
-    max_order,
-)
+function chemicalpotential_renormalization(data, δμ; lowest_order=2, min_order=2, max_order)
     @assert max_order <= 5 "Order $order hasn't been implemented!"
     println(δμ)
     @assert length(δμ) >= max_order - lowest_order
@@ -116,4 +110,30 @@ function load_z_mu(
     end
 
     return z, μ
+end
+
+"""Modified from EFT_UEG to store parafile in local (SOSEM) directory."""
+function fromFile(parafile=parafileName)
+    println("Reading para from $parafile")
+    try
+        data, header = readdlm(parafile, ','; header=true)
+        df = DataFrame(data, vec(header))
+        CounterTerm.sortdata!(df)
+        return df
+    catch e
+        println(e)
+        println("Failed to load from $parafile. We will initialize the file instead")
+        return nothing
+    end
+end
+
+"""Modified from EFT_UEG to store parafile in local (SOSEM) directory."""
+function toFile(df, parafile=parafileName)
+    if isnothing(df)
+        @warn "Empty dataframe $df, nothing to save"
+        return
+    end
+    CounterTerm.sortdata!(df)
+    println("Save the parameters to the file $parafile")
+    return writedlm(parafile, Iterators.flatten(([names(df)], eachrow(df))), ',')
 end
