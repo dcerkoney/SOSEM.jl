@@ -1,6 +1,6 @@
 """Integration test for bare (O(V²)), uniform (k = 0) SOSEM observables."""
 function bare_integral_k0(;
-    observable::DiagGen.Observables,
+    observable::DiagGen.Observable,
     beta=200.0,
     alpha=2.0,
     neval=5e5,
@@ -17,10 +17,10 @@ function bare_integral_k0(;
     )
 
     # UEG parameters for MC integration
-    param = ParaMC(; order=settings.max_order, rs=2.0, beta=beta, isDynamic=false)
+    param = ParaMC(; order=settings.max_order, rs=1.0, beta=beta, isDynamic=false)
 
     # Generate the diagrams for the implicitly fixed-order calculation
-    
+
     # Test against explicit fixed-order calculation
     diagparam, diagtree, exprtree = DiagGen.build_nonlocal_fixed_order(settings)
     diagparam_v2, _, _ = DiagGen.build_nonlocal(settings)
@@ -70,7 +70,7 @@ Integration test for bare (O(V²)), uniform (k = 0) SOSEM observable using
 the multi-partition integrator intended for evaluation with counterterms.
 """
 function bare_integral_k0_multipartition(;
-    observable::DiagGen.Observables,
+    observable::DiagGen.Observable,
     beta=200.0,
     alpha=2.0,
     neval=5e5,
@@ -88,7 +88,7 @@ function bare_integral_k0_multipartition(;
     )
 
     # UEG parameters for MC integration
-    param = ParaMC(; order=settings.max_order, rs=2.0, beta=beta, isDynamic=false)
+    param = ParaMC(; order=settings.max_order, rs=1.0, beta=beta, isDynamic=false)
 
     # Build diagram and expression trees for all loop and counterterm partitions
     partitions, diagparams, diagtrees, exprtrees =

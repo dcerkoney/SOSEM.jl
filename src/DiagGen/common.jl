@@ -7,7 +7,7 @@ end
 
 """Settings for diagram generation/integration of Σ₂[G, V, Γⁱ₃] and derived second-order moments."""
 @with_kw struct Settings
-    observable::Observables = sigma20
+    observable::Observable = sigma20
     min_order::Int = _get_lowest_loop_order(observable)  # Minimum allowed total order ξ (loops + CTs)
     max_order::Int = _get_lowest_loop_order(observable)  # Maximum allowed total order ξ (loops + CTs)
     verbosity::Verbosity = quiet

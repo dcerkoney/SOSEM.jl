@@ -1,7 +1,9 @@
 """Monte-Carlo (MC) evaluation of second-order self-energy moments for the uniform electron gas (UEG)."""
 module UEG_MC
 
+using DataFrames
 using DataStructures: SortedDict
+using DelimitedFiles
 using ..DiagGen: Settings, Config
 using ElectronGas
 using ..ElectronLiquid
@@ -25,7 +27,7 @@ export restodict, load_fixed_order_data_jld2, aggregate_orders
 
 # Chemical potential renormalization for Monte-Carlo with counterterms
 include("renormalization.jl")
-export load_z_mu, chemicalpotential_renormalization, delta_mu1
+export chemicalpotential_renormalization, delta_mu1, load_z_mu, fromFile, toFile
 
 # Dimensionless Lindhard functions for the bare and statically-screened UEG theories
 include("lindhard.jl")
