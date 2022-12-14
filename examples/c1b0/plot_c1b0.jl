@@ -12,13 +12,13 @@ using SOSEM
 
 function main()
     rs = 1.0
-    beta = 200.0
+    beta = 20.0
     mass2 = 2.0
     # mass2 = 0.1
     solver = :vegasmc
     expand_bare_interactions = false
 
-    neval = 5e8
+    neval = 1e9
     max_order = 4
     max_order_plot = 4
 
@@ -77,7 +77,7 @@ function main()
 
     # Non-dimensionalize bare and RPA+FL non-local moments
     rs_quad = 1.0
-    sosem_quad = np.load("results/data/soms_rs=$(rs_quad)_beta_ef=200.0.npz")
+    sosem_quad = np.load("results/data/soms_rs=$(rs_quad)_beta_ef=40.0.npz")
     # np.load("results/data/soms_rs=$(Float64(param.rs))_beta_ef=$(param.beta).npz")
     k_kf_grid_quad = np.linspace(0.0, 3.0; num=600)
     # Non-dimensionalize rs = 2 quadrature results by Thomas-Fermi energy
@@ -156,7 +156,7 @@ function main()
     ax.text(
         xloc,
         yloc,
-        "\$r_s = 1,\\, \\beta \\hspace{0.1em} \\epsilon_F = 200,\$";
+        "\$r_s = 1,\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
         fontsize=14,
     )
     ax.text(

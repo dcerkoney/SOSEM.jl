@@ -18,13 +18,13 @@ using SOSEM
 
 function main()
     rs = 1.0
-    beta = 200.0
+    beta = 20.0
     mass2 = 2.0
     # mass2 = 0.1
     solver = :vegasmc
     expand_bare_interactions = false
 
-    neval = 5e8
+    neval = 1e10
     min_order = 3
     max_order = 4
     min_order_plot = 4
@@ -79,32 +79,49 @@ function main()
     # colors = ["orchid", "cornflowerblue", "turquoise", "chartreuse", "greenyellow"]
     # markers = ["-", "-", "-", "-", "-"]
 
-    # Load the results from multiple JLD2 files
-    filenames = [
-        "results/data/c1bL_n=$(order)_rs=$(rs)_" *
+    # Load the results from JLD2
+    savename =
+        "results/data/c1bL_n=$(max_order)_rs=$(rs)_" *
         "beta_ef=$(beta)_lambda=$(mass2)_" *
-        "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)" for order in fixed_orders
-    ]
-    settings, param, kgrid, partitions_list, res_list =
-        UEG_MC.load_fixed_order_data_jld2(filenames, plotsettings, plotparams)
+        "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)"
+    settings, param, kgrid, partitions, res = jldopen("$savename.jld2", "a+") do f
+        key = "$(UEG.short(plotparams[end]))"
+        return f[key]
+    end
+    data = UEG_MC.restodict(res, partitions)
+    println(data)
+
+    # # Load the results from multiple JLD2 files
+    # # data_fixed_orders = [3, 4]
+    # data_fixed_orders = [3]
+    # filenames = [
+    #     "results/data/c1bL_n=$(order)_rs=$(rs)_" *
+    #     "beta_ef=$(beta)_lambda=$(mass2)_" *
+    #     "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)" for
+    #     order in data_fixed_orders
+    # ]
+    # settings, param, kgrid, partitions_list, res_list =
+    #     UEG_MC.load_fixed_order_data_jld2(filenames, plotsettings, plotparams)
 
     # Convert fixed-order data to dictionary
-    data = UEG_MC.restodict(res_list, partitions_list)
+    # data = UEG_MC.restodict(res_list, partitions_list)
 
     # Get dimensionless k-grid (k / kF)
     k_kf_grid = kgrid / param.kF
 
     println(settings)
     println(UEG.paraid(param))
-    println(res_list)
-    println(partitions_list)
+    # println(res_list)
+    # println(partitions_list)
+    println(res)
+    println(partitions)
 
     # Plot the results
     fig, ax = plt.subplots()
 
     # Non-dimensionalize bare and RPA+FL non-local moments
     rs_lo = 1.0
-    sosem_lo = np.load("results/data/soms_rs=$(rs_lo)_beta_ef=200.0.npz")
+    sosem_lo = np.load("results/data/soms_rs=$(rs_lo)_beta_ef=40.0.npz")
     # Non-dimensionalize rs = 2 quadrature results by Thomas-Fermi energy
     param_lo = Parameter.atomicUnit(0, rs_lo)    # (dimensionless T, rs)
     eTF_lo = param_lo.qTF^2 / (2 * param_lo.me)
@@ -143,42 +160,41 @@ function main()
 
     # Next available color for plotting
     next_color = 0
-    for partitions in partitions_list
-        for p in partitions
-            if !(min_order_plot <= sum(p) <= max_order_plot)
-                continue
-            end
-            # Get means and error bars from the result up to this order
-            # NOTE: Since C⁽¹ᵇ⁾ᴸ = C⁽¹ᵇ⁾ᴿ for the UEG, the
-            #       full class (b) moment is C⁽¹ᵇ⁾ = 2C⁽¹ᵇ⁾ᴸ.
-            means = 2 * Measurements.value.(data[p])
-            stdevs = 2 * Measurements.uncertainty.(data[p])
-            # Data gets noisy above 1st Green's function counterterm order
-            # marker =
-            #     (p[2] > 1 || (p[1] > 3 && p[2] > 0)) ?
-            #     "o-" : "-"
-            marker = "-"
-            ax.plot(
-                k_kf_grid,
-                means,
-                marker;
-                markersize=2,
-                # color=next_color == 3 ? "C0" : "C$next_color",
-                color="C$next_color",
-                label="\$\\widetilde{C}^{(1b)}_{$p}\$",
-                # label="\$\\widetilde{C}^{(1b)}_{$p}\$ ($solver)",
-                # label="\$\\mathcal{P}=$p\$ ($solver)",
-            )
-            ax.fill_between(
-                k_kf_grid,
-                means - stdevs,
-                means + stdevs;
-                # color=next_color == 3 ? "C0" : "C$next_color",
-                color="C$next_color",
-                alpha=0.4,
-            )
-            next_color += 1
+    # for partitions in partitions_list
+    for p in partitions
+        if !(min_order_plot <= sum(p) <= max_order_plot)
+            continue
         end
+        # Get means and error bars from the result up to this order
+        # NOTE: Since C⁽¹ᵇ⁾ᴸ = C⁽¹ᵇ⁾ᴿ for the UEG, the
+        #       full class (b) moment is C⁽¹ᵇ⁾ = 2C⁽¹ᵇ⁾ᴸ.
+        means = 2 * Measurements.value.(data[p])
+        stdevs = 2 * Measurements.uncertainty.(data[p])
+        # Data gets noisy above 1st Green's function counterterm order
+        # marker =
+        #     (p[2] > 1 || (p[1] > 3 && p[2] > 0)) ?
+        #     "o-" : "-"
+        marker = "-"
+        ax.plot(
+            k_kf_grid,
+            means,
+            marker;
+            markersize=2,
+            # color=next_color == 3 ? "C0" : "C$next_color",
+            color="C$next_color",
+            label="\$\\widetilde{C}^{(1b)}_{$p}\$",
+            # label="\$\\widetilde{C}^{(1b)}_{$p}\$ ($solver)",
+            # label="\$\\mathcal{P}=$p\$ ($solver)",
+        )
+        ax.fill_between(
+            k_kf_grid,
+            means - stdevs,
+            means + stdevs;
+            # color=next_color == 3 ? "C0" : "C$next_color",
+            color="C$next_color",
+            alpha=0.4,
+        )
+        next_color += 1
     end
 
     # Convert results to a Dict of measurements at each order with interaction counterterms merged
@@ -207,7 +223,7 @@ function main()
     c1b4_errs_exact = 2 * Measurements.uncertainty.(c1bL4_exact)
     println("Largest magnitude of C^{(1b)}_{n=3}(k): $(2 * maximum(abs.(c1bL4_exact)))")
     # C⁽¹ᵇ⁾₄ = 2(C⁽¹ᵇ⁾ᴸ_{4,0} + δμ₁ C⁽¹ᵇ⁾ᴸ_{3,1}) (calc δμ₁)
-    c1bL4 = c1bL[3]  # c1bL = [undef, c1bL3, c1bL4, ...]
+    c1bL4 = c1bL[4]  # c1bL = [undef, c1bL3, c1bL4, ...]
     c1b4_means = 2 * Measurements.value.(c1bL4)
     c1b4_errs = 2 * Measurements.uncertainty.(c1bL4)
     stdscores = stdscore.(c1bL4, c1bL4_exact)
@@ -250,24 +266,20 @@ function main()
     ax.legend(; loc="lower right", ncol=2)
     ax.set_xlim(minimum(k_kf_grid), min(2.0, maximum(k_kf_grid)))
     # ax.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
-    # ax.set_ylim(-0.1, 0.0025)
+    ax.set_ylim(-0.11, nothing)
     ax.set_xlabel("\$k / k_F\$")
     ax.set_ylabel(
         "\$\\widetilde{C}^{(1b)}_{(\\,\\cdot\\,)}(k) " *
         " \\equiv C^{(1b)}_{(\\,\\cdot\\,)}(k) \\,/\\, {\\epsilon}^{\\hspace{0.1em}2}_{\\mathrm{TF}}\$",
     )
-    # # (nmax = 3)
-    # xloc = 1.75
-    # yloc = -0.15
-    # ydiv = -0.05
     # (nmax = 4)
-    xloc = 1.125
-    yloc = 1.0
-    ydiv = -0.3
+    xloc = 0.125
+    yloc = 0.00125
+    ydiv = -0.01
     ax.text(
         xloc,
         yloc,
-        "\$r_s = 1,\\, \\beta \\hspace{0.1em} \\epsilon_F = 200,\$";
+        "\$r_s = 1,\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
         fontsize=14,
     )
     ax.text(
@@ -283,7 +295,7 @@ function main()
         "\${\\epsilon}_{\\mathrm{TF}}\\equiv\\frac{\\hbar^2 q^2_{\\mathrm{TF}}}{2 m_e}=2\\pi\\mathcal{N}_F\$ (a.u.)";
         fontsize=12,
     )
-    plt.title("Using fixed bare Coulomb interactions \$V_1\$, \$V_2\$")
+    # plt.title("Using fixed bare Coulomb interactions \$V_1\$, \$V_2\$")
     # plt.title(
     #     "Using re-expanded Coulomb interactions \$V_1[V_\\lambda]\$, \$V_2[V_\\lambda]\$",
     # )

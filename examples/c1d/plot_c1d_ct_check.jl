@@ -16,13 +16,13 @@ using SOSEM: UEG_MC
 
 function main()
     rs = 1.0
-    beta = 200.0
+    beta = 20.0
     mass2 = 2.0
     # mass2 = 0.1
     solver = :vegasmc
     expand_bare_interactions = false
 
-    neval = 1e9
+    neval = 1e10
     min_order = 3
     max_order = 4
     min_order_plot = 4
@@ -83,6 +83,7 @@ function main()
     param = f["$key/param"]
     kgrid = f["$key/kgrid"]
     partitions = f["$key/partitions"]
+    close(f)
     print(settings)
     print(param)
     print(kgrid)
@@ -105,7 +106,7 @@ function main()
     # Non-dimensionalize rs = 2 quadrature results by Thomas-Fermi energy
     param_quad = Parameter.atomicUnit(0, rs_quad)    # (dimensionless T, rs)
     eTF_quad = param_quad.qTF^2 / (2 * param_quad.me)
-    sosem_quad = np.load("results/data/soms_rs=$(rs_quad)_beta_ef=200.0.npz")
+    sosem_quad = np.load("results/data/soms_rs=$(rs_quad)_beta_ef=40.0.npz")
 
     # Bare results (stored in Hartree a.u.)
     k_kf_grid_quad = np.linspace(0.0, 3.0; num=600)
@@ -257,14 +258,14 @@ function main()
         )
         ax.text(
             0.25,
-            -0.45,
+            -0.02,
             "\$\\widetilde{C}^{(1d)}_{n=4} = \\widetilde{C}^{(1d)}_{(4,0)} + " *
             "\\delta\\mu_1 \\widetilde{C}^{(1d)}_{(3,1)}\$";
             fontsize=12,
         )
         ax.text(
             0.465,
-            -0.575,
+            -0.0325,
             "\$ + \\delta\\mu^2_1 \\widetilde{C}^{(1d)}_{(2,2)} + " *
             "\\delta\\mu_2 \\widetilde{C}^{(1d)}_{(2,1)}\$";
             fontsize=12,
@@ -275,24 +276,25 @@ function main()
     ax.legend(; loc="lower right", ncol=2)
     ax.set_xlim(minimum(k_kf_grid), min(2.0, maximum(k_kf_grid)))
     # ax.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
-    ax.set_ylim(; bottom=-0.7, top=0.7)
+    # ax.set_ylim(; bottom=-0.2, top=0.5)
+    ax.set_ylim(; bottom=-0.04, top=0.1)
     ax.set_xlabel("\$k / k_F\$")
     ax.set_ylabel(
         "\$\\widetilde{C}^{(1d)}_{(\\,\\cdot\\,)}(k) " *
         " \\equiv C^{(1d)}_{(\\,\\cdot\\,)}(k) \\,/\\, {\\epsilon}^{\\hspace{0.1em}2}_{\\mathrm{TF}}\$",
     )
     # # (nmax = 3)
-    # xloc = 1.225
-    # yloc = 0.725
-    # ydiv = -0.075
+    # xloc = 1.125
+    # yloc = 0.45
+    # ydiv = -0.06
     # (nmax = 4)
-    xloc = 1.125
-    yloc = 0.55
-    ydiv = -0.125
+    xloc = 1.15
+    yloc = 0.0875
+    ydiv = -0.0125
     ax.text(
         xloc,
         yloc,
-        "\$r_s = 1,\\, \\beta \\hspace{0.1em} \\epsilon_F = 200,\$";
+        "\$r_s = 1,\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
         fontsize=14,
     )
     ax.text(
@@ -308,7 +310,7 @@ function main()
         "\${\\epsilon}_{\\mathrm{TF}}\\equiv\\frac{\\hbar^2 q^2_{\\mathrm{TF}}}{2 m_e}=2\\pi\\mathcal{N}_F\$ (a.u.)";
         fontsize=12,
     )
-    plt.title("Using fixed bare Coulomb interactions \$V_1\$, \$V_2\$")
+    # plt.title("Using fixed bare Coulomb interactions \$V_1\$, \$V_2\$")
     # plt.title(
     #     "Using re-expanded Coulomb interactions \$V_1[V_\\lambda]\$, \$V_2[V_\\lambda]\$",
     # )

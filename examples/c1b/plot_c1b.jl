@@ -13,13 +13,13 @@ using SOSEM
 
 function main()
     rs = 1.0
-    beta = 200.0
+    beta = 20.0
     mass2 = 2.0
     # mass2 = 0.1
     solver = :vegasmc
     expand_bare_interactions = false
 
-    neval = 5e8
+    neval = 1e9
     max_order = 4
     max_order_plot = 4
 
@@ -83,7 +83,7 @@ function main()
 
     # Non-dimensionalize bare and RPA+FL non-local moments
     rs_lo = 1.0
-    sosem_lo = np.load("results/data/soms_rs=$(rs_lo)_beta_ef=200.0.npz")
+    sosem_lo = np.load("results/data/soms_rs=$(rs_lo)_beta_ef=40.0.npz")
     # Non-dimensionalize rs = 2 quadrature results by Thomas-Fermi energy
     param_lo = Parameter.atomicUnit(0, rs_lo)    # (dimensionless T, rs)
     eTF_lo = param_lo.qTF^2 / (2 * param_lo.me)
@@ -168,7 +168,7 @@ function main()
     ax.text(
         xloc,
         yloc,
-        "\$r_s = 1,\\, \\beta \\hspace{0.1em} \\epsilon_F = 200,\$";
+        "\$r_s = 1,\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
         fontsize=14,
     )
     ax.text(
