@@ -85,18 +85,20 @@ end
 
 @testset "Lindhard function improper integration" begin
     test_solvers = [:vegas, :vegasmc]
-    # vegas/vegasmc solvers break down due to tail round-off error
-    match_vegas_errmsgs =
-        str -> any(
-            occursin(s, str) for s in [
-                r"block .?\d+.? is NaN",
-                r"AssertionError.*?histogram.*?finite",
-                r"UndefVarError.*?i",  # new error in v0.3.2
-            ]
-        )
+    # # vegas/vegasmc solvers break down due to tail round-off error
+    # match_vegas_errmsgs =
+    #     str -> any(
+    #         occursin(s, str) for s in [
+    #             r"block .?\d+.? is NaN",
+    #             r"AssertionError.*?histogram.*?finite",
+    #             r"UndefVarError.*?i",  # new error in v0.3.2
+    #         ]
+    #     )
     # vegas/vegasmc solvers break down due to tail round-off error
     for solver in test_solvers
-        @test_throws match_vegas_errmsgs integrate_lindhard(;
+        # # NOTE: Passing a matching function to @test_throws requires julia≥1.8!
+        # @test_throws match_vegas_errmsgs integrate_lindhard(;
+        @test_throws Union{AssertionError,UndefVarError} integrate_lindhard(;
             taylor_expand=false,
             mcprint=-2,
             solver=solver,
