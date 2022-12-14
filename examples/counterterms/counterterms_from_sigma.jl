@@ -1,12 +1,15 @@
 using ElectronLiquid
 using JLD2
 
+# Change to counterterm directory
+cd("$(ENV["SOSEM_HOME"])/examples/counterterms")
+
 # Physical params matching data for SOSEM observables
 order = [2]  # C^{(1)}_{N≤4} includes CTs up to 2nd order
 rs = [1.0]
 # mass2 = [0.1]
 mass2 = [2.0]
-beta = [200.0]
+beta = [20.0]
 
 # Total number of MCMC evaluations
 neval = 1e10

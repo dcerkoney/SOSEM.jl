@@ -2,13 +2,17 @@ using ElectronLiquid
 using Measurements
 using Printf
 using JLD2
+using SOSEM
+
+# Change to counterterm directory
+cd("$(ENV["SOSEM_HOME"])/examples/counterterms")
 
 # Physical params matching data for SOSEM observables
 order = [2]  # C^{(1)}_{N≤4} includes CTs up to 2nd order
 rs = [1.0]
 # mass2 = [0.1]
 mass2 = [2.0]
-beta = [200.0]
+beta = [20.0]
 
 const filename = "data_Z.jld2"
 const parafilename = "para.csv"
@@ -23,8 +27,8 @@ end
 
 function process(datatuple, isSave)
     print("processing...")
-    df = CounterTerm.fromFile(parafilename)
-    para, ngrid, kgrid, data = datatuple
+    df = UEG_MC.fromFile(parafilename)
+    para, _, _, data = datatuple
     printstyled(UEG.short(para); color=:yellow)
     println()
 
@@ -41,7 +45,7 @@ function process(datatuple, isSave)
         _z[p] = zfactor(val, para.β)
     end
 
-    dzi, dmu, dz = CounterTerm.sigmaCT(para.order, _mu, _z)
+    dzi, _, _ = CounterTerm.sigmaCT(para.order, _mu, _z)
     println("zfactor: ", dzi)
 
     ############# save to csv  #################
@@ -65,7 +69,7 @@ function process(datatuple, isSave)
     end
 
     # println("new dataframe\n$df")
-    return isSave && CounterTerm.toFile(df, parafilename)
+    return isSave && UEG_MC.toFile(df, parafilename)
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
