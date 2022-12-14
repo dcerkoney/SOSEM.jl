@@ -11,63 +11,15 @@ using SOSEM
 
 # NOTE: Call from main project directory as: julia examples/c1c/plot_c1c_ct_check.jl
 
-function load_z_mu(
-    param::UEG.ParaMC,
-    parafilename="para.csv",
-    ct_filename="examples/counterterms/data_Z.jld2",
-)
-    # Load μ from csv
-    local ct_data
-    filefound = false
-    f = jldopen(ct_filename, "r")
-    for key in keys(f)
-        if UEG.paraid(f[key][1]) == UEG.paraid(param)
-            ct_data = f[key]
-            filefound = true
-        end
-    end
-    if !filefound
-        throw(KeyError(UEG.paraid(param)))
-    end
-
-    df = CounterTerm.fromFile(parafilename)
-    para, _, _, data = ct_data
-    printstyled(UEG.short(para); color=:yellow)
-    println()
-
-    function zfactor(data, β)
-        return @. (imag(data[2, 1]) - imag(data[1, 1])) / (2π / β)
-    end
-
-    function mu(data)
-        return real(data[1, 1])
-    end
-
-    for p in sort([k for k in keys(data)])
-        println("$p: μ = $(mu(data[p]))   z = $(zfactor(data[p], para.β))")
-    end
-
-    μ = Dict()
-    for (p, val) in data
-        μ[p] = mu(val)
-    end
-    z = Dict()
-    for (p, val) in data
-        z[p] = zfactor(val, para.β)
-    end
-
-    return z, μ
-end
-
 function main()
     rs = 1.0
-    beta = 200.0
+    beta = 20.0
     mass2 = 2.0
     # mass2 = 0.1
     solver = :vegasmc
     expand_bare_interactions = false
 
-    neval = 5e8
+    neval = 1e10
     max_order = 4
     min_order_plot = 4
     max_order_plot = 4
@@ -128,7 +80,7 @@ function main()
 
     # Non-dimensionalize bare and RPA+FL non-local moments
     rs_quad = 1.0
-    sosem_quad = np.load("results/data/soms_rs=$(rs_quad)_beta_ef=200.0.npz")
+    sosem_quad = np.load("results/data/soms_rs=$(rs_quad)_beta_ef=40.0.npz")
     # np.load("results/data/soms_rs=$(Float64(param.rs))_beta_ef=$(param.beta).npz")
     k_kf_grid_quad = np.linspace(0.0, 3.0; num=600)
     # Non-dimensionalize rs = 2 quadrature results by Thomas-Fermi energy
@@ -185,36 +137,43 @@ function main()
     end
 
     # Convert results to a Dict of measurements at each order with interaction counterterms merged
-    data = restodict(res, partitions)
+    data = UEG_MC.restodict(res, partitions)
     merged_data = CounterTerm.mergeInteraction(data)
     println([k for (k, _) in merged_data])
 
     # Reexpand merged data in powers of μ
-    z, μ = load_z_mu(param)
+    z, μ = UEG_MC.load_z_mu(param)
     δz, δμ = CounterTerm.sigmaCT(max_order - 2, μ, z; verbose=1)
     println("Computed δμ: ", δμ)
-    c1c = UEG_MC.chemicalpotential_renormalization(max_order_plot, merged_data, δμ)
-
-    # Test manual renormalization with exact lowest-order chemical potential;
-    # the first-order counterterm is: δμ1= ReΣ₁[λ](kF, 0)
-    δμ1_exact = UEG_MC.delta_mu1(param)
-    # C⁽¹⁾₃ = C⁽¹⁾_{3,0} + δμ₁ C⁽¹⁾_{2,1} (exact δμ₁)
-    c1c3_exact = merged_data[(3, 0)] + δμ1_exact * merged_data[(2, 1)]
-    c1c3_means_exact = Measurements.value.(c1c3_exact)
-    c1c3_errs_exact = Measurements.uncertainty.(c1c3_exact)
-    println("Largest magnitude of C^{(1c)}_{n=3}(k): $(maximum(abs.(c1c3_exact)))")
-    # C⁽¹⁾₃ = C⁽¹⁾_{3,0} + δμ₁ C⁽¹⁾_{2,1} (calc δμ₁)
-    c1c3 = c1c[2]  # c1c = [c1c2, c1c3, ...]
-    c1c3_means = Measurements.value.(c1c3)
-    c1c3_errs = Measurements.uncertainty.(c1c3)
-    stdscores = stdscore.(c1c3, c1c3_exact)
-    worst_score = argmax(abs, stdscores)
-    println("Exact δμ₁: ", δμ1_exact)
-    println("Computed δμ₁: ", δμ[1])
-    println(
-        "Worst standard score for total result to 3rd " *
-        "order (auto vs exact+manual): $worst_score",
+    c1c = UEG_MC.chemicalpotential_renormalization(
+        merged_data,
+        δμ;
+        min_order=min_order_plot,
+        max_order=max_order_plot,
     )
+
+    if min_order_plot ≤ 3
+        # Test manual renormalization with exact lowest-order chemical potential;
+        # the first-order counterterm is: δμ1= ReΣ₁[λ](kF, 0)
+        δμ1_exact = UEG_MC.delta_mu1(param)
+        # C⁽¹⁾₃ = C⁽¹⁾_{3,0} + δμ₁ C⁽¹⁾_{2,1} (exact δμ₁)
+        c1c3_exact = merged_data[(3, 0)] + δμ1_exact * merged_data[(2, 1)]
+        c1c3_means_exact = Measurements.value.(c1c3_exact)
+        c1c3_errs_exact = Measurements.uncertainty.(c1c3_exact)
+        println("Largest magnitude of C^{(1c)}_{n=3}(k): $(maximum(abs.(c1c3_exact)))")
+        # C⁽¹⁾₃ = C⁽¹⁾_{3,0} + δμ₁ C⁽¹⁾_{2,1} (calc δμ₁)
+        c1c3 = c1c[3]  # c1c = [c1c2, c1c3, ...]
+        c1c3_means = Measurements.value.(c1c3)
+        c1c3_errs = Measurements.uncertainty.(c1c3)
+        stdscores = stdscore.(c1c3, c1c3_exact)
+        worst_score = argmax(abs, stdscores)
+        println("Exact δμ₁: ", δμ1_exact)
+        println("Computed δμ₁: ", δμ[1])
+        println(
+            "Worst standard score for total result to 3rd " *
+            "order (auto vs exact+manual): $worst_score",
+        )
+    end
 
     # Check the counterterm cancellation to leading order in δμ
     if min_order_plot ≤ 3
@@ -244,8 +203,8 @@ function main()
     end
     # Plot the counterterm cancellation at next-leading order in δμ
     if max_order_plot ≥ 4
-        c1c4_means = Measurements.value.(c1c[3])
-        c1c4_errs = Measurements.uncertainty.(c1c[3])
+        c1c4_means = Measurements.value.(c1c[4])
+        c1c4_errs = Measurements.uncertainty.(c1c[4])
         ax.plot(
             k_kf_grid,
             c1c4_means,
@@ -265,14 +224,14 @@ function main()
         )
         ax.text(
             0.1025,
-            -0.5,
+            -0.3,
             "\$\\widetilde{C}^{(1c)}_{n=4} = \\widetilde{C}^{(1c)}_{(4,0)} + " *
             "\\delta\\mu_1 \\widetilde{C}^{(1c)}_{(3,1)}\$";
             fontsize=12,
         )
         ax.text(
             0.31,
-            -0.775,
+            -0.37,
             "\$ + \\delta\\mu^2_1 \\widetilde{C}^{(1c)}_{(2,2)} + " *
             "\\delta\\mu_2 \\widetilde{C}^{(1c)}_{(2,1)}\$";
             fontsize=12,
@@ -283,24 +242,25 @@ function main()
     ax.legend(; loc="lower right", ncol=2)
     ax.set_xlim(minimum(k_kf_grid), min(2.0, maximum(k_kf_grid)))
     # ax.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
-    # ax.set_ylim(-0.1, 0.0025)
+    # ax.set_ylim(-0.45, nothing)
+    ax.set_ylim(nothing, 0.275)
     ax.set_xlabel("\$k / k_F\$")
     ax.set_ylabel(
         "\$\\widetilde{C}^{(1c)}_{(\\,\\cdot\\,)}(k) " *
         " \\equiv C^{(1c)}_{(\\,\\cdot\\,)}(k) \\,/\\, {\\epsilon}^{\\hspace{0.1em}2}_{\\mathrm{TF}}\$",
     )
     # # (nmax = 3)
-    # xloc = 1.75
-    # yloc = -0.15
-    # ydiv = -0.05
+    # xloc = 1.15
+    # yloc = -0.2
+    # ydiv = -0.04
     # (nmax = 4)
     xloc = 1.125
-    yloc = 1.0
-    ydiv = -0.3
+    yloc = 0.2
+    ydiv = -0.07
     ax.text(
         xloc,
         yloc,
-        "\$r_s = 1,\\, \\beta \\hspace{0.1em} \\epsilon_F = 200,\$";
+        "\$r_s = 1,\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
         fontsize=14,
     )
     ax.text(
@@ -316,7 +276,7 @@ function main()
         "\${\\epsilon}_{\\mathrm{TF}}\\equiv\\frac{\\hbar^2 q^2_{\\mathrm{TF}}}{2 m_e}=2\\pi\\mathcal{N}_F\$ (a.u.)";
         fontsize=12,
     )
-    plt.title("Using fixed bare Coulomb interactions \$V_1\$, \$V_2\$")
+    # plt.title("Using fixed bare Coulomb interactions \$V_1\$, \$V_2\$")
     # plt.title(
     #     "Using re-expanded Coulomb interactions \$V_1[V_\\lambda]\$, \$V_2[V_\\lambda]\$",
     # )

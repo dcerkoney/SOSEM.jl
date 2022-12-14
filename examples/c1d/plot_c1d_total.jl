@@ -14,12 +14,12 @@ using SOSEM: UEG_MC
 
 function main()
     rs = 1.0
-    beta = 200.0
+    beta = 20.0
     mass2 = 2.0
     solver = :vegasmc
     expand_bare_interactions = false
 
-    neval = 5e8
+    neval = 1e10
     min_order = 3
     max_order = 4
     min_order_plot = 2
@@ -63,29 +63,29 @@ function main()
     # colors = ["orchid", "cornflowerblue", "turquoise", "chartreuse", "greenyellow"]
     # markers = ["-", "-", "-", "-", "-"]
 
-    # Load the results from JLD2
-    filename =
-        "results/data/c1d_n=$(max_order)_rs=$(rs)_" *
-        "beta_ef=$(beta)_lambda=$(mass2)_" *
-        "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)"
-    settings, param, kgrid, partitions, res = jldopen("$filename.jld2", "a+") do f
-        key = "$(UEG.short(plotparam))"
-        return f[key]
-    end
-
-    # # Load the results using new JLD2 format
+    # # Load the results from JLD2
     # filename =
-    #     "results/data/rs=$(rs)_beta_ef=$(beta)_" *
-    #     "lambda=$(mass2)_$(intn_str)$(solver)_$(ct_string)"
-    # f = jldopen("$filename.jld2", "r")
-    # key = "c1d_n_min=$(min_order)_n_max=$(max_order)_neval=$(neval)"
-    # res = f["$key/res"]
-    # settings = f["$key/settings"]
-    # param = f["$key/param"]
-    # kgrid = f["$key/kgrid"]
-    # partitions = f["$key/partitions"]
-    # # Close the JLD2 file
-    # close(f)
+    #     "results/data/c1d_n=$(max_order)_rs=$(rs)_" *
+    #     "beta_ef=$(beta)_lambda=$(mass2)_" *
+    #     "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)"
+    # settings, param, kgrid, partitions, res = jldopen("$filename.jld2", "a+") do f
+    #     key = "$(UEG.short(plotparam))"
+    #     return f[key]
+    # end
+
+    # Load the results using new JLD2 format
+    filename =
+        "results/data/rs=$(rs)_beta_ef=$(beta)_" *
+        "lambda=$(mass2)_$(intn_str)$(solver)_$(ct_string)"
+    f = jldopen("$filename.jld2", "r")
+    key = "c1d_n_min=$(min_order)_n_max=$(max_order)_neval=$(neval)"
+    res = f["$key/res"]
+    settings = f["$key/settings"]
+    param = f["$key/param"]
+    kgrid = f["$key/kgrid"]
+    partitions = f["$key/partitions"]
+    # Close the JLD2 file
+    close(f)
     
     print(settings)
     print(param)
@@ -101,7 +101,7 @@ function main()
     # Non-dimensionalize rs = 2 quadrature results by Thomas-Fermi energy
     param_quad = Parameter.atomicUnit(0, rs_quad)    # (dimensionless T, rs)
     eTF_quad = param_quad.qTF^2 / (2 * param_quad.me)
-    sosem_quad = np.load("results/data/soms_rs=$(rs_quad)_beta_ef=200.0.npz")
+    sosem_quad = np.load("results/data/soms_rs=$(rs_quad)_beta_ef=40.0.npz")
 
     # Bare results (stored in Hartree a.u.)
     k_kf_grid_quad = np.linspace(0.0, 3.0; num=600)
@@ -145,8 +145,8 @@ function main()
                 merged_data,
                 δμ;
                 lowest_order=2,
-                min_order=min_order_plot,
-                max_order=max_order_plot,
+                min_order=min(min_order, min_order_plot),
+                max_order=max(max_order, max_order_plot),
             )
             # Test manual renormalization with exact lowest-order chemical potential
             if !renorm_mu_lo_ex && max_order >= 3
@@ -233,8 +233,8 @@ function main()
         means = Measurements.value.(c1d_total[N])
         stdevs = Measurements.uncertainty.(c1d_total[N])
         # Data gets noisy above 3rd loop order
-        # marker = "o-"
-        marker = N > 3 ? "o-" : "-"
+        marker = "-"
+        # marker = N > 3 ? "o-" : "-"
         ax.plot(
             k_kf_grid,
             means,
@@ -256,6 +256,7 @@ function main()
     end
     ax.legend(; loc="best")
     ax.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
+    # ax.set_xlim(0.5, 1.5)
     ax.set_xlabel("\$k / k_F\$")
     ax.set_ylabel(
         "\$C^{(1d)}_{N}(k) \\,/\\, {\\epsilon}^{\\hspace{0.1em}2}_{\\mathrm{TF}}\$",
@@ -269,7 +270,7 @@ function main()
     ax.text(
         xloc,
         yloc,
-        "\$r_s = 1,\\, \\beta \\hspace{0.1em} \\epsilon_F = 200,\$";
+        "\$r_s = 1,\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
         fontsize=14,
     )
     ax.text(

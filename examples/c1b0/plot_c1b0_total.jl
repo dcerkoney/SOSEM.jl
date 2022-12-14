@@ -16,15 +16,15 @@ using SOSEM
 
 function main()
     rs = 1.0
-    beta = 200.0
+    beta = 20.0
     mass2 = 2.0
     solver = :vegasmc
     expand_bare_interactions = false
 
-    neval = 5e8
+    neval = 3e10
     min_order = 3
     max_order = 4
-    min_order_plot = 3
+    min_order_plot = 2
     max_order_plot = 4
     @assert max_order ≥ 3
 
@@ -78,22 +78,36 @@ function main()
     # colors = ["orchid", "cornflowerblue", "turquoise", "chartreuse", "greenyellow"]
     # markers = ["-", "-", "-", "-", "-"]
 
-    # Load the results from multiple JLD2 files
-    filenames = [
-        "results/data/c1bL0_n=$(order)_rs=$(rs)_" *
+    # Load the results from JLD2
+    savename =
+        "results/data/c1bL0_n=$(max_order)_rs=$(rs)_" *
         "beta_ef=$(beta)_lambda=$(mass2)_" *
-        "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)" for order in fixed_orders
-    ]
-    settings, param, kgrid, partitions_list, res_list =
-        UEG_MC.load_fixed_order_data_jld2(filenames, plotsettings, plotparams)
+        "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)"
+    settings, param, kgrid, partitions, res = jldopen("$savename.jld2", "a+") do f
+        key = "$(UEG.short(plotparams[1]))"
+        return f[key]
+    end
+    data = UEG_MC.restodict(res, partitions)
+    println(data)
 
-    println(partitions_list)
+    # # Load the results from multiple JLD2 files
+    # filenames = [
+    #     "results/data/c1bL0_n=$(order)_rs=$(rs)_" *
+    #     "beta_ef=$(beta)_lambda=$(mass2)_" *
+    #     "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)" for order in fixed_orders
+    # ]
+    # settings, param, kgrid, partitions_list, res_list =
+    #     UEG_MC.load_fixed_order_data_jld2(filenames, plotsettings, plotparams)
+    # println(partitions_list)
+
+    println(partitions)
 
     # Get dimensionless k-grid (k / kF)
     k_kf_grid = kgrid / param.kF
 
     # Convert fixed-order data to dictionary
-    data = UEG_MC.restodict(res_list, partitions_list)
+    # data = UEG_MC.restodict(res_list, partitions_list)
+    data = UEG_MC.restodict(res, partitions)
 
     # Convert results to a Dict of measurements at each order with interaction counterterms merged
     merged_data = CounterTerm.mergeInteraction(data)
@@ -101,7 +115,7 @@ function main()
 
     # Non-dimensionalize bare and RPA+FL non-local moments
     rs_lo = 1.0
-    sosem_lo = np.load("results/data/soms_rs=$(rs_lo)_beta_ef=200.0.npz")
+    sosem_lo = np.load("results/data/soms_rs=$(rs_lo)_beta_ef=40.0.npz")
     # Non-dimensionalize rs = 2 quadrature results by Thomas-Fermi energy
     param_lo = Parameter.atomicUnit(0, rs_lo)    # (dimensionless T, rs)
     eTF_lo = param_lo.qTF^2 / (2 * param_lo.me)
@@ -153,8 +167,8 @@ function main()
             c1bL0 = UEG_MC.chemicalpotential_renormalization(
                 merged_data,
                 δμ;
-                min_order=min_order_plot,
-                max_order=max_order_plot,
+                min_order=min(min_order, min_order_plot),
+                max_order=max(max_order, max_order_plot),
             )
             # Test manual renormalization with exact lowest-order chemical potential
             if !renorm_mu_lo_ex && max_order >= 4
@@ -194,12 +208,13 @@ function main()
         c1bL0_total = UEG_MC.aggregate_orders(c1bL0)
     end
 
-    partitions = collect(Iterators.flatten(partitions_list))
+    # partitions = collect(Iterators.flatten(partitions_list))
 
     println(settings)
     println(UEG.paraid(param))
-    println(res_list)
-    println(partitions_list)
+    # println(res_list)
+    # println(partitions_list)
+    println(res)
     println(partitions)
 
     # Plot the results
@@ -294,7 +309,7 @@ function main()
     ax.text(
         xloc,
         yloc,
-        "\$r_s = 1,\\, \\beta \\hspace{0.1em} \\epsilon_F = 200,\$";
+        "\$r_s = 1,\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
         fontsize=14,
     )
     ax.text(

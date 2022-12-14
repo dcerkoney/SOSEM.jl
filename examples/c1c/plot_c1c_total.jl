@@ -1,9 +1,10 @@
 using ElectronLiquid
 using ElectronGas
+using Interpolations
 using JLD2
 using Measurements
 using PyCall
-using SOSEM: UEG_MC
+using SOSEM
 
 # For saving/loading numpy data
 @pyimport numpy as np
@@ -13,14 +14,15 @@ using SOSEM: UEG_MC
 
 function main()
     rs = 1.0
-    beta = 200.0
+    beta = 20.0
     mass2 = 2.0
     solver = :vegasmc
     expand_bare_interactions = false
 
-    neval = 5e8
-    min_order = 2
+    neval = 1e10
+    min_order = 3
     max_order = 4
+    min_order_plot = 2
     max_order_plot = 4
 
     # Enable/disable interaction and chemical potential counterterms
@@ -69,7 +71,7 @@ function main()
         key = "$(UEG.short(plotparam))"
         return f[key]
     end
-    
+
     # Get dimensionless k-grid (k / kF)
     k_kf_grid = kgrid / param.kF
 
@@ -77,6 +79,37 @@ function main()
     data = UEG_MC.restodict(res, partitions)
     merged_data = CounterTerm.mergeInteraction(data)
     println([k for (k, _) in merged_data])
+
+    # Load C⁽¹ᵈ⁾₂ quadrature results and interpolate on k_kf_grid
+    rs_quad = 1.0
+    # Non-dimensionalize rs = 2 quadrature results by Thomas-Fermi energy
+    param_quad = Parameter.atomicUnit(0, rs_quad)    # (dimensionless T, rs)
+    eTF_quad = param_quad.qTF^2 / (2 * param_quad.me)
+    sosem_quad = np.load("results/data/soms_rs=$(rs_quad)_beta_ef=40.0.npz")
+
+    # Bare results (stored in Hartree a.u.)
+    k_kf_grid_quad = np.linspace(0.0, 3.0; num=600)
+    c1c_bare_quad = sosem_quad.get("bare_c") / eTF_quad^2
+
+    # Non-dimensionalize bare and RPA+FL non-local moments
+    rs_lo = 1.0
+    sosem_lo = np.load("results/data/soms_rs=$(rs_lo)_beta_ef=40.0.npz")
+    # Non-dimensionalize rs = 2 quadrature results by Thomas-Fermi energy
+    param_lo = Parameter.atomicUnit(0, rs_lo)    # (dimensionless T, rs)
+    eTF_lo = param_lo.qTF^2 / (2 * param_lo.me)
+
+    # Bare results (stored in Hartree a.u.)
+    k_kf_grid_quad = np.linspace(0.0, 3.0; num=600)
+    c1c_bare_quad = sosem_lo.get("bare_c") / eTF_lo^2
+
+    # Interpolate bare results and downsample to coarse k_kf_grid
+    c1c_bare_interp = linear_interpolation(k_kf_grid_quad, c1c_bare_quad)
+    c1c2_exact = c1c_bare_interp(k_kf_grid)
+
+    if min_order_plot == 2
+        # Set bare result manually using exact data to avoid statistical error in (2,0,0) calculation
+        merged_data[(2, 0)] = measurement.(c1c2_exact, 0.0)  # quadrature data assumed numerically exact
+    end
 
     # Get total data
     if renorm_mu
@@ -91,7 +124,13 @@ function main()
             z, μ = UEG_MC.load_z_mu(param)
             δz, δμ = CounterTerm.sigmaCT(max_order - 2, μ, z; verbose=1)
             println("Computed δμ: ", δμ)
-            c1c = UEG_MC.chemicalpotential_renormalization(max_order_plot, merged_data, δμ)
+            c1c = UEG_MC.chemicalpotential_renormalization(
+                merged_data,
+                δμ;
+                lowest_order=2,
+                min_order=min(min_order, min_order_plot),
+                max_order=max(max_order, max_order_plot),
+            )
             # Test manual renormalization with exact lowest-order chemical potential
             if !renorm_mu_lo_ex && max_order >= 3
                 δμ1_exact = UEG_MC.delta_mu1(param)  # = ReΣ₁[λ](kF, 0)
@@ -130,17 +169,6 @@ function main()
     # Plot the results
     fig, ax = plt.subplots()
 
-    # Load C⁽¹ᵈ⁾₂ quadrature results and interpolate on k_kf_grid
-    rs_quad = 1.0
-    # Non-dimensionalize rs = 2 quadrature results by Thomas-Fermi energy
-    param_quad = Parameter.atomicUnit(0, rs_quad)    # (dimensionless T, rs)
-    eTF_quad = param_quad.qTF^2 / (2 * param_quad.me)
-    sosem_quad = np.load("results/data/soms_rs=$(rs_quad)_beta_ef=200.0.npz")
-
-    # Bare results (stored in Hartree a.u.)
-    k_kf_grid_quad = np.linspace(0.0, 3.0; num=600)
-    c1c_bare_quad = sosem_quad.get("bare_c") / eTF_quad^2
-
     ax.plot(
         k_kf_grid_quad,
         c1c_bare_quad,
@@ -156,7 +184,7 @@ function main()
             "lambda=$(param.mass2)_$(intn_str)$(solver)_$(ct_string)"
         f = jldopen("$savename.jld2", "a+")
         # NOTE: no bare result for c1b observable (accounted for in c1b0)
-        for N in min_order:max_order
+        for N in min_order_plot:max_order
             if haskey(f, "c1c") &&
                haskey(f["c1c"], "N=$N") &&
                haskey(f["c1c/N=$N"], "neval=$(neval)")
@@ -173,7 +201,7 @@ function main()
     end
 
     # Plot for each aggregate order
-    for (i, N) in enumerate(min_order:max_order_plot)
+    for (i, N) in enumerate(min_order_plot:max_order_plot)
         # Get means and error bars from the result up to this order
         means = Measurements.value.(c1c_total[N])
         stdevs = Measurements.uncertainty.(c1c_total[N])
@@ -189,13 +217,7 @@ function main()
             color="C$i",
             label="\$N=$N\$ ($solver)",
         )
-        ax.fill_between(
-            k_kf_grid,
-            means - stdevs,
-            means + stdevs;
-            color="C$i",
-            alpha=0.4,
-        )
+        ax.fill_between(k_kf_grid, means - stdevs, means + stdevs; color="C$i", alpha=0.4)
         if !renorm_mu_lo_ex && max_order <= 3 && N == 3
             ax.plot(
                 k_kf_grid,
@@ -221,7 +243,7 @@ function main()
     ax.text(
         xloc,
         yloc,
-        "\$r_s = 1,\\, \\beta \\hspace{0.1em} \\epsilon_F = 200,\$";
+        "\$r_s = 1,\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
         fontsize=14,
     )
     ax.text(

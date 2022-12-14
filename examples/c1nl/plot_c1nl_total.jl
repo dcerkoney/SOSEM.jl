@@ -14,17 +14,20 @@ using SOSEM
 
 function main()
     rs = 1.0
-    beta = 200.0
+    beta = 20.0
     mass2 = 2.0
     solver = :vegasmc
     expand_bare_interactions = false
 
-    neval_c1d = 1e9
-    neval_rest = 5e8
-    neval = max(neval_c1d, neval_rest)
+    neval_c1b0 = 3e10
+    neval_c1b = 1e10
+    neval_c1c = 1e10
+    neval_c1d = 1e10
+    neval = max(neval_c1b0, neval_c1b, neval_c1c, neval_c1d)
 
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
     min_order_plot = 3
+    # max_order_plot = 3
     max_order_plot = 4
 
     # Distinguish results with fixed vs re-expanded bare interactions
@@ -47,7 +50,7 @@ function main()
 
     # Non-dimensionalize bare and RPA+FL non-local moments
     rs_lo = 1.0
-    sosem_lo = np.load("results/data/soms_rs=$(rs_lo)_beta_ef=200.0.npz")
+    sosem_lo = np.load("results/data/soms_rs=$(rs_lo)_beta_ef=40.0.npz")
     # Non-dimensionalize rs = 2 quadrature results by Thomas-Fermi energy
     param_lo = Parameter.atomicUnit(0, rs_lo)    # (dimensionless T, rs)
     eTF_lo = param_lo.qTF^2 / (2 * param_lo.me)
@@ -76,9 +79,9 @@ function main()
         param = f["c1d/N=$N/neval=$neval_c1d/param"]
         kgrid = f["c1d/N=$N/neval=$neval_c1d/kgrid"]
         c1nl_N_total =
-            f["c1b0/N=$N/neval=$neval_rest/meas"] +
-            f["c1b/N=$N/neval=$neval_rest/meas"] +
-            f["c1c/N=$N/neval=$neval_rest/meas"] +
+            f["c1b0/N=$N/neval=$neval_c1b0/meas"] +
+            f["c1b/N=$N/neval=$neval_c1b/meas"] +
+            f["c1c/N=$N/neval=$neval_c1c/meas"] +
             f["c1d/N=$N/neval=$neval_c1d/meas"]
         close(f)  # close file
 
@@ -125,23 +128,59 @@ function main()
         )
         ax.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
     end
+
+    # # Plot speculative results
+    # f = jldopen("$filename.jld2", "r")
+    # param = f["c1d/N=3/neval=$neval_c1d/param"]
+    # kgrid = f["c1d/N=3/neval=$neval_c1d/kgrid"]
+    # # Get dimensionless k-grid (k / kF)
+    # k_kf_grid = kgrid / param.kF
+    # # N=3
+    # c1nl_3_conj =
+    #     f["c1b0/N=2/neval=$neval_c1b0/meas"] +
+    #     f["c1b/N=3/neval=$neval_c1b/meas"] +
+    #     f["c1c/N=2/neval=$neval_c1c/meas"] +
+    #     f["c1d/N=2/neval=$neval_c1d/meas"]
+    # c1nl_3_means, c1nl_3_stdevs =
+    #     Measurements.value.(c1nl_3_conj), Measurements.uncertainty.(c1nl_3_conj)
+    # ax.plot(k_kf_grid, c1nl_3_means, "C1"; label="\$N=3\$ \$(\\mathrm{$solver},\\, T \\approx 0)\$")
+    # ax.fill_between(
+    #     k_kf_grid,
+    #     (c1nl_3_means - c1nl_3_stdevs),
+    #     (c1nl_3_means + c1nl_3_stdevs);
+    #     color="C1",
+    #     alpha=0.3,
+    # )
+    # # N=4
+    # c1nl_4_conj =
+    #     f["c1b0/N=2/neval=$neval_c1b0/meas"] +
+    #     f["c1b/N=4/neval=$neval_c1b/meas"] +
+    #     f["c1c/N=2/neval=$neval_c1c/meas"] +
+    #     f["c1d/N=2/neval=$neval_c1d/meas"]
+    # c1nl_4_means, c1nl_4_stdevs =
+    #     Measurements.value.(c1nl_4_conj), Measurements.uncertainty.(c1nl_4_conj)
+    # ax.plot(k_kf_grid, c1nl_4_means, "C2"; label="\$N=4\$ \$(\\mathrm{$solver},\\, T \\approx 0)\$")
+    # ax.fill_between(
+    #     k_kf_grid,
+    #     (c1nl_4_means - c1nl_4_stdevs),
+    #     (c1nl_4_means + c1nl_4_stdevs);
+    #     color="C2",
+    #     alpha=0.3,
+    # )
+    # close(f)  # close file
+
     # ax.set_xlim(minimum(k_kf_grid), 2.0)
-    ax.set_ylim(top=-0.195)
+    ax.set_ylim(; top=-0.195)
     ax.legend(; loc="best")
     ax.set_xlabel("\$k / k_F\$")
-    ax.set_ylabel(
-        "\$C^{(1)nl}(k) \\,/\\, {\\epsilon}^{\\hspace{0.1em}2}_{\\mathrm{TF}}\$",
-    )
-    # xloc = 0.5
-    # yloc = -0.075
-    # ydiv = -0.009
+    ax.set_ylabel("\$C^{(1)nl}(k) \\,/\\, {\\epsilon}^{\\hspace{0.1em}2}_{\\mathrm{TF}}\$")
     xloc = 1.7
     yloc = -0.5
     ydiv = -0.05
     ax.text(
         xloc,
         yloc,
-        "\$r_s = 1,\\, \\beta \\hspace{0.1em} \\epsilon_F = 200,\$";
+        "\$r_s = 1,\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
         fontsize=14,
     )
     ax.text(
@@ -163,9 +202,11 @@ function main()
     # )
     plt.tight_layout()
     fig.savefig(
+        # "results/c1nl/c1nl_N=4_rs=$(rs)_" *
         "results/c1nl/c1nl_N=$(max_order_plot)_rs=$(rs)_" *
         "beta_ef=$(beta)_lambda=$(mass2)_" *
         "neval=$(neval)_$(intn_str)$(solver)_total.pdf",
+        # "neval=$(neval)_$(intn_str)$(solver)_total_conjectured.pdf",
     )
     plt.close("all")
     return
