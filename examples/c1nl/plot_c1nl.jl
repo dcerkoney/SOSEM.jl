@@ -26,10 +26,10 @@ function main()
     solver = :vegasmc
     expand_bare_interactions = false
 
-    neval_c1b0 = 3e10
-    neval_c1b = 1e10
-    neval_c1c = 1e10
-    neval_c1d = 1e10
+    neval_c1b0 = 5e10
+    neval_c1b = 5e10
+    neval_c1c = 5e10
+    neval_c1d = 5e10
     neval = max(neval_c1b0, neval_c1b, neval_c1c, neval_c1d)
 
     # Plot total results to order ξ 
