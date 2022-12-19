@@ -15,6 +15,13 @@ using SOSEM
 # NOTE: Call from main project directory as: julia examples/c1b0/plot_c1b0_total.jl
 
 function main()
+    # Change to project directory
+    if haskey(ENV, "SOSEM_CEPH")
+        cd(ENV["SOSEM_CEPH"])
+    elseif haskey(ENV, "SOSEM_HOME")
+        cd(ENV["SOSEM_HOME"])
+    end
+
     rs = 1.0
     beta = 20.0
     mass2 = 2.0
