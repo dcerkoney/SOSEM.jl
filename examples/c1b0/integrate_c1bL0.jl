@@ -11,6 +11,13 @@ using PyCall
 @pyimport matplotlib.pyplot as plt
 
 function main()
+    # Change to project directory
+    if haskey(ENV, "SOSEM_CEPH")
+        cd(ENV["SOSEM_CEPH"])
+    elseif haskey(ENV, "SOSEM_HOME")
+        cd(ENV["SOSEM_HOME"])
+    end
+
     # Debug mode
     if isinteractive()
         ENV["JULIA_DEBUG"] = SOSEM
