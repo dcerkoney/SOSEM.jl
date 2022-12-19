@@ -19,7 +19,7 @@ function main()
     end
 
     rs = 1.0
-    beta = 20.0
+    beta = 40.0
     mass2 = 2.0
     # mass2 = 0.1
     solver = :vegasmc
@@ -114,7 +114,7 @@ function main()
         # marker =
         #     (partitions[o][2] > 1 || (partitions[o][1] > 3 && partitions[o][2] > 0)) ?
         #     "o-" : "-"
-        marker = "-"
+        marker = "o-"
         ax.plot(
             k_kf_grid,
             means,
@@ -131,6 +131,7 @@ function main()
             alpha=0.4,
         )
     end
+    ax.plot(k_kf_grid, -sin.(k_kf_grid * pi/2)/2, "o", markersize=2)
     ax.legend(; loc="lower right")
     ax.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
     # ax.set_ylim(-0.1, 0.0025)
@@ -138,28 +139,28 @@ function main()
     ax.set_ylabel(
         "\$C^{(1c)}_{\\mathcal{P}}(k) \\,/\\, {\\epsilon}^{\\hspace{0.1em}2}_{\\mathrm{TF}}\$",
     )
-    xloc = 1.75
-    yloc = 1.0
-    ydiv = -0.3
-    ax.text(
-        xloc,
-        yloc,
-        "\$r_s = 1,\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
-        fontsize=14,
-    )
-    ax.text(
-        xloc,
-        yloc + ydiv,
-        "\$\\lambda = 2\\epsilon_{\\mathrm{Ry}},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)},\$";
-        # "\$\\lambda = \\frac{\\epsilon_{\\mathrm{Ry}}}{10},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)},\$";
-        fontsize=14,
-    )
-    ax.text(
-        xloc,
-        yloc + 2 * ydiv,
-        "\${\\epsilon}_{\\mathrm{TF}}\\equiv\\frac{\\hbar^2 q^2_{\\mathrm{TF}}}{2 m_e}=2\\pi\\mathcal{N}_F\$ (a.u.)";
-        fontsize=12,
-    )
+    # xloc = 1.75
+    # yloc = 1.0
+    # ydiv = -0.3
+    # ax.text(
+    #     xloc,
+    #     yloc,
+    #     "\$r_s = 1,\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
+    #     fontsize=14,
+    # )
+    # ax.text(
+    #     xloc,
+    #     yloc + ydiv,
+    #     "\$\\lambda = 2\\epsilon_{\\mathrm{Ry}},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)},\$";
+    #     # "\$\\lambda = \\frac{\\epsilon_{\\mathrm{Ry}}}{10},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)},\$";
+    #     fontsize=14,
+    # )
+    # ax.text(
+    #     xloc,
+    #     yloc + 2 * ydiv,
+    #     "\${\\epsilon}_{\\mathrm{TF}}\\equiv\\frac{\\hbar^2 q^2_{\\mathrm{TF}}}{2 m_e}=2\\pi\\mathcal{N}_F\$ (a.u.)";
+    #     fontsize=12,
+    # )
     plt.title("Using fixed bare Coulomb interactions \$V_1\$, \$V_2\$")
     # plt.title(
     #     "Using re-expanded Coulomb interactions \$V_1[V_\\lambda]\$, \$V_2[V_\\lambda]\$",

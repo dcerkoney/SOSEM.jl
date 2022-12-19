@@ -69,7 +69,7 @@ function main()
     for beta in beta_grid
         # UEG parameters for MC integration
         param =
-            ParaMC(; order=settings.max_order, rs=2.0, isDynamic=false, beta=beta, mass2=0.1)
+            ParaMC(; order=settings.max_order, rs=2.0, isDynamic=false, beta=beta, mass2=2.0)
         @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)" maxlog = 1
 
         # Generate the diagrams
