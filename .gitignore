@@ -42,5 +42,6 @@ Manifest.toml
 *.dvi
 
 # Misc directories
+backups
 notes
 old
