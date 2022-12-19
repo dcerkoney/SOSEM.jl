@@ -9,7 +9,6 @@ using PyCall
 
 # For saving/loading numpy data
 @pyimport numpy as np
-@pyimport matplotlib.pyplot as plt
 
 function main()
     # Change to project directory
@@ -62,8 +61,6 @@ function main()
     # Settings
     alpha = 2.0
     print = 0
-    plot = true
-    compare_bare = true
     solver = :vegasmc
 
     # Number of evals below and above kF
@@ -130,76 +127,6 @@ function main()
                 delete!(f, key)
             end
             return f[key] = (settings, param, kgrid, partitions, res)
-        end
-
-        if plot
-            # Plot the result
-            fig, ax = plt.subplots()
-            # Compare with bare quadrature results (stored in Hartree a.u.)
-            if compare_bare
-                # NOTE: The bare results were calculated at zero temperature (beta is arb.)
-                rs_quad = 1.0
-                sosem_quad = np.load("results/data/soms_rs=$(rs_quad)_beta_ef=40.0.npz")
-                # np.load("results/data/soms_rs=$(Float64(param.rs))_beta_ef=$(param.beta).npz")
-                k_kf_grid_quad = np.linspace(0.0, 3.0; num=600)
-                # Non-dimensionalize rs = 2 quadrature results by Thomas-Fermi energy
-                param_quad = Parameter.atomicUnit(0, rs_quad)    # (dimensionless T, rs)
-                eTF_quad = param_quad.qTF^2 / (2 * param_quad.me)
-                c1b_lo_quad_dimless = sosem_quad.get("bare_b") / eTF_quad^2
-                ax.plot(
-                    k_kf_grid_quad,
-                    c1b_lo_quad_dimless,
-                    "k";
-                    label="\$\\mathcal{P}=$((2,0,0))\$ (quad)",
-                )
-            end
-            for o in eachindex(partitions)
-                # Get means and error bars from the result for this partition
-                local means, stdevs
-                if res.config.N == 1
-                    # res gets automatically flattened for a single-partition measurement
-                    means, stdevs = res.mean, res.stdev
-                else
-                    means, stdevs = res.mean[o], res.stdev[o]
-                end
-                # NOTE: Since C⁽¹ᵇ⁾ᴸ = C⁽¹ᵇ⁾ᴿ for the UEG, the
-                #       full class (b) moment is C⁽¹ᵇ⁾ = 2C⁽¹ᵇ⁾ᴸ.
-                means = 2 * means
-                stdevs = 2 * stdevs
-
-                # Data gets noisy above 1st Green's function counterterm order
-                marker = partitions[o][2] > 1 ? "o-" : "-"
-                # Data gets noisy above 3rd loop order
-                # marker = partitions[o][1] > 3 ? "o-" : "-"
-                ax.plot(
-                    k_kf_grid,
-                    means,
-                    marker;
-                    markersize=2,
-                    color="C$(o - 1)",
-                    label="\$\\mathcal{P}=$(partitions[o])\$ ($solver)",
-                )
-                ax.fill_between(
-                    k_kf_grid,
-                    means - stdevs,
-                    means + stdevs;
-                    color="C$(o - 1)",
-                    alpha=0.4,
-                )
-            end
-            ax.legend(; loc="lower right")
-            ax.set_xlabel("\$k / k_F\$")
-            ax.set_ylabel(
-                "\$C^{(1b)}_{\\mathcal{P}}(\\mathbf{k}) \\,/\\, E^{2}_{\\mathrm{TF}}\$",
-            )
-            ax.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
-            plt.tight_layout()
-            fig.savefig(
-                "results/c1b/n=$(param.order)/c1b_n=$(param.order)_rs=$(param.rs)_" *
-                "beta_ef=$(param.beta)_lambda=$(param.mass2)_" *
-                "neval=$(neval)_$(intn_str)$(solver)_$(ct_string).pdf",
-            )
-            plt.close("all")
         end
     end
 end
