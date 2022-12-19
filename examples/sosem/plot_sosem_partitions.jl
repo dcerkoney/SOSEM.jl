@@ -12,7 +12,7 @@ using SOSEM
 
 function main()
     rs = 1.0
-    beta = 20.0
+    beta = 40.0
     mass2 = 2.0
     # mass2 = 0.1
     solver = :vegasmc

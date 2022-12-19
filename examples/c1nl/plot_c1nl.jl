@@ -21,7 +21,7 @@ function main()
     end
     
     rs = 1.0
-    beta = 20.0
+    beta = 40.0
     mass2 = 2.0
     solver = :vegasmc
     expand_bare_interactions = false
