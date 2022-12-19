@@ -1,4 +1,5 @@
 using AbstractTrees
+using CompositeGrids
 using ElectronGas
 using ElectronLiquid
 using ElectronLiquid.UEG: ParaMC, KOinstant
@@ -131,13 +132,25 @@ function main()
     end
 
     # UEG parameters for MC integration
-    param = ParaMC(; order=1, rs=2.0, beta=200.0, mass2=0.0, isDynamic=false)
+    param = ParaMC(; order=1, rs=2.0, beta=40.0, mass2=0.0, isDynamic=false)
     @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)"
 
     # K-mesh for measurement
     # k_kf_grid = [0.0]
-    k_kf_grid = np.load("results/kgrids/kgrid_vegas_dimless_n=77_small.npy")
-    kgrid = param.kF * k_kf_grid
+    minK = 0.15 * param.kF
+    Nk, korder = 5, 6
+    kgrid =
+        CompositeGrid.LogDensedGrid(
+            :uniform,
+            [0.0, 3 * param.kF],
+            [param.kF],
+            Nk,
+            minK,
+            korder,
+        ).grid
+    k_kf_grid = kgrid / param.kF
+    # k_kf_grid = np.load("results/kgrids/kgrid_vegas_dimless_n=77_small.npy")
+    # kgrid = param.kF * k_kf_grid
     @assert 0 in kgrid
 
     # Settings
