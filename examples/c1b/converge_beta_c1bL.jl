@@ -1,5 +1,6 @@
 using ElectronGas
-using ElectronLiquid.UEG: ParaMC
+using ElectronLiquid.UEG: ParaMC, short
+using FeynmanDiagram
 using JLD2
 using SOSEM
 
@@ -40,29 +41,28 @@ function main()
     mass2 = 2.0
 
     # Settings
-    alpha = 3.0
+    alpha = 2.0
     print = 0
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 1e5
+    neval = 1e10
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
     renorm_lambda = true
 
     # Either use a linear or logarithmic mesh
-    # mesh_type = linear::MeshType
-    mesh_type = logarithmic::MeshType
+    mesh_type = linear::MeshType
+    # mesh_type = logarithmic::MeshType
     meshtypestr = (mesh_type == linear) ? "linear_" : "log2_"
 
-    local param
     results = []
-    params = Float64[]
+    params = []
     # Grid of dimensionless cooling param (beta / EF)
-    local beta_grid
+    local beta_grid, param, partitions
     if mesh_type == linear
-        beta_grid = collect(range(2; stop=64, length=11))
+        beta_grid = collect(range(20; stop=200, length=10))
     else
         beta_grid = 2 .^ (range(0; stop=14, length=15))
     end
@@ -124,17 +124,19 @@ function main()
     end
 
     # Save to JLD2 on main thread
-    savename =
-        "results/data/converge_beta_$(meshtypestr)c1bL_n=$(param.order)_" *
-        "rs=$(param.rs)_lambda=$(param.mass2)_" *
-        "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)"
-    jldopen("$savename.jld2", "a+") do f
-        key = "$(short(param))"
-        if haskey(f, key)
-            @warn("replacing existing data for $key")
-            delete!(f, key)
+    if !isempty(results)
+        savename =
+            "results/data/converge_beta_$(meshtypestr)c1bL_n=$(param.order)_" *
+            "rs=$(param.rs)_lambda=$(param.mass2)_" *
+            "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)"
+        jldopen("$savename.jld2", "a+") do f
+            key = "$(short(param))"
+            if haskey(f, key)
+                @warn("replacing existing data for $key")
+                delete!(f, key)
+            end
+            return f[key] = (settings, param, kgrid, partitions, results)
         end
-        return f[key] = (settings, param, kgrid, partitions, results)
     end
 end
 
