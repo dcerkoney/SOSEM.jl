@@ -1,3 +1,4 @@
+using CompositeGrids
 using ElectronGas
 using ElectronLiquid.UEG: ParaMC, short
 using FeynmanDiagram
@@ -17,7 +18,7 @@ function main()
     elseif haskey(ENV, "SOSEM_HOME")
         cd(ENV["SOSEM_HOME"])
     end
-    
+
     # Debug mode
     if isinteractive()
         ENV["JULIA_DEBUG"] = SOSEM
@@ -40,12 +41,24 @@ function main()
 
     # UEG parameters for MC integration
     param =
-        ParaMC(; order=settings.max_order, rs=1.0, beta=200.0, mass2=2.0, isDynamic=false)
+        ParaMC(; order=settings.max_order, rs=1.0, beta=40.0, mass2=2.0, isDynamic=false)
     @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)"
 
     # K-mesh for measurement
-    k_kf_grid = np.load("results/kgrids/kgrid_vegas_dimless_n=77_small.npy")
-    kgrid = param.kF * k_kf_grid
+    minK = 0.15 * param.kF
+    Nk, korder = 5, 6
+    kgrid =
+        CompositeGrid.LogDensedGrid(
+            :uniform,
+            [0.0, 3 * param.kF],
+            [param.kF],
+            Nk,
+            minK,
+            korder,
+        ).grid
+    k_kf_grid = kgrid / param.kF
+    # k_kf_grid = np.load("results/kgrids/kgrid_vegas_dimless_n=77_small.npy")
+    # kgrid = param.kF * k_kf_grid
 
     # Settings
     alpha = 2.0

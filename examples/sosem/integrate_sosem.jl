@@ -1,3 +1,4 @@
+using CompositeGrids
 using ElectronGas
 using ElectronLiquid.UEG: ParaMC, short
 using FeynmanDiagram
@@ -18,7 +19,7 @@ function main()
 
     settings = DiagGen.Settings(;
         observable=DiagGen.c1c,
-       max_order=4,
+        max_order=4,
         verbosity=DiagGen.quiet,
         expand_bare_interactions=false,
         filter=[NoHartree],
@@ -27,12 +28,25 @@ function main()
     )
 
     # UEG parameters for MC integration
-    param = ParaMC(; order=settings.max_order, rs=1.0, beta=200.0, mass2=2.0, isDynamic=false)
+    param =
+        ParaMC(; order=settings.max_order, rs=1.0, beta=40.0, mass2=2.0, isDynamic=false)
     @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)"
 
     # K-mesh for measurement
-    k_kf_grid = np.load("results/kgrids/kgrid_vegas_dimless_n=77_small.npy")
-    kgrid = param.kF * k_kf_grid
+    minK = 0.15 * param.kF
+    Nk, korder = 5, 6
+    kgrid =
+        CompositeGrid.LogDensedGrid(
+            :uniform,
+            [0.0, 3 * param.kF],
+            [param.kF],
+            Nk,
+            minK,
+            korder,
+        ).grid
+    k_kf_grid = kgrid / param.kF
+    # k_kf_grid = np.load("results/kgrids/kgrid_vegas_dimless_n=77_small.npy")
+    # kgrid = param.kF * k_kf_grid
 
     # Settings
     alpha = 2.0
