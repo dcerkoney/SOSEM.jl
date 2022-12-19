@@ -7,7 +7,6 @@ using PyCall
 
 # For saving/loading numpy data
 @pyimport numpy as np
-@pyimport matplotlib.pyplot as plt
 
 @enum MeshType begin
     linear
@@ -140,65 +139,6 @@ function main()
                 delete!(f, key)
             end
             return f[key] = (settings, param, kgrid, means, stdevs)
-        end
-
-        if plot
-            # Plot the result
-            fig, ax = plt.subplots()
-            # Compare with zero-temperature quadrature result for the uniform value.
-            # Since the bare result is independent of rs after non-dimensionalization, we
-            # are free to mix rs of the current MC calculation with this result at rs = 2.
-            # Similarly, the bare results were calculated at zero temperature (beta is arb.)
-            rs_quad = 2.0
-            sosem_quad = np.load("results/data/soms_rs=$(rs_quad)_beta_ef=40.0.npz")
-            # Non-dimensionalize rs = 2 quadrature results by Thomas-Fermi energy
-            param_quad = Parameter.atomicUnit(0, rs_quad)    # (dimensionless T, rs)
-            eTF_quad = param_quad.qTF^2 / (2 * param_quad.me)
-            c1d_quad_unif_dimless = sosem_quad.get("bare_d")[1] / eTF_quad^2
-            # Either linear or logarithmic grid
-            beta_plot = (mesh_type == linear) ? beta_grid : log2.(beta_grid)
-            ax.axhline(
-                DiagGen.get_exact_k0(settings.observable);
-                color="k",
-                label="\$T=0\$ (exact)",
-            )
-            ax.axhline(
-                c1d_quad_unif_dimless;
-                linestyle="--",
-                color="gray",
-                label="\$T=0\$ (quad)",
-            )
-            ax.plot(
-                beta_plot,
-                means,
-                "o-";
-                markersize=2,
-                color="C0",
-                label="\$n=$(param.order)\$ ($solver)",
-            )
-            ax.fill_between(
-                beta_plot,
-                means - stdevs,
-                means + stdevs;
-                color="C0",
-                alpha=0.4,
-            )
-            ax.legend(; loc="center right")
-            if mesh_type == linear
-                ax.set_xlabel("\$\\beta / \\epsilon_F\$")
-            else
-                ax.set_xlabel("\$\\log_2(\\beta / \\epsilon_F)\$")
-            end
-            ax.set_ylabel("\$C^{(1d)}(\\mathbf{k}) \\,/\\, E^{2}_{\\mathrm{TF}}\$")
-            ax.set_xlim(minimum(beta_plot), maximum(beta_plot))
-            # ax.set_xticks(collect(range(1, stop=14, step=2)), minor=true)
-            plt.tight_layout()
-            fig.savefig(
-                "results/c1d/n=$(param.order)/converge_beta_$(meshtypestr)c1d_n=$(param.order)_" *
-                "rs=$(param.rs)_lambda=$(param.mass2)_" *
-                "neval=$(neval)_$(intn_str)$(solver).pdf",
-            )
-            plt.close("all")
         end
     end
 end
