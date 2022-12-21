@@ -1,3 +1,4 @@
+using FeynmanDiagram
 using SOSEM
 
 # Generate debug info
@@ -7,10 +8,14 @@ end
 
 settings = DiagGen.Settings(;
     observable=DiagGen.c1bL,
-    min_order=4,
-    max_order=4,
+    min_order=5,
+    max_order=5,
     verbosity=DiagGen.info,
+    expand_bare_interactions=false,
+    filter=[NoHartree],
+    interaction=[FeynmanDiagram.Interaction(ChargeCharge, Instant)],  # Yukawa-type interaction
 )
+cfg = DiagGen.Config(settings)
 
 # Build diagram and expression trees for all sigma_2 diagrams at order n
 diagparam, som_c1bL, som_c1bL_compiled = DiagGen.build_nonlocal_fixed_order(settings);
