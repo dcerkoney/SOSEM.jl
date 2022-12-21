@@ -16,21 +16,25 @@ function chemicalpotential_renormalization(data, δμ; lowest_order=2, min_order
     end
     # To maximum supported counterterm order, z = [C2, C3, C4, C5]
     z = RenormMeasType()
+    # Requires order 2
     if min_order ≤ 2 ≤ max_order
         #    Σ1 = Σ10
         # => C2 = C20
         z[2] = d[(2, 0)]
     end
+    # Requires order 3
     if min_order ≤ 3 ≤ max_order
         #    Σ2 = Σ20 + Σ11*δμ1
         # => C3 = C30 + C21*δμ1
         z[3] = d[(3, 0)] + δμ[1] * d[(2, 1)]
     end
+    # Requires orders 3 and 4
     if min_order ≤ 4 ≤ max_order
         #    Σ3 = Σ30 + Σ21*δμ1 + Σ12*δμ1^2 + Σ11*δμ2
         # => C4 = C40 + C31*δμ1 + C22*δμ1^2 + C21*δμ2 
         z[4] = d[(4, 0)] + δμ[1] * d[(3, 1)] + δμ[1]^2 * d[(2, 2)] + δμ[2] * d[(2, 1)]
     end
+    # Requires orders 3, 4, and 5
     if min_order ≤ 5 ≤ max_order
         #    Σ4 = Σ40 + Σ31*δμ1 + Σ22*δμ1^2 + Σ21*δμ2 + Σ13*δμ1^3 + Σ12*(2*δμ1*δμ2) + Σ11*δμ3
         # => C5 = C50 + C41*δμ1 + C32*δμ1^2 + C31*δμ2 + C23*δμ1^3 + C22*(2*δμ1*δμ2) + C21*δμ3
