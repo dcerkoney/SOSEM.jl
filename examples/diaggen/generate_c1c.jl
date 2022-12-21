@@ -1,3 +1,4 @@
+using FeynmanDiagram
 using SOSEM
 
 # Generate debug info
@@ -7,10 +8,12 @@ end
 
 settings = DiagGen.Settings(;
     observable=DiagGen.c1c,
-    min_order=2,
-    max_order=2,
+    min_order=5,
+    max_order=5,
     verbosity=DiagGen.info,
     expand_bare_interactions=false,
+    filter=[NoHartree],
+    interaction=[FeynmanDiagram.Interaction(ChargeCharge, Instant)],  # Yukawa-type interaction
 )
 cfg = DiagGen.Config(settings)
 
@@ -18,5 +21,5 @@ cfg = DiagGen.Config(settings)
 diagparam, som_c1c, som_c1c_compiled = DiagGen.build_nonlocal_fixed_order(settings);
 
 # Check the diagram tree
-# DiagGen.checktree(som_c1c, settings; plot=true, maxdepth=10)
+DiagGen.checktree(som_c1c, settings; plot=true, maxdepth=10)
 # DiagGen.checktree(som_c1c, settings)
