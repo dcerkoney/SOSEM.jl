@@ -44,8 +44,8 @@ function main()
     @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)"
 
     # K-mesh for measurement
-    minK = 0.15 * param.kF
-    Nk, korder = 5, 6
+    minK = 0.2 * param.kF
+    Nk, korder = 4, 7
     kgrid =
         CompositeGrid.LogDensedGrid(
             :uniform,
@@ -56,16 +56,14 @@ function main()
             korder,
         ).grid
     k_kf_grid = kgrid / param.kF
-    # k_kf_grid = np.load("results/kgrids/kgrid_vegas_dimless_n=77_small.npy")
-    # kgrid = param.kF * k_kf_grid
 
     # Settings
-    alpha = 2.0
-    print = 0
+    alpha = 3.0
+    print = 3600
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 5e10
+    neval = 1e9
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
