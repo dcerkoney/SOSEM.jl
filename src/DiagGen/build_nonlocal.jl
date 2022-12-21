@@ -7,7 +7,7 @@ function build_nonlocal_fixed_order(s::Settings)
     DiagTree.uidreset()
     # Construct the self-energy diagram tree without counterterms
     diagparam, diagtree = build_diagtree(s)
-    @debug "\nDiagTree:\n" * repr_tree(diagtree)
+    # @debug "\nDiagTree:\n" * repr_tree(diagtree)
     # Compile to expression tree
     exprtree = ExprTree.build([diagtree])
     return diagparam, diagtree, exprtree
