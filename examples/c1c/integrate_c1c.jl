@@ -68,7 +68,7 @@ function main()
 
     # Settings
     alpha = 3.0
-    print = 3600
+    print = 0
     solver = :vegasmc
 
     # Number of evals below and above kF
