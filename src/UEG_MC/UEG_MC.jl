@@ -4,7 +4,7 @@ module UEG_MC
 using DataFrames
 using DataStructures: SortedDict
 using DelimitedFiles
-using ..DiagGen: Settings, Config
+using ..DiagGen
 using ElectronGas
 using ..ElectronLiquid
 using ..FeynmanDiagram

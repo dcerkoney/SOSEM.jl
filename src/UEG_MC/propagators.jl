@@ -11,18 +11,24 @@ using ..UEG_MC: @todo
 # Bare Green's function and interaction evaluation #
 ####################################################
 
-# TODO: Avoid this hack by generating all SOSEM obesrvables with extT = (1, 2)
-@inline function remap_extT(taupair::Tuple{Int,Int}, extT2::Int)
+# NOTE: The current conventions for Parquet.vertex3 force us to remap external times
+#       in order to measure different observables & partitions simultaneously.
+#       Depending on whether an observable involves the left/right discontinuity side,
+#       the outgoing external time nt - 1 / nt is mapped to 2/3, respectively.
+#       Argument `extT_index` should be either 2 or 3.
+@inline function remap_extT(taupair::Tuple{Int,Int}, extTout::Int, extTout_index::Int)
     t1, t2 = taupair[1], taupair[2]
-    if t1 == 2
-        t1 = extT2
-    elseif t1 == extT2
-        t1 = 2
+    # Swap t1
+    if t1 == extTout_index
+        t1 = extTout
+    elseif t1 == extTout
+        t1 = extTout_index
     end
-    if t2 == 2
-        t2 = extT2
-    elseif t2 == extT2
-        t2 = 2
+    # Swap t2
+    if t2 == extTout_index
+        t2 = extTout
+    elseif t2 == extTout
+        t2 = extTout_index
     end
     return (t1, t2)
 end
@@ -35,12 +41,14 @@ end
 end
 
 """Evaluate a bare Green's function line."""
-function eval(id::BareGreenId, K, _, varT, additional::Tuple{ParaMC,W}) where {W}
-    p, extT = additional
+function eval(id::BareGreenId, K, _, varT, additional::Tuple{ParaMC,W,Int}) where {W}
+    p, extT, extTout_index = additional
     β, me, μ, massratio = p.β, p.me, p.μ, p.massratio
 
-    # HACK: Swap outgoing times into correct indices: extT[2] ↦ 2, 2 ↦ extT[2] (cost: ~ 1 ns)
-    remapped_taupair = remap_extT(id.extT, extT[2])
+    # HACK: Swap outgoing times into correct indices (cost: ~ 1 ns): 
+    #        • extT[2] ↦ 2, 2 ↦ extT[2]
+    #        • extT[3] ↦ 3, 3 ↦ extT[3]
+    remapped_taupair = remap_extT(id.extT, extT[2], extTout_index)
     τin, τout = varT[remapped_taupair[1]], varT[remapped_taupair[2]]
     @debug "Remapped propagator time indices: $(id.extT) ↦ $remapped_taupair" maxlog = 1
     # τin, τout = varT[id.extT[1]], varT[id.extT[2]]
@@ -93,8 +101,8 @@ function eval(id::BareGreenId, K, _, varT, additional::Tuple{ParaMC,W}) where {W
 end
 
 """Evaluate a statically screened Coulomb interaction line."""
-function eval(id::BareInteractionId, K, _, varT, additional::Tuple{ParaMC,W}) where {W}
-    # additional = (mcparam, extT)
+function eval(id::BareInteractionId, K, _, varT, additional::Tuple{ParaMC,W,Int}) where {W}
+    # additional = (mcparam, extT, extT_index)
     p = additional[1]
 
     # TODO: Implement check for bare interaction using: is_bare = (order[end] = 1)

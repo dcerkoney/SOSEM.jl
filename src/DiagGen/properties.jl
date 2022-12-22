@@ -27,6 +27,20 @@ end
     c1d      #                                 + C⁽¹ᵈ⁾
 end
 
+"""Composite of observables for different second-order moment (SOSEM) measurements."""
+@with_kw struct CompositeObservable
+    name::Symbol
+    factors::Vector{Int}                # Multiplicative factor(s)
+    exact_unif::Union{Nothing,Float64}  # Exact uniform (k = 0) value, if available
+    observables::Vector{Observable}
+    discont_sides::Vector{DiscontSide}
+    obs_signs::Vector{Int}
+    extT_signs::Vector{Int}
+    extT_indices::Vector{Int}
+end
+# Convenience typedef for atomic/composite observable types
+const ObsType = Union{Observable,CompositeObservable}
+
 """
 Returns the exact value of a specified low-order SOSEM observable to O(V²) at k = 0
 (after nondimensionalization by E²_{TF})).
@@ -44,26 +58,82 @@ const bare_observable_to_exact_k0 = Dict(
     c1d   => pi^2 / 8,
 )
 
-"""Composite of observables for different second-order moment (SOSEM) measurements."""
-@with_kw struct CompositeObservable
-    name::Symbol
-    factors::Vector{Int}                # Multiplicative factor(s)
-    exact_unif::Union{Nothing,Float64}  # Exact uniform (k = 0) value, if available
-    observables::Vector{Observable}
-    discont_sides::Vector{DiscontSide} = _get_discont_side.(observables)
-    obs_signs::Vector{Int}             = _get_obs_sign.(observables)
-    extT_signs::Vector{Int}            = _get_extT_sign.(discont_side)
-    extT_indices::Vector{Int}          = [sign == -1 ? 2 : 3 for sign in extT_signs]
+"""
+Returns the side of the discontinuity at τ = 0 giving 
+a non-zero contribution for this SOSEM observable.
+"""
+@inline function _get_discont_side(observable::ObsType)
+    return observable_to_discont_side[observable]
 end
+const observable_to_discont_side = Dict(
+    sigma20 => both,
+    sigma2  => both,
+    c1a     => positive,
+    c1bL0   => positive,
+    c1bR0   => positive,
+    c1bL    => positive,
+    c1bR    => positive,
+    c1c     => negative,
+    c1d     => positive,
+)
+
+"""
+Return the sign of the outgoing external time τ for a given SOSEM observable 
+(each observable contributes from one side of the discontinuity at τ = 0 only).
+"""
+@inline function _get_obs_sign(observable::ObsType)
+    if observable in [sigma20, sigma2] || observable isa CompositeObservable
+        # TODO: Direct self-energy measurement not yet implemented,
+        #       and CompositeObservable needs to be refactored
+        @todo
+    end
+    return observable_to_obs_sign[observable]
+end
+const observable_to_obs_sign = Dict(
+    sigma20 => 0,  # Direct measurement not yet implemented
+    sigma2  => 0,  # Direct measurement not yet implemented
+    c1a     => 1,
+    c1bL0   => 1,
+    c1bR0   => 1,
+    c1bL    => 1,
+    c1bR    => 1,
+    c1c     => -1,
+    c1d     => 1,  # Since (Θ₋₁(τ))² = Θ(-τ)
+)
+
+"""
+Return the sign of the outgoing external time τ for a given SOSEM observable 
+(each observable contributes from one side of the discontinuity at τ = 0 only).
+"""
+@inline function _get_extT_sign(side::DiscontSide)
+    if side == negative
+        # Observable non-zero when τ = 0⁻
+        return -1
+    elseif side == positive
+        # Observable non-zero when τ = 0⁺
+        return 1
+    else
+        # Direct self-energy measurement: not yet implemented
+        @todo
+    end
+end
+
 function CompositeObservable(observables; factors=ones(size(observables)), name=Symbol(""))
-    exact_unif_unavailable =
-        any(o in observables for o in [c1nl, c1nl_ueg, c1b_total, c1b_total_ueg])
+    exact_unif_unavailable = any(o in observables for o in [c1a, c1bL, c1bR])
     exact_unif = exact_unif_unavailable ? nothing : sum(get_exact_k0.(observables))
+    discont_sides = _get_discont_side.(observables)
+    obs_signs = _get_obs_sign.(observables)
+    extT_signs = _get_extT_sign.(discont_sides)
+    extT_indices = [sign == -1 ? 2 : 3 for sign in extT_signs]
     return CompositeObservable(;
         name=name,
         factors=factors,
         exact_unif=exact_unif,
         observables=observables,
+        discont_sides=discont_sides,
+        obs_signs=obs_signs,
+        extT_signs=extT_signs,
+        extT_indices=extT_indices,
     )
 end
 
@@ -103,9 +173,6 @@ const c1nl_ueg = CompositeObservable(
     factors=[2.0, 2.0, 1.0, 1.0],
     name=Symbol("C⁽¹⁾ⁿˡ[G, V, Γⁱ₃ ≥ Γ₀]"),
 )
-
-# Convenience typedef for atomic/composite observable types
-const ObsType = Union{Observable,CompositeObservable}
 
 """Overload print operator for string representations of observables."""
 Base.print(io::IO, obs::Observable) = print(io, observable_to_string[obs])
@@ -150,35 +217,6 @@ const observable_to_dash_indices = Dict(
     c1c     => [2],
     c1d     => [1, 3],
 )
-const observable_to_discont_side = Dict(
-    sigma20       => both,
-    sigma2        => both,
-    c1a           => positive,
-    c1nl0         => both,
-    c1nl          => both,
-    c1nl0_ueg     => both,
-    c1nl_ueg      => both,
-    c1bL0         => positive,
-    c1bR0         => positive,
-    c1bL          => positive,
-    c1bR          => positive,
-    c1b_total     => positive,
-    c1b_total_ueg => positive,
-    c1c           => negative,
-    c1d           => positive,
-)
-const observable_to_obs_sign = Dict(
-    sigma20 => 0,  # Direct measurement not yet implemented
-    sigma2  => 0,  # Direct measurement not yet implemented
-    c1a     => 1,
-    c1nl0   => 0,  # Direct measurement not yet implemented
-    c1bL0   => 1,
-    c1bR0   => 1,
-    c1bL    => 1,
-    c1bR    => 1,
-    c1c     => -1,
-    c1d     => 1,  # Since (Θ₋₁(τ))² = Θ(-τ)
-)
 const observable_to_name = Dict(
     sigma20 => "sigma20",
     sigma2  => "sigma2",
@@ -219,44 +257,6 @@ Returns the lowest valid loop order for the given SOSEM observable.
         @todo
     end
     return observable_to_lowest_loop_order[observable]
-end
-
-"""
-Returns the side of the discontinuity at τ = 0 giving 
-a non-zero contribution for this SOSEM observable.
-"""
-@inline function _get_discont_side(observable::ObsType)
-    return observable_to_discont_side[observable]
-end
-
-"""
-Return the sign of the outgoing external time τ for a given SOSEM observable 
-(each observable contributes from one side of the discontinuity at τ = 0 only).
-"""
-@inline function _get_obs_sign(observable::ObsType)
-    if observable in [sigma20, sigma2] || observable isa CompositeObservable
-        # TODO: Direct self-energy measurement not yet implemented,
-        #       and CompositeObservable needs to be refactored
-        @todo
-    end
-    return observable_to_obs_sign[observable]
-end
-
-"""
-Return the sign of the outgoing external time τ for a given SOSEM observable 
-(each observable contributes from one side of the discontinuity at τ = 0 only).
-"""
-@inline function _get_extT_sign(side::DiscontSide)
-    if side == negative
-        # Observable non-zero when τ = 0⁻
-        return -1
-    elseif side == positive
-        # Observable non-zero when τ = 0⁺
-        return 1
-    else
-        # Direct self-energy measurement: not yet implemented
-        @todo
-    end
 end
 
 """Deduce whether this observable has a Γⁱ₃ insertion."""

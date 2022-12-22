@@ -6,7 +6,7 @@ using ..ElectronLiquid
 using ..FeynmanDiagram
 using ..Logging
 using ..Parameters
-using ..SOSEM: @todo, DiagramF64, ExprTreeF64, PartitionType, MergedPartitionType
+using ..SOSEM: @todo, alleq, DiagramF64, ExprTreeF64, PartitionType, MergedPartitionType
 
 # Convenience typedefs for Settings and Config
 const VFloat64 = Vector{Float64}

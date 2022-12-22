@@ -8,8 +8,8 @@ end
 
 settings = DiagGen.Settings(;
     observable=DiagGen.c1c,
-    min_order=5,
-    max_order=5,
+    min_order=2,
+    max_order=2,
     verbosity=DiagGen.info,
     expand_bare_interactions=false,
     filter=[NoHartree],
