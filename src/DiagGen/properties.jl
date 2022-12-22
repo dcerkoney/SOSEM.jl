@@ -46,13 +46,19 @@ const bare_observable_to_exact_k0 = Dict(
 
 """Composite of observables for different second-order moment (SOSEM) measurements."""
 @with_kw struct CompositeObservable
-    name::String
+    name::Symbol
     factors::Vector{Int}                # Multiplicative factor(s)
     exact_unif::Union{Nothing,Float64}  # Exact uniform (k = 0) value, if available
     observables::Vector{Observable}
+    discont_sides::Vector{DiscontSide} = _get_discont_side.(observables)
+    obs_signs::Vector{Int}             = _get_obs_sign.(observables)
+    extT_signs::Vector{Int}            = _get_extT_sign.(discont_side)
+    extT_indices::Vector{Int}          = [sign == -1 ? 2 : 3 for sign in extT_signs]
 end
-function CompositeObservable(observables; factors=ones(size(observables)), name="")
-    exact_unif = sum(get_exact_k0.(observables))
+function CompositeObservable(observables; factors=ones(size(observables)), name=Symbol(""))
+    exact_unif_unavailable =
+        any(o in observables for o in [c1nl, c1nl_ueg, c1b_total, c1b_total_ueg])
+    exact_unif = exact_unif_unavailable ? nothing : sum(get_exact_k0.(observables))
     return CompositeObservable(;
         name=name,
         factors=factors,
@@ -62,36 +68,48 @@ function CompositeObservable(observables; factors=ones(size(observables)), name=
 end
 
 # Total class (b) contribution (with/without vertex corrections):  C⁽¹ᵇ⁰⁾ᴸ + C⁽¹ᵇ⁾ᴸ + (L -> R)
-const c1b_total = CompositeObservable([c1bL0, c1bR0, c1bL, c1bR]; name="c1b_total")
+const c1b_total =
+    CompositeObservable([c1bL0, c1bR0, c1bL, c1bR]; name=Symbol("C⁽¹ᵇ⁾[G, V, Γⁱ₃ ≥ Γ₀]"))
 
 # Non-local SOSEM without vertex corrections: 
 #     C⁽¹⁾ⁿˡ⁰ = C⁽¹ᵇ⁰⁾ᴸ + C⁽¹ᵇ⁰⁾ᴿ + C⁽¹ᶜ⁾ + C⁽¹ᵈ⁾
-const c1nl0 = CompositeObservable([c1bL0, c1bR0, c1c, c1d]; name="c1nl0")
+const c1nl0 =
+    CompositeObservable([c1bL0, c1bR0, c1c, c1d]; name=Symbol("C⁽¹⁾ⁿˡ[G, V, Γⁱ₃ = Γ₀]"))
 
 # Total non-local SOSEM:  C⁽¹⁾ⁿˡ = C⁽¹ᵇ⁰⁾ᴸ + C⁽¹ᵇ⁰⁾ᴿ + C⁽¹ᵇ⁾ᴸ + C⁽¹ᵇ⁾ᴿ + C⁽¹ᶜ⁾ + C⁽¹ᵈ⁾
-const c1nl = CompositeObservable([c1bL0, c1bR0, c1bL, c1bR, c1c, c1d]; name="c1nl")
+const c1nl = CompositeObservable(
+    [c1bL0, c1bR0, c1bL, c1bR, c1c, c1d];
+    name=Symbol("C⁽¹⁾ⁿˡ[G, V, Γⁱ₃ ≥ Γ₀]"),
+)
 
 # Total class (b) contribution for the UEG (with/without vertex corrections):  2C⁽¹ᵇ⁰⁾ᴸ + 2C⁽¹ᵇ⁾ᴸ
-const c1b_total_ueg =
-    CompositeObservable([c1bL0, c1bL]; factors=[2.0, 2.0], name="c1b_total_ueg")
+const c1b_total_ueg = CompositeObservable(
+    [c1bL0, c1bL];
+    factors=[2.0, 2.0],
+    name=Symbol("C⁽¹ᵇ⁾[G, V, Γⁱ₃ ≥ Γ₀]"),
+)
 
 # Non-local SOSEM for the UEG without vertex corrections (assuming TRS): 
 #     C⁽¹⁾ⁿˡ⁰ = 2C⁽¹ᵇ⁰⁾ᴸ + C⁽¹ᶜ⁾ + C⁽¹ᵈ⁾
-const c1nl0_ueg =
-    CompositeObservable([c1bL0, c1c, c1d]; factors=[2.0, 1.0, 1.0], name="c1nl0_ueg")
+const c1nl0_ueg = CompositeObservable(
+    [c1bL0, c1c, c1d];
+    factors=[2.0, 1.0, 1.0],
+    name=Symbol("C⁽¹⁾ⁿˡ[G, V, Γⁱ₃ = Γ₀]"),
+)
 
 # Total non-local SOSEM for the UEG (assuming TRS):  C⁽¹⁾ⁿˡ = 2C⁽¹ᵇ⁰⁾ᴸ + 2C⁽¹ᵇ⁾ᴸ + C⁽¹ᶜ⁾ + C⁽¹ᵈ⁾
 const c1nl_ueg = CompositeObservable(
     [c1bL0, c1bL, c1c, c1d];
     factors=[2.0, 2.0, 1.0, 1.0],
-    name="c1nl_ueg",
+    name=Symbol("C⁽¹⁾ⁿˡ[G, V, Γⁱ₃ ≥ Γ₀]"),
 )
 
 # Convenience typedef for atomic/composite observable types
 const ObsType = Union{Observable,CompositeObservable}
 
 """Overload print operator for string representations of observables."""
-Base.print(io::IO, obs::ObsType) = print(io, observable_to_string[obs])
+Base.print(io::IO, obs::Observable) = print(io, observable_to_string[obs])
+Base.print(io::IO, obs::CompositeObservable) = print(io, name)
 
 """Print the string representation of a (non-local) bare observable."""
 @inline function get_observable_name(obs::ObsType)
@@ -133,16 +151,21 @@ const observable_to_dash_indices = Dict(
     c1d     => [1, 3],
 )
 const observable_to_discont_side = Dict(
-    sigma20 => both,
-    sigma2  => both,
-    c1a     => positive,
-    c1nl0   => both,
-    c1bL0   => positive,
-    c1bR0   => positive,
-    c1bL    => positive,
-    c1bR    => positive,
-    c1c     => negative,
-    c1d     => positive,
+    sigma20       => both,
+    sigma2        => both,
+    c1a           => positive,
+    c1nl0         => both,
+    c1nl          => both,
+    c1nl0_ueg     => both,
+    c1nl_ueg      => both,
+    c1bL0         => positive,
+    c1bR0         => positive,
+    c1bL          => positive,
+    c1bR          => positive,
+    c1b_total     => positive,
+    c1b_total_ueg => positive,
+    c1c           => negative,
+    c1d           => positive,
 )
 const observable_to_obs_sign = Dict(
     sigma20 => 0,  # Direct measurement not yet implemented
@@ -160,7 +183,6 @@ const observable_to_name = Dict(
     sigma20 => "sigma20",
     sigma2  => "sigma2",
     c1a     => "c1a",
-    c1nl0   => "c1nl0",
     c1bL0   => "c1bL0",
     c1bR0   => "c1bR0",
     c1bL    => "c1bL",
@@ -172,7 +194,6 @@ const observable_to_string = Dict(
     sigma20 => "Σ₂[G, V, Γⁱ₃ = Γ₀]",
     sigma2  => "Σ₂[G, V, Γⁱ₃ > Γ₀]",
     c1a     => "C⁽¹ᵃ⁾[G, V, Γⁱ₃ ≥ Γ₀]",
-    c1nl0   => "C⁽¹⁾ⁿˡ⁰[G, V, Γⁱ₃ = Γ₀]",
     c1bL0   => "C⁽¹ᵇ⁾ᴸ[G, V, Γⁱ₃ = Γ₀]",
     c1bR0   => "C⁽¹ᵇ⁾ᴿ[G, V, Γⁱ₃ = Γ₀]",
     c1bL    => "C⁽¹ᵇ⁾ᴸ[G, V, Γⁱ₃ > Γ₀]",
@@ -193,6 +214,10 @@ const bare_observable_to_string = Dict(
 Returns the lowest valid loop order for the given SOSEM observable.
 """
 @inline function _get_lowest_loop_order(observable::ObsType)
+    if observable isa CompositeObservable
+        # TODO: CompositeObservable needs to be refactored
+        @todo
+    end
     return observable_to_lowest_loop_order[observable]
 end
 
@@ -209,8 +234,9 @@ Return the sign of the outgoing external time τ for a given SOSEM observable
 (each observable contributes from one side of the discontinuity at τ = 0 only).
 """
 @inline function _get_obs_sign(observable::ObsType)
-    # Direct self-energy measurement not yet implemented
-    if observable in [sigma20, sigma2, c1nl0]
+    if observable in [sigma20, sigma2] || observable isa CompositeObservable
+        # TODO: Direct self-energy measurement not yet implemented,
+        #       and CompositeObservable needs to be refactored
         @todo
     end
     return observable_to_obs_sign[observable]
@@ -234,7 +260,7 @@ Return the sign of the outgoing external time τ for a given SOSEM observable
 end
 
 """Deduce whether this observable has a Γⁱ₃ insertion."""
-@inline function _has_gamma3(observable::ObsType)
+@inline function _has_gamma3(observable::Observable)
     return observable in [c1bL, c1bR]
 end
 
@@ -282,7 +308,8 @@ function _getparam(
         hasTau=true,
         firstTauIdx=1,
         innerLoopNum=n_loop_tot,
-        totalTauNum=n_loop_tot,
+        totalTauNum=n_loop_tot + 1,  # one additional fake time for extT switch
+        # totalTauNum=n_loop_tot,
         interaction=interaction,
         filter=filter,
     )
