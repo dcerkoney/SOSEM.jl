@@ -20,6 +20,13 @@ macro todo()
     return :(error("Not yet implemented!"))
 end
 
+# NOTE: Backport—function allequal is not available in julia<1.8
+"""Checks that all elements of an iterable x are equal."""
+function alleq(x)
+    return all(isequal(first(x)), x)
+end
+export alleq
+
 # SOSEM diagram generation
 include("DiagGen/DiagGen.jl")
 using .DiagGen
@@ -29,11 +36,5 @@ export DiagGen
 include("UEG_MC/UEG_MC.jl")
 using .UEG_MC
 export UEG_MC
-
-# NOTE: Backport—function allequal is not available in julia<1.8
-"""Checks that all elements of an iterable x are equal."""
-function allequal(x)
-    return all(isequal(first(x)), x)
-end
 
 end  # module SOSEM

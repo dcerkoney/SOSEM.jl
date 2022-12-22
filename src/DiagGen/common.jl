@@ -76,8 +76,9 @@ Configuration bundling physical properties and fixed variables for a Σ₂[G, V,
     # Discontinuity side and overall sign
     discont_side::DiscontSide
     obs_sign::Int
-    # Sign of the outgoing external time
+    # Sign and variable pool index of the outgoing external time
     extT_sign::Int
+    extT_index::Int  # either 2 or 3, depending on extT_sign
     # External time indices
     extT::Tuple{Int,Int}
     # A generic ID for intermediate diagram construction steps
@@ -131,13 +132,16 @@ function _Config(settings::Settings, n_loop, g_names, v_names)
     k2 = k1 + k3 - k
     q1 = k1 - k
     q2 = k3 - k
+    # By convention, the outgoing external time is τₒᵤₜ = nt - 1 (nt)
+    # for observables with negative (positive) discontinuity side
+    Tout = _get_discont_side(settings.observable) == negative ? nt - 1 : nt
     # Propagator momenta/times
     g_ks   = (k1, k2, k3)
     v_ks   = (q1, q2)
-    g_taus = ((1, nt), (nt, 1), (1, nt))
-    v_taus = ((1, 1), (nt, nt))
+    g_taus = ((1, Tout), (Tout, 1), (1, Tout))
+    v_taus = ((1, 1), (Tout, Tout))
     # External times
-    extT = (1, nt)
+    extT = (1, Tout)
 
     # Optionally mark the two V lines as unscreened
     v_orders = [0, 0, 0, 0]
@@ -153,6 +157,7 @@ function _Config(settings::Settings, n_loop, g_names, v_names)
     discont_side = _get_discont_side(settings.observable)
     obs_sign     = _get_obs_sign(settings.observable)
     extT_sign    = _get_extT_sign(discont_side)
+    extT_index   = extT_sign == -1 ? 2 : 3  # 2 for 0⁻, and 3 for 0⁺
 
     # Bundle data for each line/vertex object
     g_data = GData(g_names, g_taus, g_ks, indices_g, indices_g_dash)
@@ -183,6 +188,7 @@ function _Config(settings::Settings, n_loop, g_names, v_names)
         discont_side=discont_side,
         obs_sign=obs_sign,
         extT_sign=extT_sign,
+        extT_index=extT_index,
         extT=extT,
         generic_id=generic_id,
     )
@@ -196,6 +202,8 @@ function _Config(settings::Settings, n_loop, g_names, v_names, gamma3_name)
     n_expand     = n_loop - n_v     # Expansion order for internal lines/vertices
     n_expandable = n_g + 1          # ( = n_g + n_gamma3)
 
+    @debug "Generating config for observable with Γⁱ₃ insertion (Γⁱ₃ > Γ₀)..."
+
     # Get diagram parameters
     param = _getparam(n_loop; filter=settings.filter, interaction=settings.interaction)
 
@@ -203,6 +211,8 @@ function _Config(settings::Settings, n_loop, g_names, v_names, gamma3_name)
     nk = param.totalLoopNum
     # Biggest tau index
     nt = param.totalTauNum
+
+    @debug "nk = $nk, nt = $(nt - 1) (plus one fake extT)"
 
     # Basis momenta for loops of Σ₂
     k  = DiagTree.getK(nk, 1)
@@ -222,16 +232,19 @@ function _Config(settings::Settings, n_loop, g_names, v_names, gamma3_name)
     # Γⁱ₃ and outgoing external time of Σ₂ must depend on the Γⁱ₃ insertion side.
     local v_taus, g_taus, gamma3_ks, extT
     gamma3_side = _get_insertion_side(settings.observable)
-    if gamma3_side == right
-        v_taus = ((1, 1), (nt, nt))
-        g_taus = ((1, nt), (nt, 2), (nothing, nt))
+    # By convention, the outgoing external time is τₒᵤₜ = nt - 1 (nt)
+    # for observables with negative (positive) discontinuity side
+    Tout = _get_discont_side(settings.observable) == negative ? nt - 1 : nt
+    if gamma3_side == right  # c1bL
+        v_taus = ((1, 1), (Tout, Tout))
+        g_taus = ((1, Tout), (Tout, 2), (nothing, Tout))
         gamma3_ks = (-q1, k2)
-        extT = (1, nt)
-    else # gamma3_side == left
-        v_taus = ((nt, nt), (1, 1))
-        g_taus = ((nt, 2), (nothing, nt), (nt, 1))
+        extT = (1, Tout)
+    else # gamma3_side == left  # c1bR
+        v_taus = ((Tout, Tout), (1, 1))
+        g_taus = ((Tout, 2), (nothing, Tout), (Tout, 1))
         gamma3_ks = (q2, k1)
-        extT = (nt, 1)
+        extT = (Tout, 1)
     end
     # Using the above conventions, the times for Γⁱ₃ are the same for both insertion sides
     gamma3_taus = (1, 2, nothing)
@@ -245,13 +258,14 @@ function _Config(settings::Settings, n_loop, g_names, v_names, gamma3_name)
     # Indices of (dashed) G lines in the expansion order list
     indices_g = collect(1:n_g)
     indices_g_dash = _get_dash_indices(settings.observable)
-    # Γⁱ₃ is last in the expansion order list
+    # Γⁱ₃ is last in the expansion order list for convenience (although we expand it first)
     index_gamma3 = n_g + 1
 
     # Discontinuity side and sign for this observable
     discont_side = _get_discont_side(settings.observable)
     obs_sign     = _get_obs_sign(settings.observable)
     extT_sign    = _get_extT_sign(discont_side)
+    extT_index   = extT_sign == -1 ? 2 : 3  # 2 for 0⁻, and 3 for 0⁺
 
     # Bundle data for each line/vertex object
     g_data      = GData(g_names, g_taus, g_ks, indices_g, indices_g_dash)
@@ -285,14 +299,15 @@ function _Config(settings::Settings, n_loop, g_names, v_names, gamma3_name)
         discont_side=discont_side,
         obs_sign=obs_sign,
         extT_sign=extT_sign,
+        extT_index=extT_index,
         extT=extT,
         generic_id=generic_id,
     )
 end
 
 """Print and/or plot a diagram tree to the given depth if verbosity is sufficiently high."""
-function checktree(d::Diagram, s::Settings; plot=false, maxdepth=6)
-    if s.verbosity > quiet
+function checktree(d::Diagram, s::Settings; print=true, plot=false, maxdepth=6)
+    if s.verbosity > quiet && print
         print_tree(d)
     end
     if plot
