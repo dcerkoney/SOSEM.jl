@@ -26,9 +26,9 @@ function main()
     solver = :vegasmc
     expand_bare_interactions = false
 
-    neval = 1e7
-    max_order = 3
-    max_order_plot = 3
+    neval = 1e9
+    max_order = 5
+    max_order_plot = 5
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -133,21 +133,21 @@ function main()
         )
     end
 
-    # K-mesh for measurement
-    minK = 0.2 * param.kF
-    Nk, korder = 4, 7
-    kgrid =
-        CompositeGrid.LogDensedGrid(
-            :uniform,
-            [0.0, 3 * param.kF],
-            [param.kF],
-            Nk,
-            minK,
-            korder,
-        ).grid
-    k_kf_grid_comp = kgrid / param.kF
-    println("nk = $(length(k_kf_grid_comp))")
-    ax.plot(k_kf_grid_comp, -sin.(k_kf_grid_comp * pi / 2) / 2, "o"; markersize=2, color="r")
+    # # K-mesh for measurement
+    # minK = 0.2 * param.kF
+    # Nk, korder = 4, 7
+    # kgrid =
+    #     CompositeGrid.LogDensedGrid(
+    #         :uniform,
+    #         [0.0, 3 * param.kF],
+    #         [param.kF],
+    #         Nk,
+    #         minK,
+    #         korder,
+    #     ).grid
+    # k_kf_grid_comp = kgrid / param.kF
+    # println("nk = $(length(k_kf_grid_comp))")
+    # ax.plot(k_kf_grid_comp, -sin.(k_kf_grid_comp * pi / 2) / 2, "o"; markersize=2, color="r")
 
     # ax.plot(k_kf_grid, -sin.(k_kf_grid * pi / 2) / 2, "o"; markersize=2, color="r")
     ax.legend(; loc="lower right")
