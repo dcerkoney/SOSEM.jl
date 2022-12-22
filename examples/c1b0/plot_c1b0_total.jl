@@ -28,11 +28,11 @@ function main()
     solver = :vegasmc
     expand_bare_interactions = false
 
-    neval = 3e10
+    neval = 5e10
     min_order = 3
-    max_order = 4
+    max_order = 5
     min_order_plot = 2
-    max_order_plot = 4
+    max_order_plot = 5
     @assert max_order ≥ 3
 
     # Load data from multiple fixed-order runs
@@ -277,8 +277,8 @@ function main()
         means = 2 * Measurements.value.(c1bL0_total[N])
         stdevs = 2 * Measurements.uncertainty.(c1bL0_total[N])
         # Data gets noisy above 3rd loop order
-        # marker = "o-"
-        marker = "-"
+        marker = "o-"
+        # marker = "-"
         # marker = N > 3 ? "o-" : "-"
         ax.plot(
             k_kf_grid,
@@ -322,7 +322,7 @@ function main()
     ax.text(
         xloc,
         yloc + ydiv,
-        "\$\\lambda = 2\\epsilon_{\\mathrm{Ry}},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)},\$";
+        "\$\\lambda = $(mass2)\\epsilon_{\\mathrm{Ry}},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)},\$";
         # "\$\\lambda = \\frac{\\epsilon_{\\mathrm{Ry}}}{10},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)},\$";
         fontsize=14,
     )

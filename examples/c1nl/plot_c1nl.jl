@@ -22,7 +22,7 @@ function main()
     
     rs = 1.0
     beta = 40.0
-    mass2 = 2.0
+    mass2 = 4.0
     solver = :vegasmc
     expand_bare_interactions = false
 
@@ -199,7 +199,7 @@ function main()
     ax.text(
         xloc,
         yloc + ydiv,
-        "\$\\lambda = 2\\epsilon_{\\mathrm{Ry}},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)},\$";
+        "\$\\lambda = $(mass2)\\epsilon_{\\mathrm{Ry}},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)},\$";
         # "\$\\lambda = \\frac{\\epsilon_{\\mathrm{Ry}}}{10},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)},\$";
         fontsize=14,
     )
