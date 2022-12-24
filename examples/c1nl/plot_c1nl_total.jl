@@ -21,15 +21,15 @@ function main()
     end
 
     rs = 1.0
-    beta = 40.0
-    mass2 = 4.0
+    betas = [20.0, 40.0]
+    mass2 = 2.0
     solver = :vegasmc
     expand_bare_interactions = false
 
-    neval_c1b0 = 5e10
-    neval_c1b = 5e10
-    neval_c1c = 5e10
-    neval_c1d = 5e10
+    neval_c1b0 = 3e10
+    neval_c1b = 1e10
+    neval_c1c = 1e10
+    neval_c1d = 1e10
     neval = max(neval_c1b0, neval_c1b, neval_c1c, neval_c1d)
 
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
@@ -49,11 +49,6 @@ function main()
 
     # colors = ["orchid", "cornflowerblue", "turquoise", "chartreuse", "greenyellow"]
     # markers = ["-", "-", "-", "-", "-"]
-
-    # Filename for new JLD2 format
-    filename =
-        "results/data/rs=$(rs)_beta_ef=$(beta)_" *
-        "lambda=$(mass2)_$(intn_str)$(solver)_with_ct_mu_lambda"
 
     # Non-dimensionalize bare and RPA+FL non-local moments
     rs_lo = 1.0
@@ -78,63 +73,79 @@ function main()
     c1nl_rpa_fl_means, c1nl_rpa_fl_stdevs =
         Measurements.value.(c1nl_rpa_fl), Measurements.uncertainty.(c1nl_rpa_fl)
 
+    # Filename for new JLD2 format
+    filenames = [
+        "results/data/rs=$(rs)_beta_ef=$(beta)_" *
+        "lambda=$(mass2)_$(intn_str)$(solver)_with_ct_mu_lambda" for beta in betas
+    ]
+    linestyles = ["--", "-"]
+
     # Plot the results for each order ξ and compare to RPA(+FL)
     fig, ax = plt.subplots()
-    for (i, N) in enumerate(min_order_plot:max_order_plot)
-        # Load the data for each observable
-        f = jldopen("$filename.jld2", "r")
-        param = f["c1d/N=$N/neval=$neval_c1d/param"]
-        kgrid = f["c1d/N=$N/neval=$neval_c1d/kgrid"]
-        c1nl_N_total =
-            f["c1b0/N=$N/neval=$neval_c1b0/meas"] +
-            f["c1b/N=$N/neval=$neval_c1b/meas"] +
-            f["c1c/N=$N/neval=$neval_c1c/meas"] +
-            f["c1d/N=$N/neval=$neval_c1d/meas"]
-        close(f)  # close file
+    for (j, filename) in enumerate(filenames)
+        println("beta = $(betas[j])...")
+        for (i, N) in enumerate(min_order_plot:max_order_plot)
+            # Load the data for each observable
+            f = jldopen("$filename.jld2", "r")
+            param = f["c1d/N=$N/neval=$neval_c1d/param"]
+            kgrid = f["c1d/N=$N/neval=$neval_c1d/kgrid"]
+            c1nl_N_total =
+                f["c1b0/N=$N/neval=$neval_c1b0/meas"] +
+                f["c1b/N=$N/neval=$neval_c1b/meas"] +
+                f["c1c/N=$N/neval=$neval_c1c/meas"] +
+                f["c1d/N=$N/neval=$neval_c1d/meas"]
+            close(f)  # close file
 
-        # Get dimensionless k-grid (k / kF)
-        k_kf_grid = kgrid / param.kF
+            # Get dimensionless k-grid (k / kF)
+            k_kf_grid = kgrid / param.kF
 
-        # Get means and error bars from the result up to this order
-        c1nl_N_means, c1nl_N_stdevs =
-            Measurements.value.(c1nl_N_total), Measurements.uncertainty.(c1nl_N_total)
-        @assert length(k_kf_grid) == length(c1nl_N_means) == length(c1nl_N_stdevs)
+            # Get means and error bars from the result up to this order
+            c1nl_N_means, c1nl_N_stdevs =
+                Measurements.value.(c1nl_N_total), Measurements.uncertainty.(c1nl_N_total)
+            @assert length(k_kf_grid) == length(c1nl_N_means) == length(c1nl_N_stdevs)
 
-        if i == 1
-            ax.plot(
-                k_kf_grid_quad,
-                c1nl_rpa_means,
-                "k";
-                linestyle="--",
-                label="RPA (vegas)",
-            )
+            if i == j == 1
+                ax.plot(
+                    k_kf_grid_quad,
+                    c1nl_rpa_means,
+                    "k";
+                    linestyle="--",
+                    label="RPA (vegas)",
+                )
+                ax.fill_between(
+                    k_kf_grid_quad,
+                    (c1nl_rpa_means - c1nl_rpa_stdevs),
+                    (c1nl_rpa_means + c1nl_rpa_stdevs);
+                    color="k",
+                    alpha=0.3,
+                )
+                ax.plot(k_kf_grid_quad, c1nl_rpa_fl_means, "k"; label="RPA\$+\$FL (vegas)")
+                ax.fill_between(
+                    k_kf_grid_quad,
+                    (c1nl_rpa_fl_means - c1nl_rpa_fl_stdevs),
+                    (c1nl_rpa_fl_means + c1nl_rpa_fl_stdevs);
+                    color="r",
+                    alpha=0.3,
+                )
+                ax.plot(
+                    k_kf_grid_quad,
+                    c1nl_lo,
+                    "C0";
+                    linestyle="-",
+                    label="\$N=2, T = 0\$ (quad)",
+                )
+            end
+            # ax.plot(k_kf_grid, c1nl_N_means, "o-"; color="C$i", markersize=2, label="\$N=$N\$ ($solver)")
+            ax.plot(k_kf_grid, c1nl_N_means, "C$i"; linestyle=linestyles[j], label="\$N=$N, \\beta = $(betas[j])\$ ($solver)")
             ax.fill_between(
-                k_kf_grid_quad,
-                (c1nl_rpa_means - c1nl_rpa_stdevs),
-                (c1nl_rpa_means + c1nl_rpa_stdevs);
-                color="k",
+                k_kf_grid,
+                (c1nl_N_means - c1nl_N_stdevs),
+                (c1nl_N_means + c1nl_N_stdevs);
+                color="C$i",
                 alpha=0.3,
             )
-            ax.plot(k_kf_grid_quad, c1nl_rpa_fl_means, "k"; label="RPA\$+\$FL (vegas)")
-            ax.fill_between(
-                k_kf_grid_quad,
-                (c1nl_rpa_fl_means - c1nl_rpa_fl_stdevs),
-                (c1nl_rpa_fl_means + c1nl_rpa_fl_stdevs);
-                color="r",
-                alpha=0.3,
-            )
-            ax.plot(k_kf_grid_quad, c1nl_lo, "C0"; linestyle="-", label="\$N=2\$ (quad)")
+            ax.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
         end
-        # ax.plot(k_kf_grid, c1nl_N_means, "o-"; color="C$i", markersize=2, label="\$N=$N\$ ($solver)")
-        ax.plot(k_kf_grid, c1nl_N_means, "C$i"; label="\$N=$N\$ ($solver)")
-        ax.fill_between(
-            k_kf_grid,
-            (c1nl_N_means - c1nl_N_stdevs),
-            (c1nl_N_means + c1nl_N_stdevs);
-            color="C$i",
-            alpha=0.3,
-        )
-        ax.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
     end
 
     # # Plot speculative results
@@ -212,7 +223,7 @@ function main()
     fig.savefig(
         # "results/c1nl/c1nl_N=4_rs=$(rs)_" *
         "results/c1nl/c1nl_N=$(max_order_plot)_rs=$(rs)_" *
-        "beta_ef=$(beta)_lambda=$(mass2)_" *
+        "beta_ef=$(betas)_lambda=$(mass2)_" *
         "neval=$(neval)_$(intn_str)$(solver)_total.pdf",
         # "neval=$(neval)_$(intn_str)$(solver)_total_conjectured.pdf",
     )
