@@ -21,7 +21,7 @@ function main()
     elseif haskey(ENV, "SOSEM_HOME")
         cd(ENV["SOSEM_HOME"])
     end
-    
+
     rs = 1.0
     beta = 40.0
     mass2 = 4.0
@@ -135,7 +135,9 @@ function main()
     k_kf_grid_quad = np.linspace(0.0, 3.0; num=600)
     c1b_bare_quad = sosem_lo.get("bare_b") / eTF_lo^2
 
-    # # Interpolate bare results and downsample to coarse k_kf_grid
+    # # Interpolate bare results and downsample to coarse k_kf_grid_vegas
+    k_kf_grid_vegas = np.load("results/kgrids/kgrid_vegas_dimless_n=77_small.npy")
+    
     # c1b_bare_interp = linear_interpolation(k_kf_grid_quad, c1b_bare_quad)
     # c1b2_exact = c1b_bare_interp(k_kf_grid)
 
@@ -234,16 +236,16 @@ function main()
 
     if min_order_plot == 2
         ax.plot(
-            k_kf_grid,
+            k_kf_grid_vegas,
             delta_c1b_rpa,
             "k";
             linestyle="--",
             label="RPA (vegas)",
             # label="\$\\delta C^{(1b)}_{\\mathrm{RPA}}\$ (vegas)",
         )
-        # ax.plot(k_kf_grid, c1b_rpa, "k"; linestyle="--", label="RPA (vegas)")
+        # ax.plot(k_kf_grid_vegas, c1b_rpa, "k"; linestyle="--", label="RPA (vegas)")
         ax.fill_between(
-            k_kf_grid,
+            k_kf_grid_vegas,
             (delta_c1b_rpa - delta_c1b_rpa_err),
             (delta_c1b_rpa + delta_c1b_rpa_err);
             # (c1b_rpa - c1b_rpa_err),
@@ -252,15 +254,15 @@ function main()
             alpha=0.3,
         )
         ax.plot(
-            k_kf_grid,
+            k_kf_grid_vegas,
             delta_c1b_rpa_fl,
             "k";
             label="RPA\$+\$FL (vegas)",
             # label="\$\\delta C^{(1b)}_{\\mathrm{RPA}+\\mathrm{FL}}\$ (vegas)",
         )
-        # ax.plot(k_kf_grid, c1b_rpa_fl, "k"; label="RPA\$+\$FL (vegas)")
+        # ax.plot(k_kf_grid_vegas, c1b_rpa_fl, "k"; label="RPA\$+\$FL (vegas)")
         ax.fill_between(
-            k_kf_grid,
+            k_kf_grid_vegas,
             (delta_c1b_rpa_fl - delta_c1b_rpa_fl_err),
             (delta_c1b_rpa_fl + delta_c1b_rpa_fl_err);
             # (c1b_rpa_fl - c1b_rpa_fl_err),
@@ -268,7 +270,7 @@ function main()
             color="k",
             alpha=0.3,
         )
-        # ax.plot(k_kf_grid, c1b2_exact, "C0"; linestyle="-", label="\$N=2\$ (quad)")
+        # ax.plot(k_kf_grid_vegas, c1b2_exact, "C0"; linestyle="-", label="\$N=2\$ (quad)")
     end
 
     if save
@@ -327,8 +329,8 @@ function main()
         means = 2 * Measurements.value.(c1bL_total[N])
         stdevs = 2 * Measurements.uncertainty.(c1bL_total[N])
         # Data gets noisy above 3rd loop order
-        # marker = "o-"
-        marker = "-"
+        marker = "o-"
+        # marker = "-"
         # marker = N > 3 ? "o-" : "-"
         ax.plot(
             k_kf_grid,

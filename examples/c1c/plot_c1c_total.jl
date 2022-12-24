@@ -22,16 +22,19 @@ function main()
 
     rs = 1.0
     beta = 40.0
-    mass2 = 4.0
+    mass2 = 2.0
     solver = :vegasmc
     expand_bare_interactions = false
 
-    neval = 5e10
+    neval34 = 5e10
+    neval5 = 1e9
+    neval = min(neval34, neval5)
     min_order = 3
     max_order = 5
     min_order_plot = 2
     max_order_plot = 5
-
+    @assert max_order ≥ 3
+    
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
     renorm_lambda = true
@@ -78,7 +81,7 @@ function main()
     savename =
         "results/data/c1c_n=$(max_together)_rs=$(rs)_" *
         "beta_ef=$(beta)_lambda=$(mass2)_" *
-        "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)"
+        "neval=$(neval34)_$(intn_str)$(solver)_$(ct_string)"
     settings, param, kgrid, partitions, res = jldopen("$savename.jld2", "a+") do f
         key = "$(UEG.short(plotparam))"
         return f[key]
@@ -134,7 +137,8 @@ function main()
     c1c_bare_quad = sosem_lo.get("bare_c") / eTF_lo^2
 
     # Interpolate bare results and downsample to coarse k_kf_grid
-    c1c_bare_interp = linear_interpolation(k_kf_grid_quad, c1c_bare_quad)
+    c1c_bare_interp =
+        linear_interpolation(k_kf_grid_quad, c1c_bare_quad; extrapolation_bc=Line())
     c1c2_exact = c1c_bare_interp(k_kf_grid)
 
     if min_order_plot == 2
@@ -199,15 +203,11 @@ function main()
 
     # Plot the results
     fig, ax = plt.subplots()
-
-    ax.plot(
-        k_kf_grid_quad,
-        c1c_bare_quad,
-        "k";
-        label="LO (quad)",
-        # label="\$LO = \\mathrm{RPA}+\\mathrm{FL}\$ (quad)",
-    )
-    # No additional RPA+FL results for class (c) moment!
+    
+    if min_order_plot == 2
+        # Plot the bare (LO) result; there are no RPA(+FL) corrections for the class (c) moment
+        ax.plot(k_kf_grid_quad, c1c_bare_quad, "C0"; label="\$N=2\$ (quad)")
+    end
 
     if save
         savename =
@@ -216,18 +216,17 @@ function main()
         f = jldopen("$savename.jld2", "a+")
         # NOTE: no bare result for c1b observable (accounted for in c1b0)
         for N in min_order_plot:max_order
+            num_eval = N == 5 ? neval5 : neval34
             if haskey(f, "c1c") &&
                haskey(f["c1c"], "N=$N") &&
-               haskey(f["c1c/N=$N"], "neval=$(neval)")
-                @warn("replacing existing data for N=$N, neval=$(neval)")
-                delete!(f["c1c/N=$N"], "neval=$(neval)")
+               haskey(f["c1c/N=$N"], "neval=$(num_eval)")
+                @warn("replacing existing data for N=$N, neval=$(num_eval)")
+                delete!(f["c1c/N=$N"], "neval=$(num_eval)")
             end
-            # NOTE: Since C⁽¹ᵇ⁾ᴸ = C⁽¹ᵇ⁾ᴿ for the UEG, the
-            #       full class (b) moment is C⁽¹ᵇ⁾ = 2C⁽¹ᵇ⁾ᴸ.
-            f["c1c/N=$N/neval=$neval/meas"] = c1c_total[N]
-            f["c1c/N=$N/neval=$neval/settings"] = settings
-            f["c1c/N=$N/neval=$neval/param"] = param
-            f["c1c/N=$N/neval=$neval/kgrid"] = kgrid
+            f["c1c/N=$N/neval=$num_eval/meas"] = c1c_total[N]
+            f["c1c/N=$N/neval=$num_eval/settings"] = settings
+            f["c1c/N=$N/neval=$num_eval/param"] = param
+            f["c1c/N=$N/neval=$num_eval/kgrid"] = kgrid
         end
     end
 
@@ -240,8 +239,8 @@ function main()
         stdevs = Measurements.uncertainty.(c1c_total[N])
         # Data gets noisy above 3rd loop order
         # marker = "o-"
-        marker = "-"
-        # marker = N > 3 ? "o-" : "-"
+        # marker = "-"
+        marker = N ≥ 3 ? "o-" : "-"
         ax.plot(
             k_over_kfs,
             means,
