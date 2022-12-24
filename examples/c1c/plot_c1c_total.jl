@@ -22,16 +22,19 @@ function main()
 
     rs = 1.0
     beta = 40.0
-    mass2 = 4.0
+    mass2 = 2.0
     solver = :vegasmc
     expand_bare_interactions = false
 
-    neval = 5e10
+    neval34 = 5e10
+    neval5 = 1e9
+    neval = min(neval34, neval5)
     min_order = 3
-    max_order = 4
+    max_order = 5
     min_order_plot = 2
-    max_order_plot = 4
-
+    max_order_plot = 5
+    @assert max_order ≥ 3
+    
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
     renorm_lambda = true
@@ -69,21 +72,45 @@ function main()
     # colors = ["orchid", "cornflowerblue", "turquoise", "chartreuse", "greenyellow"]
     # markers = ["-", "-", "-", "-", "-"]
 
-    # Load the results from JLD2 (and μ data from csv, if applicable)
+    # Load the order 3-4 results from JLD2 (and μ data from csv, if applicable)
+    if max_order == 5
+        max_together = 4
+    else
+        max_together = max_order
+    end
     savename =
-        "results/data/c1c_n=$(max_order)_rs=$(rs)_" *
+        "results/data/c1c_n=$(max_together)_rs=$(rs)_" *
         "beta_ef=$(beta)_lambda=$(mass2)_" *
-        "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)"
+        "neval=$(neval34)_$(intn_str)$(solver)_$(ct_string)"
     settings, param, kgrid, partitions, res = jldopen("$savename.jld2", "a+") do f
         key = "$(UEG.short(plotparam))"
         return f[key]
     end
 
+    # Load the fixed order 5 result from JLD2
+    local kgrid5, res5, partitions5
+    if max_order == 5
+        savename5 =
+            "results/data/c1c_n=$(max_order)_rs=$(rs)_" *
+            "beta_ef=$(beta)_lambda=$(mass2)_" *
+            "neval=$(neval5)_$(intn_str)$(solver)_$(ct_string)"
+        settings5, param5, kgrid5, partitions5, res5 = jldopen("$savename5.jld2", "a+") do f
+            key = "$(UEG.short(plotparam))"
+            return f[key]
+        end
+    end
+
     # Get dimensionless k-grid (k / kF)
     k_kf_grid = kgrid / param.kF
+    k_kf_grid5 = kgrid5 / param.kF
 
     # Convert results to a Dict of measurements at each order with interaction counterterms merged
     data = UEG_MC.restodict(res, partitions)
+    # Add 5th order results to data dict
+    if max_order == 5
+        data5 = UEG_MC.restodict(res5, partitions5)
+        merge!(data, data5)
+    end
     merged_data = CounterTerm.mergeInteraction(data)
     println([k for (k, _) in merged_data])
 
@@ -110,7 +137,8 @@ function main()
     c1c_bare_quad = sosem_lo.get("bare_c") / eTF_lo^2
 
     # Interpolate bare results and downsample to coarse k_kf_grid
-    c1c_bare_interp = linear_interpolation(k_kf_grid_quad, c1c_bare_quad)
+    c1c_bare_interp =
+        linear_interpolation(k_kf_grid_quad, c1c_bare_quad; extrapolation_bc=Line())
     c1c2_exact = c1c_bare_interp(k_kf_grid)
 
     if min_order_plot == 2
@@ -175,15 +203,11 @@ function main()
 
     # Plot the results
     fig, ax = plt.subplots()
-
-    ax.plot(
-        k_kf_grid_quad,
-        c1c_bare_quad,
-        "k";
-        label="LO (quad)",
-        # label="\$LO = \\mathrm{RPA}+\\mathrm{FL}\$ (quad)",
-    )
-    # No additional RPA+FL results for class (c) moment!
+    
+    if min_order_plot == 2
+        # Plot the bare (LO) result; there are no RPA(+FL) corrections for the class (c) moment
+        ax.plot(k_kf_grid_quad, c1c_bare_quad, "C0"; label="\$N=2\$ (quad)")
+    end
 
     if save
         savename =
@@ -192,42 +216,46 @@ function main()
         f = jldopen("$savename.jld2", "a+")
         # NOTE: no bare result for c1b observable (accounted for in c1b0)
         for N in min_order_plot:max_order
+            num_eval = N == 5 ? neval5 : neval34
             if haskey(f, "c1c") &&
                haskey(f["c1c"], "N=$N") &&
-               haskey(f["c1c/N=$N"], "neval=$(neval)")
-                @warn("replacing existing data for N=$N, neval=$(neval)")
-                delete!(f["c1c/N=$N"], "neval=$(neval)")
+               haskey(f["c1c/N=$N"], "neval=$(num_eval)")
+                @warn("replacing existing data for N=$N, neval=$(num_eval)")
+                delete!(f["c1c/N=$N"], "neval=$(num_eval)")
             end
-            # NOTE: Since C⁽¹ᵇ⁾ᴸ = C⁽¹ᵇ⁾ᴿ for the UEG, the
-            #       full class (b) moment is C⁽¹ᵇ⁾ = 2C⁽¹ᵇ⁾ᴸ.
-            f["c1c/N=$N/neval=$neval/meas"] = c1c_total[N]
-            f["c1c/N=$N/neval=$neval/settings"] = settings
-            f["c1c/N=$N/neval=$neval/param"] = param
-            f["c1c/N=$N/neval=$neval/kgrid"] = kgrid
+            f["c1c/N=$N/neval=$num_eval/meas"] = c1c_total[N]
+            f["c1c/N=$N/neval=$num_eval/settings"] = settings
+            f["c1c/N=$N/neval=$num_eval/param"] = param
+            f["c1c/N=$N/neval=$num_eval/kgrid"] = kgrid
         end
     end
 
     # Plot for each aggregate order
-    for (i, N) in enumerate(min_order_plot:max_order_plot)
+    for (i, N) in enumerate(min_order:max_order_plot)
+        # if N == 2
+        #     continue
+        # end
+        # NOTE: Currently using a different kgrid at order 5
+        k_over_kfs = N == 5 ? k_kf_grid5 : k_kf_grid
         # Get means and error bars from the result up to this order
         means = Measurements.value.(c1c_total[N])
         stdevs = Measurements.uncertainty.(c1c_total[N])
         # Data gets noisy above 3rd loop order
         # marker = "o-"
-        marker = "-"
-        # marker = N > 3 ? "o-" : "-"
+        # marker = "-"
+        marker = N ≥ 3 ? "o-" : "-"
         ax.plot(
-            k_kf_grid,
+            k_over_kfs,
             means,
             marker;
             markersize=2,
             color="C$i",
             label="\$N=$N\$ ($solver)",
         )
-        ax.fill_between(k_kf_grid, means - stdevs, means + stdevs; color="C$i", alpha=0.4)
+        ax.fill_between(k_over_kfs, means - stdevs, means + stdevs; color="C$i", alpha=0.4)
         if !renorm_mu_lo_ex && max_order <= 3 && N == 3
             ax.plot(
-                k_kf_grid,
+                k_over_kfs,
                 Measurements.value.(c1c3_manual);
                 color="r",
                 linestyle="--",
