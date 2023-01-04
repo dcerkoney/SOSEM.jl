@@ -16,19 +16,19 @@ using ..UEG_MC: @todo
 #       Depending on whether an observable involves the left/right discontinuity side,
 #       the outgoing external time nt - 1 / nt is mapped to 2/3, respectively.
 #       Argument `extT_index` should be either 2 or 3.
-@inline function remap_extT(taupair::Tuple{Int,Int}, extTout::Int, extTout_index::Int)
+@inline function remap_extT(taupair::Tuple{Int,Int}, extT_out::Int, extT_out_index::Int)
     t1, t2 = taupair[1], taupair[2]
     # Swap t1
-    if t1 == extTout_index
-        t1 = extTout
-    elseif t1 == extTout
-        t1 = extTout_index
+    if t1 == extT_out_index
+        t1 = extT_out
+    elseif t1 == extT_out
+        t1 = extT_out_index
     end
     # Swap t2
-    if t2 == extTout_index
-        t2 = extTout
-    elseif t2 == extTout
-        t2 = extTout_index
+    if t2 == extT_out_index
+        t2 = extT_out
+    elseif t2 == extT_out
+        t2 = extT_out_index
     end
     return (t1, t2)
 end
@@ -42,13 +42,13 @@ end
 
 """Evaluate a bare Green's function line."""
 function eval(id::BareGreenId, K, _, varT, additional::Tuple{ParaMC,W,Int}) where {W}
-    p, extT, extTout_index = additional
+    p, extT, extT_out_index = additional
     β, me, μ, massratio = p.β, p.me, p.μ, p.massratio
 
     # HACK: Swap outgoing times into correct indices (cost: ~ 1 ns): 
     #        • extT[2] ↦ 2, 2 ↦ extT[2]
     #        • extT[3] ↦ 3, 3 ↦ extT[3]
-    remapped_taupair = remap_extT(id.extT, extT[2], extTout_index)
+    remapped_taupair = remap_extT(id.extT, extT[2], extT_out_index)
     τin, τout = varT[remapped_taupair[1]], varT[remapped_taupair[2]]
     @debug "Remapped propagator time indices: $(id.extT) ↦ $remapped_taupair" maxlog = 1
     # τin, τout = varT[id.extT[1]], varT[id.extT[2]]
