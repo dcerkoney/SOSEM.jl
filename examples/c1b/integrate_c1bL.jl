@@ -34,30 +34,28 @@ function main()
         # interaction=[FeynmanDiagram.Interaction(ChargeCharge, Dynamic)],  # TODO: test RPA-type interaction
     )
 
-    # TODO: Implement min/max DiagGen orders. Add a method to select hard-coded
-    #       partitions and update the JLD2 data of a single partition accordingly.
-
     # UEG parameters for MC integration
     param =
         ParaMC(; order=settings.max_order, rs=1.0, beta=40.0, mass2=2.0, isDynamic=false)
     @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)"
 
     # K-mesh for measurement
-    minK = 0.2 * param.kF
-    Nk, korder = 4, 7
-    kgrid =
-        CompositeGrid.LogDensedGrid(
-            :uniform,
-            [0.0, 3 * param.kF],
-            [param.kF],
-            Nk,
-            minK,
-            korder,
-        ).grid
+    kgrid = [0.0]
+    # minK = 0.2 * param.kF
+    # Nk, korder = 4, 7
+    # kgrid =
+    #     CompositeGrid.LogDensedGrid(
+    #         :uniform,
+    #         [0.0, 3 * param.kF],
+    #         [param.kF],
+    #         Nk,
+    #         minK,
+    #         korder,
+    #     ).grid
 
     # Settings
     alpha = 3.0
-    print = 3600
+    print = 0
     solver = :vegasmc
 
     # Number of evals below and above kF
