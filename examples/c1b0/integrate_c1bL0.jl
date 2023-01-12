@@ -5,10 +5,6 @@ using FeynmanDiagram
 using JLD2
 using Measurements
 using SOSEM
-using PyCall
-
-# For saving/loading numpy data
-@pyimport numpy as np
 
 function main()
     # Change to project directory
