@@ -14,7 +14,7 @@ using LinearAlgebra
 using MCIntegration
 using Measurements
 using ..Parameters
-using ..SOSEM: @todo, DiagramF64, ExprTreeF64, PartitionType, MergedPartitionType
+using ..SOSEM: @todo, alleq, DiagramF64, ExprTreeF64, PartitionType, MergedPartitionType
 
 # Convenience typedefs for measurement data
 const MeasType = Dict{PartitionType,Vector{Measurement}}

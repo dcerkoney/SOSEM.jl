@@ -25,8 +25,8 @@ function main()
 
     settings = DiagGen.Settings(;
         observable=DiagGen.c1bL0,
-        min_order=5,  # TODO: special-purpose integrator for (2,0,0) partition
-        max_order=5,
+        min_order=3,  # TODO: special-purpose integrator for (2,0,0) partition
+        max_order=4,
         verbosity=DiagGen.quiet,
         expand_bare_interactions=false,
         filter=[NoHartree],
@@ -44,26 +44,26 @@ function main()
     @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)"
 
     # K-mesh for measurement
-    minK = 0.2 * param.kF
-    Nk, korder = 4, 7
-    kgrid =
-        CompositeGrid.LogDensedGrid(
-            :uniform,
-            [0.0, 3 * param.kF],
-            [param.kF],
-            Nk,
-            minK,
-            korder,
-        ).grid
-    k_kf_grid = kgrid / param.kF
+    kgrid = [0.0]
+    # minK = 0.2 * param.kF
+    # Nk, korder = 4, 7
+    # kgrid =
+    #     CompositeGrid.LogDensedGrid(
+    #         :uniform,
+    #         [0.0, 3 * param.kF],
+    #         [param.kF],
+    #         Nk,
+    #         minK,
+    #         korder,
+    #     ).grid
 
     # Settings
     alpha = 3.0
-    print = 3600
+    print = 0
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 2e10
+    neval = 5e10
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
