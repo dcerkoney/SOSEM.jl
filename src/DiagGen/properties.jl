@@ -45,7 +45,7 @@ const bare_observable_to_exact_k0 = Dict(
 )
 
 """Composite of observables for different second-order moment (SOSEM) measurements."""
-@with_kw struct CompositeObservable
+struct CompositeObservable
     name::String
     factors::Vector{Int}                # Multiplicative factor(s)
     exact_unif::Union{Nothing,Float64}  # Exact uniform (k = 0) value, if available
@@ -53,12 +53,7 @@ const bare_observable_to_exact_k0 = Dict(
 end
 function CompositeObservable(observables; factors=ones(size(observables)), name="")
     exact_unif = sum(get_exact_k0.(observables))
-    return CompositeObservable(;
-        name=name,
-        factors=factors,
-        exact_unif=exact_unif,
-        observables=observables,
-    )
+    return CompositeObservable(name, factors, exact_unif, observables)
 end
 
 # Total class (b) contribution (with/without vertex corrections):  C⁽¹ᵇ⁰⁾ᴸ + C⁽¹ᵇ⁾ᴸ + (L -> R)
