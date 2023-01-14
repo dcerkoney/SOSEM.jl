@@ -24,9 +24,11 @@ function main()
     beta = 40.0
     neval = 1e10
     # lambdas = [0.5, 1.0, 1.5, 2.0, 3.0]
-    lambdas = [3.0]
+    lambdas = [1.0, 3.0]
     solver = :vegasmc
     expand_bare_interactions = false
+
+    plot_rpa = false
 
     min_order = 3
     max_order = 4
@@ -88,43 +90,53 @@ function main()
     # Plot the results for each order ξ vs lambda and compare to RPA(+FL)
     fig, ax = plt.subplots()
     if min_order_plot == 2
+        if plot_rpa
+            ax.plot(
+                lambdas,
+                c1nl_rpa_means,
+                "o--";
+                color="k",
+                markersize=2,
+                label="RPA (vegas)",
+            )
+            ax.fill_between(
+                lambdas,
+                (c1nl_rpa_means - c1nl_rpa_stdevs),
+                (c1nl_rpa_means + c1nl_rpa_stdevs);
+                color="k",
+                alpha=0.3,
+            )
+            ax.plot(
+                lambdas,
+                c1nl_rpa_fl_means,
+                "o-";
+                color="k",
+                markersize=2,
+                label="RPA\$+\$FL (vegas)",
+            )
+            ax.fill_between(
+                lambdas,
+                (c1nl_rpa_fl_means - c1nl_rpa_fl_stdevs),
+                (c1nl_rpa_fl_means + c1nl_rpa_fl_stdevs);
+                color="r",
+                alpha=0.3,
+            )
+        end
+        # ax.plot(
+        #     lambdas,
+        #     c1nl_los,
+        #     "o-";
+        #     color="C0",
+        #     markersize=2,
+        #     label="\$N=2\$ (quad, \$T = 0\$)",
+        # )
         ax.plot(
             lambdas,
-            c1nl_rpa_means,
-            "o--";
-            color="k",
-            markersize=2,
-            label="RPA (vegas)",
-        )
-        ax.fill_between(
-            lambdas,
-            (c1nl_rpa_means - c1nl_rpa_stdevs),
-            (c1nl_rpa_means + c1nl_rpa_stdevs);
-            color="k",
-            alpha=0.3,
-        )
-        ax.plot(
-            lambdas,
-            c1nl_rpa_fl_means,
-            "o-";
-            color="k",
-            markersize=2,
-            label="RPA\$+\$FL (vegas)",
-        )
-        ax.fill_between(
-            lambdas,
-            (c1nl_rpa_fl_means - c1nl_rpa_fl_stdevs),
-            (c1nl_rpa_fl_means + c1nl_rpa_fl_stdevs);
-            color="r",
-            alpha=0.3,
-        )
-        ax.plot(
-            lambdas,
-            c1nl_los,
+            -0.5 * one.(lambdas),
             "o-";
             color="C0",
             markersize=2,
-            label="\$N=2\$ (quad, \$T = 0\$)",
+            label="\$N=2\$ (exact \$T = 0\$)",
         )
     end
     for (i, N) in enumerate(min_order:max_order_plot)
@@ -137,9 +149,12 @@ function main()
             @assert this_kgrid == [0.0]
             c1nl_N_total =
                 f["c1b0/N=$(N)_unif/neval=$neval/meas"] +
-                f["c1b/N=$(N)_unif/neval=$neval/meas"] +
                 f["c1c/N=$(N)_unif/neval=$neval/meas"] +
                 f["c1d/N=$(N)_unif/neval=$neval/meas"]
+            # The c1b observable has no data for N = 2
+            if N > 2
+                c1nl_N_total += f["c1b/N=$(N)_unif/neval=$neval/meas"]
+            end
             close(f)  # close file
             @assert length(c1nl_N_total) == 1
 
@@ -167,11 +182,11 @@ function main()
     ax.legend(; loc="best")
     ax.set_xlabel("\$\\lambda\$ (Ry)")
     ax.set_ylabel(
-        "\$C^{(1)nl}(k=0\\, \\lambda) \\,/\\, {\\epsilon}^{\\hspace{0.1em}2}_{\\mathrm{TF}}\$",
+        "\$C^{(1)nl}(k=0,\\, \\lambda) \\,/\\, {\\epsilon}^{\\hspace{0.1em}2}_{\\mathrm{TF}}\$",
     )
-    xloc = 2.87
-    yloc = -0.65
-    ydiv = -0.025
+    xloc = 1.07
+    yloc = -0.51
+    ydiv = -0.01
     # xloc = 1.7
     # yloc = -0.5
     # ydiv = -0.05

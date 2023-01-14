@@ -193,7 +193,7 @@ function main()
     solver = :vegasmc
 
     # lambdas = [0.5, 1.0, 1.5, 2.0, 3.0]
-    lambdas = [3.0]
+    lambdas = [1.0, 3.0]
 
     max_order = 4
     @assert max_order ≥ 3
