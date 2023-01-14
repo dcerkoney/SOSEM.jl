@@ -124,6 +124,26 @@ function main()
             return f[key] = (settings, param, kgrid, partitions, res)
         end
     end
+
+    # Save to JLD2 on main thread using new format
+    if !isnothing(res)
+        savename =
+            "results/data/rs=$(param.rs)_beta_ef=$(param.beta)_" *
+            "lambda=$(param.mass2)_$(intn_str)$(solver)_$(ct_string)"
+        jldopen("$savename.jld2", "a+") do f
+            key = "c1bL0_n_min=$(settings.min_order)_n_max=$(settings.max_order)_neval=$(neval)"
+            if haskey(f, key)
+                @warn("replacing existing data for $key")
+                delete!(f, key)
+            end
+            f["$key/res"] = res
+            f["$key/settings"] = settings
+            f["$key/param"] = param
+            f["$key/kgrid"] = kgrid
+            f["$key/partitions"] = partitions
+            return
+        end
+    end
 end
 
 main()
