@@ -12,8 +12,8 @@ function integrate_nonlocal_with_ct(
     # Get necessary DiagGen properties from settings (the observable sign and
     # discontinuity side are the same ∀ partitions, but extT depend on n_loop!)
     dummy_cfg = Config(settings)
-    discont_side, extT_sign, extT_index =
-        dummy_cfg.discont_side, dummy_cfg.extT_sign, dummy_cfg.extT_index
+    discont_side, Tout_sign, Tout_index =
+        dummy_cfg.discont_side, dummy_cfg.Tout_sign, dummy_cfg.Tout_index
 
     # We assume that each partition expression tree has a single root
     @assert all(length(et.root) == 1 for et in exprtrees)
@@ -25,12 +25,12 @@ function integrate_nonlocal_with_ct(
 
     # Get tree-dependent outgoing external time values/indices directly from expression trees
     extTs = [exprtrees[i].node.object[r].para.extT for (i, r) in enumerate(roots)]
-    extT_index = settings.observable == DiagGen.c1c ? 3 : 2
+    Tout_index = settings.observable == DiagGen.c1c ? 3 : 2
 
     @debug "Observable: \n$(settings.observable)"
     @debug "Discontinuity side: $discont_side"
-    @debug "sgn(τout = ±δ) = $extT_sign"
-    @debug "τout map index = $extT_index"
+    @debug "sgn(τout = ±δ) = $Tout_sign"
+    @debug "τout map index = $Tout_index"
 
     # Grid size
     n_kgrid = length(kgrid)
@@ -70,7 +70,7 @@ function integrate_nonlocal_with_ct(
     @debug "External time indices = $extTs"
     @debug "External times = $(T.data[[1,2]])"
     @debug begin
-        extT_maps = [(extT_index, extT[2]) => (extT[2], extT_index) for extT in extTs]
+        extT_maps = [(Tout_index, extT[2]) => (extT[2], Tout_index) for extT in extTs]
         "Remapping $extT_maps in G evals"
     end
 
@@ -88,7 +88,7 @@ function integrate_nonlocal_with_ct(
             innerLoopNums,
             prefactors,
             extTs,
-            extT_index,
+            Tout_index,
             varK,
             kgrid,
         ),
@@ -191,12 +191,12 @@ function integrate_nonlocal(
     innerLoopNum = diagparam.innerLoopNum
 
     # Pass external time index to integrand
-    extT_sign = cfg.extT_sign
-    extT_index = cfg.extT_index
+    Tout_sign = cfg.Tout_sign
+    Tout_index = cfg.Tout_index
 
     @debug "Discontinuity side: $(cfg.discont_side)"
-    @debug "sgn(τout = ±δ) = $extT_sign"
-    @debug "τout map index = $extT_index"
+    @debug "sgn(τout = ±δ) = $Tout_sign"
+    @debug "τout map index = $Tout_index"
 
     # Grid size
     n_kgrid = length(kgrid)
@@ -233,7 +233,7 @@ function integrate_nonlocal(
 
     @debug "External time indices = $(cfg.extT)"
     @debug "External times = $(T.data[[1,2]])"
-    @debug "Remapping $((extT_index, extT[2]) => (extT[2], extT_index)) in G eval"
+    @debug "Remapping $((Tout_index, extT[2]) => (extT[2], Tout_index)) in G eval"
 
     return integrate(
         integrand_single;
@@ -248,7 +248,7 @@ function integrate_nonlocal(
             [innerLoopNum],
             [prefactor],
             [cfg.extT],
-            cfg.extT_index,
+            cfg.Tout_index,
             varK,
             kgrid,
         ),

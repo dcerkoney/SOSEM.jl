@@ -77,8 +77,8 @@ Configuration bundling physical properties and fixed variables for a Σ₂[G, V,
     discont_side::DiscontSide
     obs_sign::Int
     # Sign and variable pool index of the outgoing external time
-    extT_sign::Int
-    extT_index::Int  # either 2 or 3, depending on extT_sign
+    Tout_sign::Int
+    Tout_index::Int  # either 2 or 3, depending on Tout_sign
     # External time indices
     extT::Tuple{Int,Int}
     # A generic ID for intermediate diagram construction steps
@@ -156,8 +156,8 @@ function _Config(settings::Settings, n_loop, g_names, v_names)
     # Discontinuity side and sign for this observable
     discont_side = _get_discont_side(settings.observable)
     obs_sign     = _get_obs_sign(settings.observable)
-    extT_sign    = _get_extT_sign(discont_side)
-    extT_index   = extT_sign == -1 ? 2 : 3  # 2 for 0⁻, and 3 for 0⁺
+    Tout_sign    = _get_Tout_sign(discont_side)
+    Tout_index   = Tout_sign == -1 ? 2 : 3  # 2 for 0⁻, and 3 for 0⁺
 
     # Bundle data for each line/vertex object
     g_data = GData(g_names, g_taus, g_ks, indices_g, indices_g_dash)
@@ -187,8 +187,8 @@ function _Config(settings::Settings, n_loop, g_names, v_names)
         V=v_data,
         discont_side=discont_side,
         obs_sign=obs_sign,
-        extT_sign=extT_sign,
-        extT_index=extT_index,
+        Tout_sign=Tout_sign,
+        Tout_index=Tout_index,
         extT=extT,
         generic_id=generic_id,
     )
@@ -264,8 +264,8 @@ function _Config(settings::Settings, n_loop, g_names, v_names, gamma3_name)
     # Discontinuity side and sign for this observable
     discont_side = _get_discont_side(settings.observable)
     obs_sign     = _get_obs_sign(settings.observable)
-    extT_sign    = _get_extT_sign(discont_side)
-    extT_index   = extT_sign == -1 ? 2 : 3  # 2 for 0⁻, and 3 for 0⁺
+    Tout_sign    = _get_Tout_sign(discont_side)
+    Tout_index   = Tout_sign == -1 ? 2 : 3  # 2 for 0⁻, and 3 for 0⁺
 
     # Bundle data for each line/vertex object
     g_data      = GData(g_names, g_taus, g_ks, indices_g, indices_g_dash)
@@ -298,8 +298,8 @@ function _Config(settings::Settings, n_loop, g_names, v_names, gamma3_name)
         Gamma3=gamma3_data,
         discont_side=discont_side,
         obs_sign=obs_sign,
-        extT_sign=extT_sign,
-        extT_index=extT_index,
+        Tout_sign=Tout_sign,
+        Tout_index=Tout_index,
         extT=extT,
         generic_id=generic_id,
     )

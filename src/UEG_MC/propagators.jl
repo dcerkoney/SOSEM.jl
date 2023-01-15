@@ -15,7 +15,7 @@ using ..UEG_MC: @todo
 #       in order to measure different observables & partitions simultaneously.
 #       Depending on whether an observable involves the left/right discontinuity side,
 #       the outgoing external time nt - 1 / nt is mapped to 2/3, respectively.
-#       Argument `extT_index` should be either 2 or 3.
+#       Argument `Tout_index` should be either 2 or 3.
 @inline function remap_extT(taupair::Tuple{Int,Int}, extT_out::Int, extT_out_index::Int)
     t1, t2 = taupair[1], taupair[2]
     # Swap t1
@@ -102,7 +102,7 @@ end
 
 """Evaluate a statically screened Coulomb interaction line."""
 function eval(id::BareInteractionId, K, _, varT, additional::Tuple{ParaMC,W,Int}) where {W}
-    # additional = (mcparam, extT, extT_index)
+    # additional = (mcparam, extT, Tout_index)
     p = additional[1]
 
     # TODO: Implement check for bare interaction using: is_bare = (order[end] = 1)
