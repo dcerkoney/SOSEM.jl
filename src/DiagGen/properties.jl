@@ -125,6 +125,28 @@ const observable_to_dash_indices = Dict(
     c1c     => [2],
     c1d     => [1, 3],
 )
+const observable_to_discont_side = Dict(
+    sigma20 => both,
+    sigma2  => both,
+    c1a     => positive,
+    c1bL0   => positive,
+    c1bR0   => positive,
+    c1bL    => positive,
+    c1bR    => positive,
+    c1c     => negative,
+    c1d     => positive,
+)
+const observable_to_obs_sign = Dict(
+    sigma20 => 0,  # Direct measurement not yet implemented
+    sigma2  => 0,  # Direct measurement not yet implemented
+    c1a     => 1,
+    c1bL0   => 1,
+    c1bR0   => 1,
+    c1bL    => 1,
+    c1bR    => 1,
+    c1c     => -1,
+    c1d     => 1,  # Since (Θ₋₁(τ))² = Θ(-τ)
+)
 const observable_to_name = Dict(
     sigma20 => "sigma20",
     sigma2  => "sigma2",
