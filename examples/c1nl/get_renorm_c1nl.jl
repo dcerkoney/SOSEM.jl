@@ -167,7 +167,7 @@ function renorm_measurement(
             end
             # NOTE: Since C⁽¹ᵇ⁾ᴸ = C⁽¹ᵇ⁾ᴿ for the UEG, the
             #       full class (b) moment is C⁽¹ᵇ⁾ = 2C⁽¹ᵇ⁾ᴸ.
-            meas = class == "c1bL0" ? 2 * c1class_total[N] : c1class_total[N]
+            meas = class in ["c1bL0", "c1bL"] ? 2 * c1class_total[N] : c1class_total[N]
             f["$class_savename/N=$(N)_unif/neval=$neval/meas"] = meas
             f["$class_savename/N=$(N)_unif/neval=$neval/settings"] = settings
             f["$class_savename/N=$(N)_unif/neval=$neval/param"] = param
@@ -192,8 +192,8 @@ function main()
     neval = 1e10
     solver = :vegasmc
 
-    # lambdas = [0.5, 1.0, 1.5, 2.0, 3.0]
-    lambdas = [1.0, 3.0]
+    lambdas = [0.5, 1.0, 1.5, 2.0, 3.0]
+    # lambdas = [2.0]
 
     max_order = 4
     @assert max_order ≥ 3

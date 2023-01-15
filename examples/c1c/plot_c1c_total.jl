@@ -93,7 +93,7 @@ function main()
         savename5 =
             "results/data/c1c_n=$(max_order)_rs=$(rs)_" *
             "beta_ef=$(beta)_lambda=$(mass2)_" *
-            "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)"
+            "neval=$(neval5)_$(intn_str)$(solver)_$(ct_string)"
         settings5, param5, kgrid5, partitions5, res5 = jldopen("$savename5.jld2", "a+") do f
             key = "$(UEG.short(plotparam))"
             return f[key]
@@ -231,7 +231,10 @@ function main()
     end
 
     # Plot for each aggregate order
-    for (i, N) in enumerate(min_order_plot:max_order_plot)
+    for (i, N) in enumerate(min_order:max_order_plot)
+        # if N == 2
+        #     continue
+        # end
         # NOTE: Currently using a different kgrid at order 5
         k_over_kfs = N == 5 ? k_kf_grid5 : k_kf_grid
         # Get means and error bars from the result up to this order
