@@ -23,8 +23,8 @@ function main()
     rs = 1.0
     beta = 40.0
     neval = 1e10
-    # lambdas = [0.5, 1.0, 1.5, 2.0, 3.0]
-    lambdas = [1.0, 3.0]
+    lambdas = [0.5, 1.0, 1.5, 2.0, 3.0]
+    # lambdas = [1.0, 3.0]
     solver = :vegasmc
     expand_bare_interactions = false
 
@@ -96,7 +96,7 @@ function main()
                 c1nl_rpa_means,
                 "o--";
                 color="k",
-                markersize=2,
+                markersize=3,
                 label="RPA (vegas)",
             )
             ax.fill_between(
@@ -111,7 +111,7 @@ function main()
                 c1nl_rpa_fl_means,
                 "o-";
                 color="k",
-                markersize=2,
+                markersize=3,
                 label="RPA\$+\$FL (vegas)",
             )
             ax.fill_between(
@@ -127,33 +127,53 @@ function main()
         #     c1nl_los,
         #     "o-";
         #     color="C0",
-        #     markersize=2,
+        #     markersize=3,
         #     label="\$N=2\$ (quad, \$T = 0\$)",
         # )
         ax.plot(
             lambdas,
             -0.5 * one.(lambdas),
-            "o-";
+            "-";
             color="C0",
-            markersize=2,
-            label="\$N=2\$ (exact \$T = 0\$)",
+            markersize=3,
+            label="\$N=2\$ (exact, \$T = 0\$)",
         )
     end
     for (i, N) in enumerate(min_order:max_order_plot)
         c1nl_N_means = []
         c1nl_N_stdevs = []
         for (j, filename) in enumerate(filenames)
+            if j == 4
+                println("\nN = $N, lambda = $(lambdas[j]):")
+            end
             # Load the data for each observable
             f = jldopen("$filename.jld2", "r")
             this_kgrid = f["c1d/N=$(N)_unif/neval=$neval/kgrid"]
             @assert this_kgrid == [0.0]
+
+            r1 = f["c1b0/N=$(N)_unif/neval=$neval/meas"]
+            r2 = f["c1c/N=$(N)_unif/neval=$neval/meas"]
+            r3 = f["c1d/N=$(N)_unif/neval=$neval/meas"]
             c1nl_N_total =
                 f["c1b0/N=$(N)_unif/neval=$neval/meas"] +
                 f["c1c/N=$(N)_unif/neval=$neval/meas"] +
                 f["c1d/N=$(N)_unif/neval=$neval/meas"]
             # The c1b observable has no data for N = 2
             if N > 2
+                r4 = f["c1b/N=$(N)_unif/neval=$neval/meas"]
                 c1nl_N_total += f["c1b/N=$(N)_unif/neval=$neval/meas"]
+                if j == 4
+                    println(
+                        "c1b0_unif = $r1\nc1b_unif = $r4\nc1c_unif = $r2\nc1d_unif = $r3",
+                    )
+                end
+            else
+                if j == 4
+                    println("c1b0_unif = $r1\nc1c_unif = $r2\nc1d_unif = $r3")
+                end
+            end
+            if j == 4
+                println("c1nl_N_total = $c1nl_N_total")
             end
             close(f)  # close file
             @assert length(c1nl_N_total) == 1
@@ -167,7 +187,7 @@ function main()
             c1nl_N_means,
             "o-";
             color="C$i",
-            markersize=2,
+            markersize=3,
             label="\$N=$N\$ ($solver)",
         )
         ax.fill_between(
@@ -185,8 +205,8 @@ function main()
         "\$C^{(1)nl}(k=0,\\, \\lambda) \\,/\\, {\\epsilon}^{\\hspace{0.1em}2}_{\\mathrm{TF}}\$",
     )
     xloc = 1.07
-    yloc = -0.51
-    ydiv = -0.01
+    yloc = -0.54
+    ydiv = -0.025
     # xloc = 1.7
     # yloc = -0.5
     # ydiv = -0.05
