@@ -61,7 +61,7 @@ function delta_mu1(param::UEG.ParaMC)
     # Dimensionless Yukawa mass squared (lambda = λ / kF²)
     lambda = param.mass2 / param.kF^2
     # Dimensionless screened Lindhard function
-    F_x_lambda = UEG_MC.screened_lindhard(x; lambda=lambda)
+    F_x_lambda = screened_lindhard(x; lambda=lambda)
     # δμ₁ cancels the real part of the Fock self-energy
     # at the Fermi surface for a Yukawa-screened UEG.
     return -(param.e0^2 * param.kF / (2 * pi^2 * param.ϵ0)) * F_x_lambda
