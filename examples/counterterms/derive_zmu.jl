@@ -14,7 +14,7 @@ order = [3]  # C^{(1)}_{N≤5} includes CTs up to 3rd order
 # rs = LinRange(0.1, 2.0, 5)
 rs = [1.0]
 #mass2 = LinRange(1.0, 5.0, 5)
-mass2 = [0.5, 1.5]
+mass2 = [1.5]
 beta = [40.0]
 
 # Grid-search 2: rs, beta
