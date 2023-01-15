@@ -26,8 +26,7 @@ export Gamma3InsertionSide, left, right
 export DiscontSide, negative, positive, both
 export CompositeObservable, c1b_total, c1nl0, c1nl, c1b_total_ueg, c1nl0_ueg, c1nl_ueg
 export Observable, sigma20, sigma2, c1a, c1bL0, c1bR0, c1bL, c1bR, c1c, c1d
-export get_observables_in_composite,
-    get_observable_name, get_bare_string, get_exact_k0, getID, propagator_param
+export get_bare_string, get_exact_k0, getID, propagator_param
 
 include("common.jl")
 export Verbosity, quiet, info, verbose

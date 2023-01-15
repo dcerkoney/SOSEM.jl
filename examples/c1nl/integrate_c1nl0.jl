@@ -36,9 +36,9 @@ function main()
             filter=[NoHartree],
             interaction=[FeynmanDiagram.Interaction(ChargeCharge, Instant)],  # Yukawa-type interaction
             # interaction=[FeynmanDiagram.Interaction(ChargeCharge, Dynamic)],  # TODO: test RPA-type interaction
-        ) for obs in DiagGen.get_observables_in_composite(DiagGen.c1nl0)
+        ) for obs in DiagGen.c1nl0.observables
     ]
-    @assert DiagGen.get_observables_in_composite(DiagGen.c1nl0) ==
+    @assert DiagGen.c1nl0.observables ==
             [DiagGen.c1bL0, DiagGen.c1c, DiagGen.c1d]
 
     # UEG parameters for MC integration
