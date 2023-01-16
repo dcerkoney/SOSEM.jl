@@ -8,8 +8,8 @@ end
 
 settings = DiagGen.Settings(;
     observable=DiagGen.c1c,
-    min_order=2,
-    max_order=2,
+    min_order=6,
+    max_order=6,
     verbosity=DiagGen.info,
     expand_bare_interactions=false,
     filter=[NoHartree],
@@ -23,3 +23,5 @@ diagparam, som_c1c, som_c1c_compiled = DiagGen.build_nonlocal_fixed_order(settin
 # Check the diagram tree
 DiagGen.checktree(som_c1c, settings; plot=true, maxdepth=10)
 # DiagGen.checktree(som_c1c, settings)
+
+@assert som_c1c.factor == -1

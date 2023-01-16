@@ -34,7 +34,7 @@ function bare_integral_k0(;
 
     # Integrate the non-local moment
     res = UEG_MC.integrate_nonlocal(
-        settings,
+        # settings,
         param,
         diagparam,
         exprtree;
@@ -99,7 +99,7 @@ function bare_integral_k0_multipartition(;
 
     # Integrate the non-local moment
     res = UEG_MC.integrate_nonlocal_with_ct(
-        settings,
+        # settings,
         param,
         diagparams,
         exprtrees;
@@ -156,7 +156,7 @@ end
             @test_broken bare_integral_k0_multipartition(;
                 observable=DiagGen.c1bL0,
                 solver=solver,
-                mcprint=-2,
+                # mcprint=-2,
             )
         end
     end
@@ -165,7 +165,7 @@ end
             @test bare_integral_k0_multipartition(;
                 observable=DiagGen.c1c,
                 solver=solver,
-                mcprint=-2,
+                # mcprint=-2,
             )
         end
     end
@@ -174,7 +174,7 @@ end
             @test_broken bare_integral_k0_multipartition(;
                 observable=DiagGen.c1d,
                 solver=solver,
-                mcprint=-2,
+                # mcprint=-2,
             )
         end
     end

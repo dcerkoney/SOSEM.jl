@@ -78,7 +78,6 @@ Configuration bundling physical properties and fixed variables for a Σ₂[G, V,
     obs_sign::Int
     # Sign and variable pool index of the outgoing external time
     Tout_sign::Int
-    Tout_index::Int  # either 2 or 3, depending on Tout_sign
     # External time indices
     extT::Tuple{Int,Int}
     # A generic ID for intermediate diagram construction steps
@@ -121,8 +120,9 @@ function _Config(settings::Settings, n_loop, g_names, v_names)
 
     # Total size of the SOSEM loop basis dimension (= n_loop + n_v + 1)
     nk = param.totalLoopNum
-    # Biggest tau index (= n_loop + n_v)
-    nt = param.totalTauNum
+    # Biggest tau index (= n_loop + n_v, +1 for Tout switch)
+    # nt = param.totalTauNum
+    @assert param.totalTauNum == nk
 
     # Basis momenta for loops of Σ₂
     k  = DiagTree.getK(nk, 1)
@@ -132,16 +132,18 @@ function _Config(settings::Settings, n_loop, g_names, v_names)
     k2 = k1 + k3 - k
     q1 = k1 - k
     q2 = k3 - k
-    # By convention, the outgoing external time is τₒᵤₜ = nt - 1 (nt)
+
+    # By convention, the outgoing external time is τₒᵤₜ = 1 (2)
     # for observables with negative (positive) discontinuity side
-    Tout = _get_discont_side(settings.observable) == negative ? nt - 1 : nt
+    Tout = _get_discont_side(settings.observable) == negative ? 1 : 2
+
     # Propagator momenta/times
     g_ks   = (k1, k2, k3)
     v_ks   = (q1, q2)
-    g_taus = ((1, Tout), (Tout, 1), (1, Tout))
-    v_taus = ((1, 1), (Tout, Tout))
-    # External times
-    extT = (1, Tout)
+    g_taus = ((3, Tout), (Tout, 3), (3, Tout))
+    v_taus = ((3, 3), (Tout, Tout))
+    # External times (τᵢₙ, τₒᵤₜ) ∈ {(3, 1), (3, 2)}
+    extT = (3, Tout)
 
     # Optionally mark the two V lines as unscreened
     v_orders = [0, 0, 0, 0]
@@ -157,7 +159,6 @@ function _Config(settings::Settings, n_loop, g_names, v_names)
     discont_side = _get_discont_side(settings.observable)
     obs_sign     = _get_obs_sign(settings.observable)
     Tout_sign    = _get_Tout_sign(discont_side)
-    Tout_index   = Tout_sign == -1 ? 2 : 3  # 2 for 0⁻, and 3 for 0⁺
 
     # Bundle data for each line/vertex object
     g_data = GData(g_names, g_taus, g_ks, indices_g, indices_g_dash)
@@ -188,7 +189,6 @@ function _Config(settings::Settings, n_loop, g_names, v_names)
         discont_side=discont_side,
         obs_sign=obs_sign,
         Tout_sign=Tout_sign,
-        Tout_index=Tout_index,
         extT=extT,
         generic_id=generic_id,
     )
@@ -207,12 +207,13 @@ function _Config(settings::Settings, n_loop, g_names, v_names, gamma3_name)
     # Get diagram parameters
     param = _getparam(n_loop; filter=settings.filter, interaction=settings.interaction)
 
-    # Total size of the SOSEM loop basis dimension (= max_order + 1)
+    # Total size of the SOSEM loop basis dimension (= n_loop + n_v + 1)
     nk = param.totalLoopNum
-    # Biggest tau index
-    nt = param.totalTauNum
-
-    @debug "nk = $nk, nt = $(nt - 1) (plus one fake extT)"
+    # Biggest tau index (= n_loop + n_v, +1 for Tout switch)
+    # nt = param.totalTauNum
+    @assert param.totalTauNum == nk
+    
+    @debug "nk = $nk, nt = $(param.totalTauNum - 1) (plus one fake extT)"
 
     # Basis momenta for loops of Σ₂
     k  = DiagTree.getK(nk, 1)
@@ -230,24 +231,24 @@ function _Config(settings::Settings, n_loop, g_names, v_names, gamma3_name)
     # specifiable; they depend on whether the Γⁱ₃ insertion is to the left or the right of G₂.
     # Due to the convention of Parquet.vertex3, the bosonic and incoming fermionic times for
     # Γⁱ₃ and outgoing external time of Σ₂ must depend on the Γⁱ₃ insertion side.
-    local v_taus, g_taus, gamma3_ks, extT
+    local v_taus, g_taus, gamma3_ks, gamma3_taus, extT
     gamma3_side = _get_insertion_side(settings.observable)
-    # By convention, the outgoing external time is τₒᵤₜ = nt - 1 (nt)
+
+    # By convention, the outgoing external time is τₒᵤₜ = 1 (2)
     # for observables with negative (positive) discontinuity side
-    Tout = _get_discont_side(settings.observable) == negative ? nt - 1 : nt
+    Tout = _get_discont_side(settings.observable) == negative ? 1 : 2
+    @assert Tout == 2  # since c1c has no gamma insertions
+
     if gamma3_side == right  # c1bL
-        v_taus = ((1, 1), (Tout, Tout))
-        g_taus = ((1, Tout), (Tout, 2), (nothing, Tout))
+        v_taus = ((3, 3), (Tout, Tout))
+        g_taus = ((3, Tout), (Tout, 4), (nothing, Tout))
         gamma3_ks = (-q1, k2)
-        extT = (1, Tout)
-    else # gamma3_side == left  # c1bR
-        v_taus = ((Tout, Tout), (1, 1))
-        g_taus = ((Tout, 2), (nothing, Tout), (Tout, 1))
-        gamma3_ks = (q2, k1)
-        extT = (Tout, 1)
+        gamma3_taus = (3, 4, nothing) # (τᵢₙ, τ4, (*))
+        extT = (3, Tout)
+    else # gamma3_side == left
+        # Config for c1bR not yet implemented (requires τ-remapping after DiagGen)
+        @todo
     end
-    # Using the above conventions, the times for Γⁱ₃ are the same for both insertion sides
-    gamma3_taus = (1, 2, nothing)
 
     # Optionally mark the two V lines as unscreened
     v_orders = [0, 0, 0, 0]
@@ -258,14 +259,14 @@ function _Config(settings::Settings, n_loop, g_names, v_names, gamma3_name)
     # Indices of (dashed) G lines in the expansion order list
     indices_g = collect(1:n_g)
     indices_g_dash = _get_dash_indices(settings.observable)
-    # Γⁱ₃ is last in the expansion order list for convenience (although we expand it first)
+    
+    # Γⁱ₃ is last in the expansion order list by convention
     index_gamma3 = n_g + 1
 
     # Discontinuity side and sign for this observable
     discont_side = _get_discont_side(settings.observable)
     obs_sign     = _get_obs_sign(settings.observable)
     Tout_sign    = _get_Tout_sign(discont_side)
-    Tout_index   = Tout_sign == -1 ? 2 : 3  # 2 for 0⁻, and 3 for 0⁺
 
     # Bundle data for each line/vertex object
     g_data      = GData(g_names, g_taus, g_ks, indices_g, indices_g_dash)
@@ -299,7 +300,6 @@ function _Config(settings::Settings, n_loop, g_names, v_names, gamma3_name)
         discont_side=discont_side,
         obs_sign=obs_sign,
         Tout_sign=Tout_sign,
-        Tout_index=Tout_index,
         extT=extT,
         generic_id=generic_id,
     )

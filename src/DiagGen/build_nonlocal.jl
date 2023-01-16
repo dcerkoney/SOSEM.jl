@@ -15,46 +15,6 @@ function build_nonlocal_fixed_order(s::Settings)
 end
 
 """
-Construct diagram and expression trees for the full non-local second-order moment (SOSEM) diagram
-derived from Σ₂[G, V, Γⁱ₃ = Γ₀] (or Σ₂ itself) at O(Vⁿ) for a statically-screened interaction V[λ].
-"""
-function build_full_nonlocal_fixed_order(s_list::Vector{Settings})
-    @assert all(s.min_order == s.max_order for s in s_list)
-    DiagTree.uidreset()
-    # Build trees for each (atomic) observable; we can merge them all except for c1c
-    diagparams = DiagParaF64[]
-    diagtrees_rest = DiagramF64[]
-    extTs_rest = Tuple{Int,Int}[]
-    local diagtree_c1c
-    for (i, s) in enumerate(s_list)
-        sign = _get_obs_sign(s.observable)
-        diagparam, obstree = build_diagtree(s; factor=sign * c1nl_ueg.factors[i])
-        if s.observable == c1c
-            push!(diagparams, diagparam)
-            diagtree_c1c = obstree
-        else
-            push!(diagparams, diagparam)
-            push!(diagtrees_rest, obstree)
-            push!(extTs_rest, Config(s).extT)
-        end
-    end
-    # The external times and diagram parameters of all 
-    # observables must be equal to measure simultaneously;
-    # hence, we can combine all observables but c1c, which
-    # requires its own partition
-    @assert alleq(diagparams)
-    @assert alleq(extTs_rest)
-    # Sum trees for the 3 observables with positive discontinuity side
-    diagparam = diagparams[1]
-    diagtree_rest = DiagramF64(getID(diagparam), Sum(), diagtrees_rest; name=c1nl_ueg.name)
-    # Two diagram trees, one for each extT type
-    diagtrees = [diagtree_c1c, diagtree_rest]
-    # Build two-root expression trees (1) c1c (2) rest
-    exprtree = ExprTree.build([diagtree_c1c, diagtree_rest])
-    return diagparam, diagtrees, exprtree
-end
-
-"""
 Construct diagram and expression trees for a non-local second-order moment (SOSEM) diagram derived from 
 Σ₂[G, V, Γⁱ₃ = Γ₀] (or Σ₂ itself) between orders n_min and n_max in a statically-screened interaction V[λ].
 """
@@ -84,7 +44,7 @@ Construct a list of all expression trees for non-local second-order moment (SOSE
 Σ₂[G(μ), V(λ), Γⁱ₃ = Γ₀] (or Σ₂ itself) between orders n_min and n_max in ξ (loop + CT orders),
 including counterterms in μ and/or λ.
 """
-function build_nonlocal_with_ct(s::Settings; renorm_mu=false, renorm_lambda=true)
+function build_nonlocal_with_ct(s::Settings; renorm_mu=true, renorm_lambda=true)
     DiagTree.uidreset()
     valid_partitions = Vector{PartitionType}()
     diagparams = Vector{DiagParaF64}()
@@ -116,6 +76,52 @@ function build_nonlocal_with_ct(s::Settings; renorm_mu=false, renorm_lambda=true
     return valid_partitions, diagparams, diagtrees, exprtrees
 end
 
+######
+######
+
+"""
+Construct diagram and expression trees for the full non-local second-order moment (SOSEM) diagram
+derived from Σ₂[G, V, Γⁱ₃ = Γ₀] (or Σ₂ itself) at O(Vⁿ) for a statically-screened interaction V[λ].
+"""
+function build_full_nonlocal_fixed_order(s_list::Vector{Settings})
+    @assert all(s.min_order == s.max_order for s in s_list)
+    DiagTree.uidreset()
+    # Build trees for each (atomic) observable; we can merge them all except for c1c
+    diagparams = DiagParaF64[]
+    diagtrees_rest = DiagramF64[]
+    extTs_rest = Tuple{Int,Int}[]
+    local diagtree_c1c, id_rest
+    for (i, s) in enumerate(s_list)
+        # Add overall sign for this observable to diagram factor
+        sign = _get_obs_sign(s.observable)
+        diagparam, obstree = build_diagtree(s; factor=sign * c1nl_ueg.factors[i])
+        if s.observable == c1c
+            push!(diagparams, diagparam)
+            diagtree_c1c = obstree
+        else
+            push!(diagparams, diagparam)
+            push!(diagtrees_rest, obstree)
+            push!(extTs_rest, Config(s).extT)
+            id_rest = deepcopy(obstree.id)
+        end
+    end
+    # The external times and diagram parameters of all 
+    # observables must be equal to measure simultaneously;
+    # hence, we can combine all observables but c1c, which
+    # requires its own partition
+    @assert alleq(diagparams)
+    @assert alleq(extTs_rest)
+    # Sum trees for the 3 observables with positive discontinuity side
+    diagparam = diagparams[1]
+    diagtree_rest =
+        DiagramF64(id_rest, Sum(), diagtrees_rest; name="C⁽¹ᵇ⁰⁾ᴸ + C⁽¹ᵇ⁾ᴸ + C⁽¹ᵈ⁾")
+    # Two diagram trees, one for each extT type
+    diagtrees = [diagtree_c1c, diagtree_rest]
+    # Build two-root expression trees (1) c1c (2) rest
+    exprtree = ExprTree.build([diagtree_c1c, diagtree_rest])
+    return diagparam, diagtrees, exprtree
+end
+
 """
 Construct a list of all expression trees for the full non-local second-order moment (SOSEM)
 derived from Σ₂[G(μ), V(λ), Γⁱ₃ = Γ₀] (or Σ₂ itself) between orders n_min and n_max in ξ
@@ -140,7 +146,7 @@ function build_full_nonlocal_with_ct(
         partn_diagparams = DiagParaF64[]
         partn_diagtrees_rest = DiagramF64[]
         partn_extTs_rest = Vector{Int}[]
-        local partn_diagtree_c1c
+        local partn_diagtree_c1c, partn_id_rest
         for (i, s) in enumerate(s_list)
             sign = _get_obs_sign(s.observable)
             partn_diagparam, partn_obstree =
@@ -152,6 +158,7 @@ function build_full_nonlocal_with_ct(
                 push!(partn_diagparams, partn_diagparam)
                 push!(partn_diagtrees_rest, partn_obstree)
                 push!(partn_extTs_rest, Config(s).extT)
+                partn_id_rest = deepcopy(partn_obstree.id)
             end
         end
         # The external times and diagram parameters of all 
@@ -163,10 +170,10 @@ function build_full_nonlocal_with_ct(
         # Sum trees for the 3 observables with positive discontinuity side
         partn_diagparam = partn_diagparams[1]
         diagtree_rest = DiagramF64(
-            getID(partn_diagparam),
+            partn_id_rest,
             Sum(),
             partn_diagtrees_rest;
-            name=c1nl_ueg.name,
+            name="C⁽¹ᵇ⁰⁾ᴸ + C⁽¹ᵇ⁾ᴸ + C⁽¹ᵈ⁾",
         )
         # Diagtrees for c1c and rest for this partition
         partn_diagtrees = [diagtree_c1c, diagtree_rest]
@@ -192,6 +199,9 @@ function build_full_nonlocal_with_ct(
     return diagparams, diagtrees_list, exprtrees
 end
 
+######
+######
+
 """
 Generate a diagram tree for the one-crossing Σ₂[G, V, Γⁱ₃ = Γ₀] diagram
 (without dashed G-lines) to O(Vⁿ) for a statically-screened interaction V[λ].
@@ -208,6 +218,8 @@ function build_diagtree(s::Settings; n_loop::Int=s.max_order, factor=1.0)
     # Initialize DiagGen configuration containing diagram parameters, partition,
     # propagator and vertex momentum/time data, (expansion) order info, etc.
     cfg = Config(s, n_loop)
+    # We assume that Gamma3 is last in the expansion order list
+    cfg.has_gamma3 && @assert cfg.Gamma3.index == 4
 
     # The number of (possibly indistinct) diagram trees to generate is: 
     # ((n_expandable n_expand)) = binomial(n_expandable + n_expand - 1, n_expand)
@@ -232,10 +244,12 @@ function build_diagtree(s::Settings; n_loop::Int=s.max_order, factor=1.0)
     end
     vprintln(s, info, "Done! (discarded $(n_trees_naive - tree_count) invalid expansions)")
 
-    # Now construct the self-energy diagram tree and parameters
-    diagparam = cfg.param
-    diagtree = DiagramF64(getID(diagparam), Sum(), som_diags; factor=factor, name=s.name)
-    return diagparam, diagtree
+    # Now construct the SOSEM diagram tree and parameters
+    extK = DiagTree.getK(cfg.param.totalLoopNum, 1)
+    sosem_id = SigmaId(cfg.param, Dynamic; k=extK, t=cfg.extT)
+    diagtree = DiagramF64(sosem_id, Sum(), som_diags; factor=factor, name=s.name)
+    # diagtree = DiagramF64(getID(diagparam), Sum(), som_diags; factor=factor, name=s.name)
+    return cfg.param, diagtree
 end
 
 """Check if a (weak) composition of expansion orders is valid for a given observable/settings."""
@@ -262,34 +276,31 @@ Construct a second-order self-energy (moment) subdiagram with bare Γⁱ₃ inse
 D = (G₁ ∘ G₂ ∘ G₃ ∘ V₁ ∘ V₂)
 """
 function _build_subdiagram_gamma0(cfg::Config, expansion_orders::Vector{Int}; tree_count)
-    # The first available tau index for G(1,n) is 2 when n_expand > 0, 
-    # and FeynmanDiagram.firstTauIdx(Ver3Diag) = 3 otherwise
-    first_fti = cfg.n_expand > 0 ? 2 : FeynmanDiagram.firstTauIdx(Ver3Diag)
-    # The firstTauIdx for each G line depends on the expansion order of the previous G.
-    g_ftis, g_max_ti = Parquet.findFirstTauIdx(
-        expansion_orders,
-        repeat([GreenDiag], cfg.n_g),
-        first_fti,  # = 2 when n > 2, otherwise = 3
-        1,
-    )
+    # The first available tau index is 4 (times 1,2,3 are reserved for external)
+    diagtypes = repeat([GreenDiag], cfg.n_g)
+    first_fti = 4
+    interactionTauNum = 1
+
+    # The firstTauIdx for each subdiagram depends on the previous expansion order
+    ftis, max_ti =
+        Parquet.findFirstTauIdx(expansion_orders, diagtypes, first_fti, interactionTauNum)
+    @assert max_ti == cfg.param.totalTauNum
 
     # First loop indices for each Green's function
-    # NOTE: The default value for a self-energy observable is FeynmanDiagram.firstLoopIdx(SigmaDiag) = 2.
+    # NOTE: The default value for self-energies is FeynmanDiagram.firstLoopIdx(SigmaDiag) = 2.
     #       Here we add an offset of n_v = 2 due to the outer two bare interactions.
     first_fli = FeynmanDiagram.firstLoopIdx(SigmaDiag, cfg.n_v)
-    @assert first_fli == 4
-    g_flis, g_max_li = Parquet.findFirstLoopIdx(expansion_orders, first_fli)
+    @assert first_fli == 4  # k1, k2, k3 are already present in loop basis
+
+    # Get first loop indices
+    flis, max_li = Parquet.findFirstLoopIdx(expansion_orders, first_fli)
 
     @debug """
     \nSubtree #$(tree_count+1):
-        • Expansion orders:\t\t\t$expansion_orders
-        • First tau indices for G_i's:\t\t$g_ftis (maxTauIdx = $g_max_ti)
-        • First momentum loop indices for G_i's:\t$g_flis (maxLoopIdx = $g_max_li)
+        • Expansion orders (G₁, G₂, G₃):\t\t\t$expansion_orders
+        • First tau indices:\t\t$ftis (maxTauIdx = $max_ti)
+        • First momentum loop indices:\t$flis (maxLoopIdx = $max_li)
     """
-
-    # TODO: Add counterterms---for n[i] expansion order of line i, spend n_cti
-    #       orders on counterterm derivatives in all possible ways (0 < n_cti < n[i]).
-    #       E.g., if n[i] = 4, we have: ni_left, n_cti = weakintsplit(n[i])
 
     # Green's function and bare interaction params
     g_params = [
@@ -297,17 +308,16 @@ function _build_subdiagram_gamma0(cfg::Config, expansion_orders::Vector{Int}; tr
             cfg.param;
             type=GreenDiag,
             innerLoopNum=expansion_orders[i],
-            firstLoopIdx=g_flis[i],
-            firstTauIdx=g_ftis[i],
+            firstLoopIdx=flis[i],
+            firstTauIdx=ftis[i],
         ) for i in 1:(cfg.n_g)
     ]
-    # v_ftis = [taupair[1] for taupair in cfg.V.taus]
     v_params = [
         reconstruct(
             cfg.param;
             type=Ver4Diag,
             innerLoopNum=0,
-            firstLoopIdx=1,  # =0
+            firstLoopIdx=1,
             firstTauIdx=cfg.V.taus[i][1],
         ) for i in 1:(cfg.n_v)
     ]
@@ -350,79 +360,85 @@ For (1) left and (2) right Γⁱ₃ insertions, we have:
 (2) D = (G₁ ∘ G₂ ∘ V₁ ∘ V₂) ∘ (Γⁱ₃ ∘ G₃).
 """
 function _build_subdiagram_gamma(cfg::Config, expansion_orders::Vector{Int}; tree_count)
-    # The firstTauIdx for each expandable item depends on the expansion order of the previous item.
-    # We must expand and group by Γⁱ₃ subdiagram first, so it comes first in the expansion order list.
-    gamma3_fti = 1
+    # The first (bosonic) tau index for Gamma3 is 3 (times 1,2,3 are reserved for external)
+    diagtypes = [Ver3Diag; repeat([GreenDiag], cfg.n_g)]
+    first_fti = cfg.Gamma3.taus[1]
+    interactionTauNum = 1
+    @assert first_fti == 3
 
-    # g_ftis, max_ti = Parquet.findFirstTauIdx(
-    #     expansion_orders,
-    #     [Ver3Diag; repeat([GreenDiag], cfg.n_g)],
-    #     FeynmanDiagram.firstTauIdx(Ver3Diag),  # = 1
-    #     1,
-    # )
+    # Expansion orders for G lines
+    # g_expansion_orders = expansion_orders[cfg.G.indices]
+
+    # Reordered expansion orders with Gamma3 insertion at the beginning 
+    # (for tau/loop index finders), (Γⁱ₃, G₁, G₂, G₃). This is required
+    # since Γⁱ₃ must be built first.
+    expansion_reorders = [expansion_orders[end]; expansion_orders[1:(end - 1)]]
+
+    # The firstTauIdx for each subdiagram depends on the previous expansion order
+    ftis, max_ti =
+        Parquet.findFirstTauIdx(expansion_reorders, diagtypes, first_fti, interactionTauNum)
+    @assert max_ti == cfg.param.totalTauNum
 
     # First loop indices for each Green's function
-    # NOTE: The default value for a self-energy observable is FeynmanDiagram.firstLoopIdx(SigmaDiag) = 2.
+    # NOTE: The default value for self-energies is FeynmanDiagram.firstLoopIdx(SigmaDiag) = 2.
     #       Here we add an offset of n_v = 2 due to the outer two bare interactions.
-    first_fli = FeynmanDiagram.firstLoopIdx(SigmaDiag, cfg.n_v)  # = 4
+    first_fli = FeynmanDiagram.firstLoopIdx(SigmaDiag, cfg.n_v)
     @assert first_fli == 4  # k1, k2, k3 are already present in loop basis
-    # Expansion orders starting with Gamma_3
-    expansion_reorders = [expansion_orders[end]; expansion_orders[1:(end - 1)]]
-    g_flis, max_li = Parquet.findFirstLoopIdx(expansion_reorders, first_fli)
+
+    # Get first loop indices
+    flis, max_li = Parquet.findFirstLoopIdx(expansion_reorders, first_fli)
 
     # First, we compute the product (Γⁱ₃ ∘ Gᵢ), i = 2 (3) for a SOSEM with left (right) Γⁱ₃ insertion.
-    # Hence, the first items in the loop/time index lists correspond to those of Γⁱ₃.
-    gamma3_fli = popfirst!(g_flis)
-    # gamma3_fti = popfirst!(g_ftis)
+    # Hence, the first items in the loop/time index lists must correspond to those of Γⁱ₃.
+    # gamma3_fli = popfirst!(flis)
+    # gamma3_fti = popfirst!(ftis)
 
+    # • First tau index for Γⁱ₃:\t\t$gamma3_fti
+    # • First momentum loop index for Γⁱ₃:\t$gamma3_fli
     @debug """
     \nSubtree #$(tree_count+1):
-        • Expansion orders (Gamma last):\t\t\t$expansion_orders
-        • G expansion orders:\t\t\t$(expansion_orders[1:(cfg.n_g)])
-        • First momentum loop indices for G_i's:\t$g_flis (maxLoopIdx = $max_li)
-        • Gamma_3 expansion order:\t\t$(expansion_orders[cfg.Gamma3.index])
-        • First tau index for Gamma_3:\t\t$gamma3_fti
-        • First momentum loop index for Gamma_3:\t$gamma3_fli
+        • Expansion orders (Γⁱ₃, G₁, G₂, G₃):\t\t\t$expansion_reorders
+        • First tau indices:\t\t$ftis (maxTauIdx = $max_ti)
+        • First momentum loop indices:\t$flis (maxLoopIdx = $max_li)
     """
-
-    # TODO: Add counterterms---for n[i] expansion order of line i, spend n_cti
-    #       orders on counterterm derivatives in all possible ways (0 < n_cti < n[i]).
-    #       E.g., if n[i] = 4, we have: ni_left, n_cti = weakintsplit(n[i])
 
     # Bare vertex function params
     gamma3_param = reconstruct(
         cfg.param;
         type=Ver3Diag,
-        innerLoopNum=expansion_orders[cfg.Gamma3.index],
-        firstLoopIdx=gamma3_fli,
-        firstTauIdx=gamma3_fti,
+        innerLoopNum=expansion_reorders[1],
+        firstLoopIdx=flis[1],
+        firstTauIdx=ftis[1],
     )
 
     # Expand 3-point vertex and group by external times (summing over internal spins)
     gamma3_df =
         mergeby(Parquet.vertex3(gamma3_param, cfg.Gamma3.ks; name=cfg.Gamma3.name), :extT)
 
-    # Grab outgoing time of each Gamma_3 group for Gᵢ
+    # Grab external times of each Gamma_3 group for Gᵢ
     taus_gamma3_out = [group.extT for group in eachrow(gamma3_df)]
 
     # Index of the Green's function attached to Gamma_3 at the right
-    idx_g_gamma3 = (cfg.Gamma3.side == left) ? 2 : 3
+    idx_g_gamma3 = (cfg.Gamma3.side == right) ? 3 : 2
+    @assert idx_g_gamma3 == 3
+    @assert cfg.Gamma3.side == right
 
     # Inner loop over variable outgoing extT from Gamma_3 and Gᵢ to build
     # (Γⁱ₃ ∘ Gᵢ), where i = 2 (3) for a left (right) Γⁱ₃ insertion
-    g_ftis_rest = []
+    # g_ftis_rest = []
     gamma3_gi_diags = []
     gamma3_gi_name = Symbol(cfg.Gamma3.name, "∘", cfg.G.names[idx_g_gamma3])
     for (i, gamma3_diag) in enumerate(gamma3_df.diagram)
         # Build Green function attached to Gamma3
-        delta_tau_gi = innerTauNum(Ver3Diag, expansion_orders[idx_g_gamma3], 1)
-        first_Tidx_gi = delta_tau_gi + 1
+        # first_Tidx_gi = first_fti + expansion_reorders[idx_g_gamma3] + 1
+        # println("$$first_Tidx_gi, $(ftis[2])")
+        # @assert first_Tidx_gi == ftis[1 + idx_g_gamma3]
         gi_param = reconstruct(
             cfg.param;
             type=GreenDiag,
-            innerLoopNum=expansion_orders[idx_g_gamma3],
-            firstLoopIdx=g_flis[1],
-            firstTauIdx=first_Tidx_gi,
+            innerLoopNum=expansion_reorders[1 + idx_g_gamma3],
+            firstLoopIdx=flis[1 + idx_g_gamma3],
+            firstTauIdx=ftis[1 + idx_g_gamma3],
         )
         gi = Parquet.green(
             gi_param,
@@ -443,45 +459,45 @@ function _build_subdiagram_gamma(cfg::Config, expansion_orders::Vector{Int}; tre
     # Construct the diagram tree for Gamma_3 * Gᵢ
     gamma3_gi =
         DiagramF64(GenericId(gamma3_param), Sum(), gamma3_gi_diags; name=gamma3_gi_name)
-    plot_tree(gamma3_gi; maxdepth=10)
+    # plot_tree(gamma3_gi; maxdepth=10)
 
     # Number of inner times spent on Gᵢ
-    delta_tau_gi = innerTauNum(GreenDiag, expansion_orders[idx_g_gamma3], 1)
-
-    # Indices of the two Green's function lines, which remain to be built
-    idx_rest = deleteat!(collect(1:(cfg.n_g)), idx_g_gamma3)
+    # delta_tau_gi = innerTauNum(GreenDiag, expansion_orders[idx_g_gamma3], 1)
 
     # Find the first time indices of the remaining Green's functions
-    first_Tidx_rest = taus_gamma3_out[i][end] + delta_tau_gi + 1
-    g_ftis_rest, max_ti = Parquet.findFirstTauIdx(
-        expansion_orders[idx_rest],
-        repeat([GreenDiag], cfg.n_g - 1),
-        first_Tidx_rest,
-        1,
-    )
-    @debug """
-        • First tau indices for remaining G_i's:\t\t$g_ftis_rest (maxTauIdx = $max_ti)
-    """
+    # first_Tidx_rest = taus_gamma3_out[i][end] + delta_tau_gi + 1
+    # g_ftis_rest, max_ti = Parquet.findFirstTauIdx(
+    #     expansion_orders_rest,
+    #     repeat([GreenDiag], cfg.n_g - 1),
+    #     ftis[3],
+    #     1,
+    # )
+    # @debug """
+    #     • First tau indices for remaining G_i's:\t\t$g_ftis_rest (maxTauIdx = $max_ti)
+    # """
 
-    # Params for remaining Green's functions
+    # Indices of the two Green's function lines, which remain to be built
+    indices_g_rest = idx_g_gamma3 == 3 ? [1, 2] : [1, 3]
+
+    # Params for remaining Green's functions (last two in reordered expansion list)
     g_params_rest = [
         reconstruct(
             cfg.param;
             type=GreenDiag,
-            innerLoopNum=expansion_orders[idx_rest[i]],
-            firstLoopIdx=g_flis[idx_rest[i]],
-            firstTauIdx=g_ftis_rest[i],
-        ) for i in eachindex(idx_rest)
+            innerLoopNum=expansion_reorders[1 + i],
+            firstLoopIdx=flis[1 + i],
+            firstTauIdx=ftis[1 + i],
+        ) for i in indices_g_rest
     ]
 
     # Re-expanded Green's function and bare interaction lines
     g_lines_rest = [
         Parquet.green(
-            g_params_rest[i],
-            cfg.G.ks[idx_rest[i]],
-            cfg.G.taus[idx_rest[i]];
-            name=cfg.G.names[idx_rest[i]],
-        ) for i in eachindex(idx_rest)
+            g_param,
+            cfg.G.ks[indices_g_rest[i]],
+            cfg.G.taus[indices_g_rest[i]];
+            name=cfg.G.names[indices_g_rest[i]],
+        ) for (i, g_param) in enumerate(g_params_rest)
     ]
 
     # Adapt dash indices to the 2-element list g_lines_rest (max index is 2). Since the dash

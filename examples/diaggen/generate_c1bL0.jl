@@ -23,3 +23,5 @@ diagparam, som_c1bL0, som_c1bL0_compiled = DiagGen.build_nonlocal_fixed_order(se
 # Check the diagram tree
 DiagGen.checktree(som_c1bL0, settings; plot=true, maxdepth=10)
 # DiagGen.checktree(som_c1bL0, settings)
+
+@assert som_c1bL0.factor == 1
