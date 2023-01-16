@@ -267,9 +267,9 @@ function main()
             num_eval = N == 5 ? neval5 : neval34
             if haskey(f, "c1b0") &&
                haskey(f["c1b0"], "N=$N") &&
-               haskey(f["c1b0/N=$N"], "neval=$(num_eval)")
-                @warn("replacing existing data for N=$N, neval=$(num_eval)")
-                delete!(f["c1b0/N=$N"], "neval=$(num_eval)")
+               haskey(f["c1b0/N=$N"], "neval=$num_eval")
+                @warn("replacing existing data for N=$N, neval=$num_eval")
+                delete!(f["c1b0/N=$N"], "neval=$num_eval")
             end
             # NOTE: Since C⁽¹ᵇ⁾ᴸ = C⁽¹ᵇ⁾ᴿ for the UEG, the
             #       full class (b) moment is C⁽¹ᵇ⁾ = 2C⁽¹ᵇ⁾ᴸ.
