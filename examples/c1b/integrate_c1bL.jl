@@ -35,6 +35,8 @@ function main()
         ParaMC(; order=settings.max_order, rs=1.0, beta=40.0, mass2=2.0, isDynamic=false)
     @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)"
 
+    println("lambda = $(param.mass2)")
+
     # K-mesh for measurement
     # kgrid = [0.0]
     minK = 0.2 * param.kF
