@@ -115,7 +115,7 @@ end
 Return the sign of the outgoing external time τ for a given SOSEM observable 
 (each observable contributes from one side of the discontinuity at τ = 0 only).
 """
-@inline function _get_extT_sign(side::DiscontSide)
+@inline function _get_Tout_sign(side::DiscontSide)
     if side == negative
         # Observable non-zero when τ = 0⁻
         return -1
@@ -202,14 +202,17 @@ const c1b_total_ueg =
 
 # Non-local SOSEM for the UEG without vertex corrections (assuming TRS): 
 #     C⁽¹⁾ⁿˡ⁰ = 2C⁽¹ᵇ⁰⁾ᴸ + C⁽¹ᶜ⁾ + C⁽¹ᵈ⁾
-const c1nl0_ueg =
-    CompositeObservable([c1bL0, c1c, c1d]; factors=[2.0, 1.0, 1.0], name="c1nl0_ueg")
+const c1nl0_ueg = CompositeObservable(
+    [c1bL0, c1c, c1d];
+    factors=[2.0, 1.0, 1.0],
+    name="C⁽¹⁾ⁿˡ[G, V, Γⁱ₃ = Γ₀]",
+)
 
 # Total non-local SOSEM for the UEG (assuming TRS):  C⁽¹⁾ⁿˡ = 2C⁽¹ᵇ⁰⁾ᴸ + 2C⁽¹ᵇ⁾ᴸ + C⁽¹ᶜ⁾ + C⁽¹ᵈ⁾
 const c1nl_ueg = CompositeObservable(
     [c1bL0, c1bL, c1c, c1d];
     factors=[2.0, 2.0, 1.0, 1.0],
-    name="c1nl_ueg",
+    name="C⁽¹⁾ⁿˡ[G, V, Γⁱ₃ ≥ Γ₀]",
 )
 
 # Convenience typedef for atomic/composite observable types
@@ -231,9 +234,9 @@ const observable_to_string = Dict(
 )
 
 """Overload print operator for string representations of observables."""
-Base.print(io::IO, obs::ObsType) = print(io, observable_to_string[obs])
-# Base.print(io::IO, obs::Observable) = print(io, observable_to_string[obs])
-# Base.print(io::IO, obs::CompositeObservable) = print(io, observable_to_string[obs])
+# Base.print(io::IO, obs::ObsType) = print(io, observable_to_string[obs])
+Base.print(io::IO, obs::Observable) = print(io, observable_to_string[obs])
+Base.print(io::IO, obs::CompositeObservable) = print(io, observable_to_string[obs])
 # Base.print(io::IO, obs::CompositeObservable) = print(io, obs.name)
 
 """Print the string representation of a (non-local) bare observable."""
@@ -269,7 +272,7 @@ function _getparam(
         hasTau=true,
         firstTauIdx=1,
         innerLoopNum=n_loop_tot,
-        totalTauNum=n_loop_tot + 1,  # one additional fake time for extT switch
+        totalTauNum=n_loop_tot + 1,  # one additional fake time for Tout switch
         # totalTauNum=n_loop_tot,
         interaction=interaction,
         filter=filter,

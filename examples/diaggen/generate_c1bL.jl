@@ -21,5 +21,7 @@ cfg = DiagGen.Config(settings)
 diagparam, som_c1bL, som_c1bL_compiled = DiagGen.build_nonlocal_fixed_order(settings);
 
 # Check the diagram tree
-DiagGen.checktree(som_c1bL, settings; print=false, plot=true, maxdepth=10)
+DiagGen.checktree(som_c1bL, settings; print=true, plot=true, maxdepth=6)
 # DiagGen.checktree(som_c1bL, settings)
+
+@assert som_c1bL.factor == 1
