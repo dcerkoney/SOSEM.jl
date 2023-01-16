@@ -24,16 +24,17 @@ function main()
 
     rs = 1.0
     beta = 40.0
-    mass2 = 4.0
+    mass2 = 2.0
     solver = :vegasmc
     expand_bare_interactions = false
 
-    neval = 5e10
+    neval34 = 1e7
+    neval5 = 1e7
+    neval = min(neval34, neval5)
     min_order = 3
-    max_order = 4
-    # min_order_plot = 2  # For C^{(1b0)}_2 + C^{(1b)}_N plot
+    max_order = 5
     min_order_plot = 2
-    max_order_plot = 4
+    max_order_plot = 5
     @assert max_order ≥ 3
 
     # Load data from multiple fixed-order runs
@@ -50,19 +51,22 @@ function main()
     # Save total results
     save = true
 
-    plotparams = [
-        UEG.ParaMC(; order=order, rs=rs, beta=beta, mass2=mass2, isDynamic=false) for
-        order in fixed_orders
-    ]
+    plotparam =
+        UEG.ParaMC(; order=max_order, rs=rs, beta=beta, mass2=mass2, isDynamic=false)
 
-    plotsettings = DiagGen.Settings(;
-        observable=DiagGen.c1bL,
-        min_order=min_order,
-        max_order=max_order,
-        expand_bare_interactions=expand_bare_interactions,
-        filter=[NoHartree],
-        interaction=[FeynmanDiagram.Interaction(ChargeCharge, Instant)],  # Yukawa-type interaction
-    )
+    # plotparams = [
+    #     UEG.ParaMC(; order=order, rs=rs, beta=beta, mass2=mass2, isDynamic=false) for
+    #     order in fixed_orders
+    # ]
+
+    # plotsettings = DiagGen.Settings(;
+    #     observable=DiagGen.c1bL,
+    #     min_order=min_order,
+    #     max_order=max_order,
+    #     expand_bare_interactions=expand_bare_interactions,
+    #     filter=[NoHartree],
+    #     interaction=[FeynmanDiagram.Interaction(ChargeCharge, Instant)],  # Yukawa-type interaction
+    # )
 
     # Distinguish results with fixed vs re-expanded bare interactions
     intn_str = ""
@@ -87,40 +91,45 @@ function main()
     # colors = ["orchid", "cornflowerblue", "turquoise", "chartreuse", "greenyellow"]
     # markers = ["-", "-", "-", "-", "-"]
 
-    # Load the results from JLD2
+    # Load the order 3-4 results from JLD2 (and μ data from csv, if applicable)
+    if max_order == 5
+        max_together = 4
+    else
+        max_together = max_order
+    end
     savename =
-        "results/data/c1bL_n=$(max_order)_rs=$(rs)_" *
+        "results/data/c1bL_n=$(max_together)_rs=$(rs)_" *
         "beta_ef=$(beta)_lambda=$(mass2)_" *
-        "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)"
+        "neval=$(neval34)_$(intn_str)$(solver)_$(ct_string)"
     settings, param, kgrid, partitions, res = jldopen("$savename.jld2", "a+") do f
-        key = "$(UEG.short(plotparams[end]))"
+        key = "$(UEG.short(plotparam))"
         return f[key]
     end
-    data = UEG_MC.restodict(res, partitions)
-    println(data)
 
-    # # Load the results from multiple JLD2 files
-    # # data_fixed_orders = [3, 4]
-    # data_fixed_orders = [3]
-    # filenames = [
-    #     "results/data/c1bL_n=$(order)_rs=$(rs)_" *
-    #     "beta_ef=$(beta)_lambda=$(mass2)_" *
-    #     "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)" for
-    #     order in data_fixed_orders
-    # ]
-    # settings, param, kgrid, partitions_list, res_list =
-    #     UEG_MC.load_fixed_order_data_jld2(filenames, plotsettings, plotparams)
-
-    # Convert fixed-order data to dictionary
-    # data = UEG_MC.restodict(res_list, partitions_list)
+    # Load the fixed order 5 result from JLD2
+    local kgrid5, res5, partitions5
+    if max_order == 5
+        savename5 =
+            "results/data/c1bL_n=$(max_order)_rs=$(rs)_" *
+            "beta_ef=$(beta)_lambda=$(mass2)_" *
+            "neval=$(neval5)_$(intn_str)$(solver)_$(ct_string)"
+        settings5, param5, kgrid5, partitions5, res5 = jldopen("$savename5.jld2", "a+") do f
+            key = "$(UEG.short(plotparam))"
+            return f[key]
+        end
+    end
 
     # Get dimensionless k-grid (k / kF)
     k_kf_grid = kgrid / param.kF
-
-    # Convert fixed-order data to dictionary
-    # data = UEG_MC.restodict(res_list, partitions_list)
+    k_kf_grid5 = kgrid5 / param.kF
 
     # Convert results to a Dict of measurements at each order with interaction counterterms merged
+    data = UEG_MC.restodict(res, partitions)
+    # Add 5th order results to data dict
+    if max_order == 5
+        data5 = UEG_MC.restodict(res5, partitions5)
+        merge!(data, data5)
+    end
     merged_data = CounterTerm.mergeInteraction(data)
     println([k for (k, _) in merged_data])
 
@@ -137,7 +146,7 @@ function main()
 
     # # Interpolate bare results and downsample to coarse k_kf_grid_vegas
     k_kf_grid_vegas = np.load("results/kgrids/kgrid_vegas_dimless_n=77_small.npy")
-    
+
     # c1b_bare_interp = linear_interpolation(k_kf_grid_quad, c1b_bare_quad)
     # c1b2_exact = c1b_bare_interp(k_kf_grid)
 
@@ -147,20 +156,6 @@ function main()
     delta_c1b_rpa_fl = sosem_lo.get("delta_rpa+fl_b_vegas_N=1e+07.npy") / eTF_lo^2
     delta_c1b_rpa_fl_err = sosem_lo.get("delta_rpa+fl_b_err_vegas_N=1e+07.npy") / eTF_lo^2
 
-    # # Total RPA(+FL) results for class (b) moment plus C^{(1b0)}_2
-    # c1b_rpa = delta_c1b_rpa + c1b2_exact
-    # c1b_rpa_err = delta_c1b_rpa_err
-    # c1b_rpa_fl = delta_c1b_rpa_fl + c1b2_exact
-    # c1b_rpa_fl_err = delta_c1b_rpa_fl_err
-
-    # if min_order_plot == 2
-    #     # Set bare result manually using exact data to avoid systematic error in (2,0,0) calculation
-    #     # NOTE: Since C⁽¹ᵇ⁾ᴸ = C⁽¹ᵇ⁾ᴿ for the UEG, the
-    #     #       full class (b) moment is C⁽¹ᵇ⁾ = 2C⁽¹ᵇ⁾ᴸ.
-    #     c1b2L_exact = c1b2_exact / 2
-    #     merged_data[(2, 0)] = measurement.(c1b2L_exact, 0.0)  # quadrature data assumed numerically exact
-    # end
-
     # Get total data
     if renorm_mu
         if renorm_mu_lo_ex && max_order_plot == 4
@@ -169,9 +164,6 @@ function main()
             c1b3L = merged_data[(3, 0)]
             c1b4L = merged_data[(4, 0)] + δμ1 * merged_data[(3, 1)]
             c1bL = SortedDict(3 => c1b3L, 4 => c1b4L)
-            # if min_order_plot == 2
-            #     c1bL[2] = c1b2_exact
-            # end
         else
             # Reexpand merged data in powers of μ
             z, μ = UEG_MC.load_z_mu(param)
@@ -213,11 +205,6 @@ function main()
     # Aggregate the full results for C⁽¹ᶜ⁾ up to order N
     if renorm_mu_lo_ex
         c1bL_total = Dict(3 => c1b3L, 4 => c1b3L + c1b4L)
-        # if min_order_plot == 2
-        #     c1bL_total[2] = c1b2_exact / 2
-        #     c1bL_total[3] += c1b2_exact / 2
-        #     c1bL_total[4] += c1b2_exact / 2
-        # end
     else
         c1bL_total = UEG_MC.aggregate_orders(c1bL)
     end
@@ -226,10 +213,10 @@ function main()
 
     println(settings)
     println(UEG.paraid(param))
-    println(res)
-    println(partitions)
     # println(res_list)
     # println(partitions_list)
+    println(res)
+    println(partitions)
 
     # Plot the results
     fig, ax = plt.subplots()
@@ -305,24 +292,27 @@ function main()
                 f["c1b/RPA+FL/neval=$(1e7)/param"] = param
                 f["c1b/RPA+FL/neval=$(1e7)/kgrid"] = kgrid
             else
+                num_eval = N == 5 ? neval5 : neval34
                 if haskey(f, "c1b") &&
                    haskey(f["c1b"], "N=$N") &&
-                   haskey(f["c1b/N=$N"], "neval=$(neval)")
-                    @warn("replacing existing data for N=$N, neval=$(neval)")
-                    delete!(f["c1b/N=$N"], "neval=$(neval)")
+                   haskey(f["c1b/N=$N"], "neval=$num_eval")
+                    @warn("replacing existing data for N=$N, neval=$num_eval")
+                    delete!(f["c1b/N=$N"], "neval=$num_eval")
                 end
                 # NOTE: Since C⁽¹ᵇ⁾ᴸ = C⁽¹ᵇ⁾ᴿ for the UEG, the
                 #       full class (b) moment is C⁽¹ᵇ⁾ = 2C⁽¹ᵇ⁾ᴸ.
-                f["c1b/N=$N/neval=$neval/meas"] = 2 * c1bL_total[N]
-                f["c1b/N=$N/neval=$neval/settings"] = settings
-                f["c1b/N=$N/neval=$neval/param"] = param
-                f["c1b/N=$N/neval=$neval/kgrid"] = kgrid
+                f["c1b/N=$N/neval=$num_eval/meas"] = 2 * c1bL_total[N]
+                f["c1b/N=$N/neval=$num_eval/settings"] = settings
+                f["c1b/N=$N/neval=$num_eval/param"] = param
+                f["c1b/N=$N/neval=$num_eval/kgrid"] = kgrid
             end
         end
     end
 
     # Plot for each aggregate order
     for (i, N) in enumerate(min_order:max_order_plot)
+        # NOTE: Currently using a different kgrid at order 5
+        k_over_kfs = N == 5 ? k_kf_grid5 : k_kf_grid
         # Get means and error bars from the result up to this order
         # NOTE: Since C⁽¹ᵇ⁾ᴸ = C⁽¹ᵇ⁾ᴿ for the UEG, the
         #       full class (b) moment is C⁽¹ᵇ⁾ = 2C⁽¹ᵇ⁾ᴸ.

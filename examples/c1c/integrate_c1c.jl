@@ -94,7 +94,7 @@ function main()
 
     # Bin external momenta, performing a single integration
     res = UEG_MC.integrate_nonlocal_with_ct(
-        settings,
+        # settings,
         param,
         diagparams,
         exprtrees;

@@ -21,8 +21,8 @@ function main()
 
     settings = DiagGen.Settings(;
         observable=DiagGen.c1bL,
-        min_order=3,  # no (2,0,0) partition for this observable (Γⁱ₃ > Γ₀),
-        max_order=4,
+        min_order=5,  # no (2,0,0) partition for this observable (Γⁱ₃ > Γ₀),
+        max_order=5,
         verbosity=DiagGen.quiet,
         expand_bare_interactions=false,
         filter=[NoHartree],
@@ -32,22 +32,22 @@ function main()
 
     # UEG parameters for MC integration
     param =
-        ParaMC(; order=settings.max_order, rs=1.0, beta=40.0, mass2=3.0, isDynamic=false)
+        ParaMC(; order=settings.max_order, rs=1.0, beta=40.0, mass2=2.0, isDynamic=false)
     @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)"
 
     # K-mesh for measurement
-    kgrid = [0.0]
-    # minK = 0.2 * param.kF
-    # Nk, korder = 4, 7
-    # kgrid =
-    #     CompositeGrid.LogDensedGrid(
-    #         :uniform,
-    #         [0.0, 3 * param.kF],
-    #         [param.kF],
-    #         Nk,
-    #         minK,
-    #         korder,
-    #     ).grid
+    # kgrid = [0.0]
+    minK = 0.2 * param.kF
+    Nk, korder = 4, 7
+    kgrid =
+        CompositeGrid.LogDensedGrid(
+            :uniform,
+            [0.0, 3 * param.kF],
+            [param.kF],
+            Nk,
+            minK,
+            korder,
+        ).grid
 
     # Settings
     alpha = 3.0
@@ -55,7 +55,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 1e10
+    neval = 5e9
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -79,7 +79,7 @@ function main()
 
     # Bin external momenta, performing a single integration
     res = UEG_MC.integrate_nonlocal_with_ct(
-        settings,
+        # settings,
         param,
         diagparams,
         exprtrees;
