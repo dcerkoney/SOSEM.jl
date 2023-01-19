@@ -195,7 +195,7 @@ function main()
         measure=measure,
         neval=neval,
         print=print,
-        # Config kwargs
+        # NonlocalConfig kwargs
         userdata=(param, exprtree, varK, kgrid),
         var=var,
         dof=dof,

@@ -15,7 +15,7 @@ settings = DiagGen.Settings(;
     filter=[NoHartree],
     interaction=[FeynmanDiagram.Interaction(ChargeCharge, Instant)],  # Yukawa-type interaction
 )
-cfg = DiagGen.Config(settings)
+cfg = DiagGen.NonlocalConfig(settings)
 
 # Build diagram and expression trees for all sigma_2 diagrams at order n with interaction counterterms
 partitions, diagparams, diagtrees, exprtrees = DiagGen.build_nonlocal_with_ct(settings);

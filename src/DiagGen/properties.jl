@@ -134,6 +134,9 @@ Returns the lowest valid loop order for the given SOSEM observable.
 @inline function _get_lowest_loop_order(observable::Observable)
     return observable_to_lowest_loop_order[observable]
 end
+# @inline function _get_lowest_loop_order(observable::CompositeObservable)
+#     return min(observable_to_lowest_loop_order[o] for o in observable.observables)
+# end
 
 """Deduce whether this observable has a Γⁱ₃ insertion."""
 @inline function _has_gamma3(observable::Observable)
@@ -181,11 +184,24 @@ struct CompositeObservable
     signs::Vector{Int}                  # Observable signs
     factors::Vector{Int}                # Additional multiplicative prefactor(s)
     exact_unif::Union{Nothing,Float64}  # Exact uniform (k = 0) value, if available
+    lowest_loop_order::Int              # Lowest momentum loop order present in this CompositeObservable
 end
-function CompositeObservable(observables; factors=ones(size(observables)), name="")
-    exact_unif = sum(get_exact_k0.(observables))
+function CompositeObservable(
+    observables;
+    factors=ones(size(observables)),
+    lowest_loop_order=min(_get_lowest_loop_order.(observables)),
+    name="",
+)
     signs = _get_obs_sign.(observables)
-    return CompositeObservable(name, observables, signs, factors, exact_unif)
+    exact_unif = sum(get_exact_k0.(observables))
+    return CompositeObservable(
+        name,
+        observables,
+        signs,
+        factors,
+        exact_unif,
+        lowest_loop_order,
+    )
 end
 
 # Total class (b) contribution (with/without vertex corrections):  C⁽¹ᵇ⁰⁾ᴸ + C⁽¹ᵇ⁾ᴸ + (L -> R)

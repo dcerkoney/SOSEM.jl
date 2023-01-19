@@ -79,9 +79,9 @@ end
 end
 
 """
-Configuration bundling physical properties and fixed variables for a Σ₂[G, V, Γⁱ₃]-derived observable.
+NonlocalConfiguration bundling physical properties and fixed variables for a Σ₂[G, V, Γⁱ₃]-derived observable.
 """
-@with_kw struct Config
+@with_kw struct NonlocalConfig
     # Diagram parameters for the SOSEM observable
     param::DiagParaF64
     # There are 3 G lines and 2 outer V lines in every SOSEM observable
@@ -110,8 +110,8 @@ Configuration bundling physical properties and fixed variables for a Σ₂[G, V,
     generic_id::GenericId
 end
 
-"""Construct a Config struct via diagram parameters with/without Γⁱ₃ insertion."""
-function Config(
+"""Construct a NonlocalConfig struct via diagram parameters with/without Γⁱ₃ insertion."""
+function NonlocalConfig(
     settings::Settings{Observable},
     n_loop=settings.max_order;
     g_names=(:G₁, :G₂, :G₃),
@@ -127,15 +127,15 @@ function Config(
                 ),
             )
         end
-        return _Config(settings, n_loop, g_names, v_names, gamma3_name)
+        return _NonlocalConfig(settings, n_loop, g_names, v_names, gamma3_name)
     else
-        return _Config(settings, n_loop, g_names, v_names)
+        return _NonlocalConfig(settings, n_loop, g_names, v_names)
     end
 end
-Config(settings::Settings{CompositeObservable}, kwargs...) = Config.(atomize(settings), kwargs...)
+NonlocalConfig(settings::Settings{CompositeObservable}, kwargs...) = NonlocalConfig.(atomize(settings), kwargs...)
 
-"""Construct a Config struct with trivial Γⁱ₃ insertion (Γⁱ₃ = Γ₀)."""
-function _Config(settings::Settings{Observable}, n_loop, g_names, v_names)
+"""Construct a NonlocalConfig struct with trivial Γⁱ₃ insertion (Γⁱ₃ = Γ₀)."""
+function _NonlocalConfig(settings::Settings{Observable}, n_loop, g_names, v_names)
     # Expansion order info
     n_g          = 3
     n_v          = 2
@@ -203,8 +203,8 @@ function _Config(settings::Settings{Observable}, n_loop, g_names, v_names)
         ),
     )
 
-    # Config struct for low-order case
-    return Config(;
+    # NonlocalConfig struct for low-order case
+    return NonlocalConfig(;
         param=param,
         min_order=settings.min_order,
         max_order=settings.max_order,
@@ -221,8 +221,8 @@ function _Config(settings::Settings{Observable}, n_loop, g_names, v_names)
     )
 end
 
-"""Construct a Config struct with nontrivial Γⁱ₃ insertion (Γⁱ₃ > Γ₀)."""
-function _Config(settings::Settings{Observable}, n_loop, g_names, v_names, gamma3_name)
+"""Construct a NonlocalConfig struct with nontrivial Γⁱ₃ insertion (Γⁱ₃ > Γ₀)."""
+function _NonlocalConfig(settings::Settings{Observable}, n_loop, g_names, v_names, gamma3_name)
     # Expansion order info
     n_g          = 3
     n_v          = 2
@@ -273,7 +273,7 @@ function _Config(settings::Settings{Observable}, n_loop, g_names, v_names, gamma
         gamma3_taus = (3, 4, nothing) # (τᵢₙ, τ4, (*))
         extT = (3, Tout)
     else # gamma3_side == left
-        # Config for c1bR not yet implemented (requires τ-remapping after DiagGen)
+        # NonlocalConfig for c1bR not yet implemented (requires τ-remapping after DiagGen)
         @todo
     end
 
@@ -312,8 +312,8 @@ function _Config(settings::Settings{Observable}, n_loop, g_names, v_names, gamma
         ),
     )
 
-    # Config struct for high-order case
-    return Config(;
+    # NonlocalConfig struct for high-order case
+    return NonlocalConfig(;
         param=param,
         min_order=settings.min_order,
         max_order=settings.max_order,

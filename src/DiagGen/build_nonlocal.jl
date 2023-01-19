@@ -7,7 +7,7 @@ function build_nonlocal_fixed_order(s::Settings{Observable})
     DiagTree.uidreset()
     # Construct the self-energy diagram tree without counterterms
     sign = _get_obs_sign(s.observable)
-    diagparam, diagtree = build_diagtree(s; factor=sign)
+    diagparam, diagtree = build_nonlocal_diagtree(s; factor=sign)
     # @debug "\nDiagTree:\n" * repr_tree(diagtree)
     # Compile to expression tree
     exprtree = ExprTree.build([diagtree])
@@ -28,7 +28,7 @@ function build_nonlocal(s::Settings{Observable})
     for n_loop in (s.min_order):(s.max_order)
         # Build diagram tree for this loop order
         @debug "Loop order n = $n_loop:"
-        diagparam, diagtree = build_diagtree(s; n_loop=n_loop, factor=sign)
+        diagparam, diagtree = build_nonlocal_diagtree(s; n_loop=n_loop, factor=sign)
 
         # Compile to expression tree and save results for this loop order
         exprtree = ExprTree.build([diagtree])
@@ -55,7 +55,7 @@ function build_nonlocal_with_ct(s::Settings{Observable}; renorm_mu=true, renorm_
     for p in counterterm_partitions(s; renorm_mu=renorm_mu, renorm_lambda=renorm_lambda)
         # Build diagram tree for this partition
         @debug "Partition (n_loop, n_ct_mu, n_ct_lambda): $p"
-        diagparam, diagtree = build_diagtree(s; factor=sign, n_loop=p[1])
+        diagparam, diagtree = build_nonlocal_diagtree(s; factor=sign, n_loop=p[1])
 
         # Build tree with counterterms (∂λ(∂μ(DT))) via automatic differentiation
         dμ_diagtree = DiagTree.derivative([diagtree], BareGreenId, p[2]; index=1)
@@ -84,8 +84,10 @@ Construct diagram and expression trees for the full non-local second-order momen
 derived from Σ₂[G, V, Γⁱ₃ = Γ₀] (or Σ₂ itself) at O(Vⁿ) for a statically-screened interaction V[λ].
 """
 function build_nonlocal_fixed_order(settings::Settings{CompositeObservable})
-    @assert all(s.min_order == s.max_order for s in s_list)
     DiagTree.uidreset()
+    s_list = atomize(settings)  # atomized settings
+    @assert settings.min_order == settings.max_order
+
     # Build trees for each (atomic) observable; we can merge them all except for c1c
     diagparams = DiagParaF64[]
     diagtrees_rest = DiagramF64[]
@@ -100,14 +102,14 @@ function build_nonlocal_fixed_order(settings::Settings{CompositeObservable})
         end
         # Overall factor for this sub-observable
         obs_factor = c1nl_ueg.signs[i] * c1nl_ueg.factors[i]
-        diagparam, obstree = build_diagtree(s; factor=obs_factor)
+        diagparam, obstree = build_nonlocal_diagtree(s; factor=obs_factor)
         if s.observable == c1c
             push!(diagparams, diagparam)
             diagtree_c1c = obstree
         else
             push!(diagparams, diagparam)
             push!(diagtrees_rest, obstree)
-            push!(extTs_rest, Config(s).extT)
+            push!(extTs_rest, NonlocalConfig(s).extT)
             id_rest = deepcopy(obstree.id)
             namestr_rest *= string(s.observable)
             i > 1 && (namestr_rest *= " + ")
@@ -122,8 +124,15 @@ function build_nonlocal_fixed_order(settings::Settings{CompositeObservable})
     # Sum trees for the 3 observables with positive discontinuity side
     diagparam = diagparams[1]
     diagtree_rest = DiagramF64(id_rest, Sum(), diagtrees_rest; name=Symbol(namestr_rest))
+
     # Up to two diagram trees ⟹ roots, one for each extT type
-    diagtrees = isnothing(diagtree_c1c) ? [diagtree_rest] : [diagtree_c1c, diagtree_rest]
+    if isnothing(diagtree_c1c)
+        diagtrees = [diagtree_rest]
+    elseif isnothing(diagtree_rest)
+        diagtrees = [diagtree_c1c]
+    else
+        diagtrees = [diagtree_c1c, diagtree_rest]
+    end
     # Build expression tree
     exprtree = ExprTree.build(diagtrees)
     return diagparam, diagtrees, exprtree
@@ -139,36 +148,40 @@ function build_nonlocal_with_ct(
     renorm_mu=false,
     renorm_lambda=true,
 )
-    settings_list = atomize(settings)  # atomized settings
+    DiagTree.uidreset()
+    s_list = atomize(settings)  # atomized settings
     @assert settings.min_order == settings.max_order
 
-    DiagTree.uidreset()
     valid_partitions = Vector{PartitionType}()
     diagparams = Vector{DiagParaF64}()
     diagtrees_list = Vector{Vector{DiagramF64}}()
     exprtrees = Vector{ExprTreeF64}()
     # Loop over all counterterm partitions for the given SOSEM observable settings
-    for p in counterterm_partitions(settings; renorm_mu=renorm_mu, renorm_lambda=renorm_lambda)
+    for p in
+        counterterm_partitions(settings; renorm_mu=renorm_mu, renorm_lambda=renorm_lambda)
         # Build diagram trees for each (atomic) observable for this partition
         @debug "Partition (n_loop, n_ct_mu, n_ct_lambda): $p"
         # Build trees for each (atomic) observable; we can merge them all except for c1c
+        namestr_rest = ""
         partn_diagparams = DiagParaF64[]
         partn_diagtrees_rest = DiagramF64[]
         partn_extTs_rest = ProprTauType[]
         local partn_diagtree_c1c, partn_id_rest
-        for (i, s) in enumerate(settings_list)
+        for (i, s) in enumerate(s_list)
             # Overall factor for this sub-observable
             obs_factor = c1nl_ueg.signs[i] * c1nl_ueg.factors[i]
             partn_diagparam, partn_obstree =
-                build_diagtree(s; factor=obs_factor, n_loop=p[1])
+                build_nonlocal_diagtree(s; factor=obs_factor, n_loop=p[1])
             if s.observable == c1c
                 push!(partn_diagparams, partn_diagparam)
                 partn_diagtree_c1c = partn_obstree
             else
                 push!(partn_diagparams, partn_diagparam)
                 push!(partn_diagtrees_rest, partn_obstree)
-                push!(partn_extTs_rest, Config(s).extT)
+                push!(partn_extTs_rest, NonlocalConfig(s).extT)
                 partn_id_rest = deepcopy(partn_obstree.id)
+                namestr_rest *= string(s.observable)
+                i > 1 && (namestr_rest *= " + ")
             end
         end
         # The external times and diagram parameters of all 
@@ -183,10 +196,16 @@ function build_nonlocal_with_ct(
             partn_id_rest,
             Sum(),
             partn_diagtrees_rest;
-            name=Symbol("C⁽¹ᵇ⁰⁾ᴸ + C⁽¹ᵇ⁾ᴸ + C⁽¹ᵈ⁾"),
+            name=Symbol(namestr_rest),
         )
-        # Diagtrees for c1c and rest for this partition
-        partn_diagtrees = [partn_diagtree_c1c, diagtree_rest]
+        # Up to two diagram trees ⟹ roots, one for each extT type
+        if isnothing(partn_diagtree_c1c)
+            partn_diagtrees = [diagtree_rest]
+        elseif isnothing(partn_diagtree_rest)
+            partn_diagtrees = [partn_diagtree_c1c]
+        else
+            partn_diagtrees = [partn_diagtree_c1c, diagtree_rest]
+        end
 
         # Build tree with counterterms (∂λ(∂μ(DT))) via automatic differentiation
         dμ_diagtrees = DiagTree.derivative(partn_diagtrees, BareGreenId, p[2]; index=1)
@@ -224,10 +243,14 @@ end
 Construct a diagram tree for a non-local second-order 
 moment (SOSEM) observable at the given loop order.
 """
-function build_diagtree(s::Settings{Observable}; n_loop::Int=s.max_order, factor=1.0)
+function build_nonlocal_diagtree(
+    s::Settings{Observable};
+    n_loop::Int=s.max_order,
+    factor=1.0,
+)
     # Initialize DiagGen configuration containing diagram parameters, partition,
     # propagator and vertex momentum/time data, (expansion) order info, etc.
-    cfg = Config(s, n_loop)
+    cfg = NonlocalConfig(s, n_loop)
     # We assume that Gamma3 is last in the expansion order list
     cfg.has_gamma3 && @assert cfg.Gamma3.index == 4
 
@@ -248,7 +271,8 @@ function build_diagtree(s::Settings{Observable}; n_loop::Int=s.max_order, factor
             continue
         end
         # Build the subdiagram corresponding to the current expansion orders
-        this_diag, tree_count = _build_subdiagram(cfg, expansion_orders, tree_count)
+        this_diag, tree_count =
+            _build_nonlocal_subdiagram(cfg, expansion_orders, tree_count)
         push!(som_diags, this_diag)
         tree_count += 1
     end
@@ -263,7 +287,7 @@ function build_diagtree(s::Settings{Observable}; n_loop::Int=s.max_order, factor
 end
 
 """Check if a (weak) composition of expansion orders is valid for a given observable/settings."""
-@inline function _is_invalid_expansion(cfg::Config, expansion_orders::Vector{Int})
+@inline function _is_invalid_expansion(cfg::NonlocalConfig, expansion_orders::Vector{Int})
     # We can't spend any orders on dashed line(s), if any exist
     is_invalid =
         !isempty(cfg.G.dash_indices) && any(expansion_orders[cfg.G.dash_indices] .!= 0)
@@ -275,8 +299,14 @@ end
 end
 
 """Construct a second-order self-energy (moment) subdiagram"""
-function _build_subdiagram(cfg::Config, expansion_orders::Vector{Int}, tree_count)
-    subdiag = cfg.has_gamma3 ? _build_subdiagram_gamma : _build_subdiagram_gamma0
+function _build_nonlocal_subdiagram(
+    cfg::NonlocalConfig,
+    expansion_orders::Vector{Int},
+    tree_count,
+)
+    subdiag =
+        cfg.has_gamma3 ? _build_nonlocal_subdiagram_gamma :
+        _build_nonlocal_subdiagram_gamma0
     return subdiag(cfg, expansion_orders; tree_count)
 end
 
@@ -285,7 +315,11 @@ Construct a second-order self-energy (moment) subdiagram with bare Γⁱ₃ inse
 
 D = (G₁ ∘ G₂ ∘ G₃ ∘ V₁ ∘ V₂)
 """
-function _build_subdiagram_gamma0(cfg::Config, expansion_orders::Vector{Int}; tree_count)
+function _build_nonlocal_subdiagram_gamma0(
+    cfg::NonlocalConfig,
+    expansion_orders::Vector{Int};
+    tree_count,
+)
     # The first available tau index is 4 (times 1,2,3 are reserved for external)
     diagtypes = repeat([GreenDiag], cfg.n_g)
     first_fti = 4
@@ -369,7 +403,11 @@ For (1) left and (2) right Γⁱ₃ insertions, we have:
 (1) D = (G₁ ∘ G₃ ∘ V₁ ∘ V₂) ∘ (Γⁱ₃ ∘ G₂),
 (2) D = (G₁ ∘ G₂ ∘ V₁ ∘ V₂) ∘ (Γⁱ₃ ∘ G₃).
 """
-function _build_subdiagram_gamma(cfg::Config, expansion_orders::Vector{Int}; tree_count)
+function _build_nonlocal_subdiagram_gamma(
+    cfg::NonlocalConfig,
+    expansion_orders::Vector{Int};
+    tree_count,
+)
     # The first (bosonic) tau index for Gamma3 is 3 (times 1,2,3 are reserved for external)
     diagtypes = [Ver3Diag; repeat([GreenDiag], cfg.n_g)]
     first_fti = cfg.Gamma3.taus[1]

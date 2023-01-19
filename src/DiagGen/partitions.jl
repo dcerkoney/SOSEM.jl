@@ -12,6 +12,9 @@ function partition(order::Int)
     return sort([p for p in par if p[1] + p[2] + p[3] <= order])
 end
 
+# function has_partition(o::Observable, p::PartitionType)
+# end
+
 """
 Get all (μ and/or λ) counterterm partitions (n1, n2, n3) satisfying the following constraints:
 

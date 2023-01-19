@@ -8,7 +8,7 @@ using ..Logging
 using ..Parameters
 using ..SOSEM: @todo, alleq, DiagramF64, ExprTreeF64, PartitionType, MergedPartitionType
 
-# Convenience typedefs for Settings and Config
+# Convenience typedefs for Settings and NonlocalConfig
 const VFloat64 = Vector{Float64}
 const OptInt = Union{Nothing,Int}
 const ProprTauType = Tuple{Int,Int}
@@ -30,7 +30,7 @@ export get_bare_string, get_exact_k0, getID, propagator_param
 
 include("common.jl")
 export Verbosity, quiet, info, verbose
-export Settings, Config, checktree, atomize
+export Settings, NonlocalConfig, checktree, atomize
 
 include("partitions.jl")
 export partition,
@@ -38,9 +38,9 @@ export partition,
 
 # Non-local moment
 include("build_nonlocal.jl")
-export build_nonlocal, build_nonlocal_with_ct, build_sigma2_nonlocal, build_diagtree
+export build_nonlocal, build_nonlocal_with_ct, build_sigma2_nonlocal, build_nonlocal_diagtree
 
-# # Local moment
+# Local moment
 # include("build_local.jl")
 # export build_local, build_sigma2_local
 

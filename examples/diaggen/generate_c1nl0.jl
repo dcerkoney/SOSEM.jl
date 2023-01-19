@@ -21,7 +21,7 @@ settings = Settings{CompositeObservable}(;
     interaction=[FeynmanDiagram.Interaction(ChargeCharge, Instant)],  # Yukawa-type interaction
 )
 println(atomize(settings))
-cfgs = Config(settings)
+cfgs = NonlocalConfig(settings)
 
 # Build diagram and expression trees for all diagrams at order n
 diagparam, diagtrees, exprtree = build_full_nonlocal_fixed_order(settings);

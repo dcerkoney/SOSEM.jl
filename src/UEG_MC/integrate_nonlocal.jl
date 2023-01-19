@@ -10,7 +10,7 @@ function integrate_nonlocal(
     solver=:vegasmc,
 )
     # DiagGen config from settings
-    # cfg = Config(settings)
+    # cfg = NonlocalConfig(settings)
 
     # Pass innerLoopNum to integrand
     innerLoopNum = diagparam.innerLoopNum
@@ -72,7 +72,7 @@ function integrate_nonlocal_with_ct(
 )
     # Get necessary DiagGen properties from settings (the observable sign and
     # discontinuity side are the same ∀ partitions, but extT depend on n_loop!)
-    # dummy_cfg = Config(settings)
+    # dummy_cfg = NonlocalConfig(settings)
 
     # We assume that each partition expression tree has a single root
     @assert all(length(et.root) == 1 for et in exprtrees)
