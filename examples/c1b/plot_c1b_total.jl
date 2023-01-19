@@ -28,8 +28,8 @@ function main()
     solver = :vegasmc
     expand_bare_interactions = false
 
-    neval34 = 1e7
-    neval5 = 1e7
+    neval34 = 5e10
+    neval5 = 5e9
     neval = min(neval34, neval5)
     min_order = 3
     max_order = 5
@@ -310,6 +310,7 @@ function main()
     end
 
     # Plot for each aggregate order
+    colors = ["C2", "C1", "red"]
     for (i, N) in enumerate(min_order:max_order_plot)
         # NOTE: Currently using a different kgrid at order 5
         k_over_kfs = N == 5 ? k_kf_grid5 : k_kf_grid
@@ -327,10 +328,12 @@ function main()
             means,
             marker;
             markersize=2,
-            color="C$i",
+            color=colors[i],
+            # color="C$i",
             label="\$N=$N\$ ($solver)",
         )
-        ax.fill_between(k_kf_grid, means - stdevs, means + stdevs; color="C$i", alpha=0.4)
+        ax.fill_between(k_kf_grid, means - stdevs, means + stdevs; color=colors[i], alpha=0.4)
+        # ax.fill_between(k_kf_grid, means - stdevs, means + stdevs; color="C$i", alpha=0.4)
         # if !renorm_mu_lo_ex && max_order <= 4 && N == 4
         #     ax.plot(
         #         k_kf_grid,

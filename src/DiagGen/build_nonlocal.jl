@@ -2,7 +2,7 @@
 Construct diagram and expression trees for a non-local second-order moment (SOSEM) diagram derived 
 from Σ₂[G, V, Γⁱ₃ = Γ₀] (or Σ₂ itself) at O(Vⁿ) for a statically-screened interaction V[λ].
 """
-function build_nonlocal_fixed_order(s::Settings)
+function build_nonlocal_fixed_order(s::Settings{Observable})
     @assert s.min_order == s.max_order
     DiagTree.uidreset()
     # Construct the self-energy diagram tree without counterterms
@@ -18,7 +18,7 @@ end
 Construct diagram and expression trees for a non-local second-order moment (SOSEM) diagram derived from 
 Σ₂[G, V, Γⁱ₃ = Γ₀] (or Σ₂ itself) between orders n_min and n_max in a statically-screened interaction V[λ].
 """
-function build_nonlocal(s::Settings)
+function build_nonlocal(s::Settings{Observable})
     DiagTree.uidreset()
     diagparams = Vector{DiagParaF64}()
     diagtrees = Vector{DiagramF64}()
@@ -44,7 +44,7 @@ Construct a list of all expression trees for non-local second-order moment (SOSE
 Σ₂[G(μ), V(λ), Γⁱ₃ = Γ₀] (or Σ₂ itself) between orders n_min and n_max in ξ (loop + CT orders),
 including counterterms in μ and/or λ.
 """
-function build_nonlocal_with_ct(s::Settings; renorm_mu=true, renorm_lambda=true)
+function build_nonlocal_with_ct(s::Settings{Observable}; renorm_mu=true, renorm_lambda=true)
     DiagTree.uidreset()
     valid_partitions = Vector{PartitionType}()
     diagparams = Vector{DiagParaF64}()
@@ -83,18 +83,24 @@ end
 Construct diagram and expression trees for the full non-local second-order moment (SOSEM) diagram
 derived from Σ₂[G, V, Γⁱ₃ = Γ₀] (or Σ₂ itself) at O(Vⁿ) for a statically-screened interaction V[λ].
 """
-function build_full_nonlocal_fixed_order(s_list::Vector{Settings})
+function build_nonlocal_fixed_order(settings::Settings{CompositeObservable})
     @assert all(s.min_order == s.max_order for s in s_list)
     DiagTree.uidreset()
     # Build trees for each (atomic) observable; we can merge them all except for c1c
     diagparams = DiagParaF64[]
     diagtrees_rest = DiagramF64[]
     extTs_rest = Tuple{Int,Int}[]
-    local diagtree_c1c, id_rest
+    local id_rest
+    namestr_rest = ""
+    diagtree_c1c = nothing
     for (i, s) in enumerate(s_list)
-        # Add overall sign for this observable to diagram factor
-        sign = _get_obs_sign(s.observable)
-        diagparam, obstree = build_diagtree(s; factor=sign * c1nl_ueg.factors[i])
+        if s.min_order < _get_lowest_loop_order(s)
+            @warn "Observable $(s.observable) does not enter at loop order $(s.min_order), skipping it..."
+            continue
+        end
+        # Overall factor for this sub-observable
+        obs_factor = c1nl_ueg.signs[i] * c1nl_ueg.factors[i]
+        diagparam, obstree = build_diagtree(s; factor=obs_factor)
         if s.observable == c1c
             push!(diagparams, diagparam)
             diagtree_c1c = obstree
@@ -103,6 +109,8 @@ function build_full_nonlocal_fixed_order(s_list::Vector{Settings})
             push!(diagtrees_rest, obstree)
             push!(extTs_rest, Config(s).extT)
             id_rest = deepcopy(obstree.id)
+            namestr_rest *= string(s.observable)
+            i > 1 && (namestr_rest *= " + ")
         end
     end
     # The external times and diagram parameters of all 
@@ -113,12 +121,11 @@ function build_full_nonlocal_fixed_order(s_list::Vector{Settings})
     @assert alleq(extTs_rest)
     # Sum trees for the 3 observables with positive discontinuity side
     diagparam = diagparams[1]
-    diagtree_rest =
-        DiagramF64(id_rest, Sum(), diagtrees_rest; name="C⁽¹ᵇ⁰⁾ᴸ + C⁽¹ᵇ⁾ᴸ + C⁽¹ᵈ⁾")
-    # Two diagram trees, one for each extT type
-    diagtrees = [diagtree_c1c, diagtree_rest]
-    # Build two-root expression trees (1) c1c (2) rest
-    exprtree = ExprTree.build([diagtree_c1c, diagtree_rest])
+    diagtree_rest = DiagramF64(id_rest, Sum(), diagtrees_rest; name=Symbol(namestr_rest))
+    # Up to two diagram trees ⟹ roots, one for each extT type
+    diagtrees = isnothing(diagtree_c1c) ? [diagtree_rest] : [diagtree_c1c, diagtree_rest]
+    # Build expression tree
+    exprtree = ExprTree.build(diagtrees)
     return diagparam, diagtrees, exprtree
 end
 
@@ -127,30 +134,33 @@ Construct a list of all expression trees for the full non-local second-order mom
 derived from Σ₂[G(μ), V(λ), Γⁱ₃ = Γ₀] (or Σ₂ itself) between orders n_min and n_max in ξ
 (loop + CT orders), including counterterms in μ and/or λ.
 """
-function build_full_nonlocal_with_ct(
-    s_list::Vector{Settings};
+function build_nonlocal_with_ct(
+    settings::Settings{CompositeObservable};
     renorm_mu=false,
     renorm_lambda=true,
 )
-    @assert s.min_order == s.max_order
+    settings_list = atomize(settings)  # atomized settings
+    @assert settings.min_order == settings.max_order
+
     DiagTree.uidreset()
     valid_partitions = Vector{PartitionType}()
     diagparams = Vector{DiagParaF64}()
     diagtrees_list = Vector{Vector{DiagramF64}}()
     exprtrees = Vector{ExprTreeF64}()
     # Loop over all counterterm partitions for the given SOSEM observable settings
-    for p in counterterm_partitions(s; renorm_mu=renorm_mu, renorm_lambda=renorm_lambda)
+    for p in counterterm_partitions(settings; renorm_mu=renorm_mu, renorm_lambda=renorm_lambda)
         # Build diagram trees for each (atomic) observable for this partition
         @debug "Partition (n_loop, n_ct_mu, n_ct_lambda): $p"
         # Build trees for each (atomic) observable; we can merge them all except for c1c
         partn_diagparams = DiagParaF64[]
         partn_diagtrees_rest = DiagramF64[]
-        partn_extTs_rest = Vector{Int}[]
+        partn_extTs_rest = ProprTauType[]
         local partn_diagtree_c1c, partn_id_rest
-        for (i, s) in enumerate(s_list)
-            sign = _get_obs_sign(s.observable)
+        for (i, s) in enumerate(settings_list)
+            # Overall factor for this sub-observable
+            obs_factor = c1nl_ueg.signs[i] * c1nl_ueg.factors[i]
             partn_diagparam, partn_obstree =
-                build_diagtree(s; factor=sign * c1nl_ueg.factors[i], n_loop=p[1])
+                build_diagtree(s; factor=obs_factor, n_loop=p[1])
             if s.observable == c1c
                 push!(partn_diagparams, partn_diagparam)
                 partn_diagtree_c1c = partn_obstree
@@ -173,10 +183,10 @@ function build_full_nonlocal_with_ct(
             partn_id_rest,
             Sum(),
             partn_diagtrees_rest;
-            name="C⁽¹ᵇ⁰⁾ᴸ + C⁽¹ᵇ⁾ᴸ + C⁽¹ᵈ⁾",
+            name=Symbol("C⁽¹ᵇ⁰⁾ᴸ + C⁽¹ᵇ⁾ᴸ + C⁽¹ᵈ⁾"),
         )
         # Diagtrees for c1c and rest for this partition
-        partn_diagtrees = [diagtree_c1c, diagtree_rest]
+        partn_diagtrees = [partn_diagtree_c1c, diagtree_rest]
 
         # Build tree with counterterms (∂λ(∂μ(DT))) via automatic differentiation
         dμ_diagtrees = DiagTree.derivative(partn_diagtrees, BareGreenId, p[2]; index=1)
@@ -191,12 +201,12 @@ function build_full_nonlocal_with_ct(
         # Compile to expression tree and save results for this partition
         partn_exprtree = ExprTree.build(dλ_dμ_diagtrees)
         push!(valid_partitions, p)
-        push!(diagparams, diagparam)
+        push!(diagparams, partn_diagparam)
         push!(diagtrees_list, dλ_dμ_diagtrees)
         # Build two-root expression trees (1) c1c (2) rest
         push!(exprtrees, partn_exprtree)
     end
-    return diagparams, diagtrees_list, exprtrees
+    return valid_partitions, diagparams, diagtrees_list, exprtrees
 end
 
 ######
@@ -206,7 +216,7 @@ end
 Generate a diagram tree for the one-crossing Σ₂[G, V, Γⁱ₃ = Γ₀] diagram
 (without dashed G-lines) to O(Vⁿ) for a statically-screened interaction V[λ].
 """
-function build_sigma2_nonlocal(s::Settings)
+function build_sigma2_nonlocal(s::Settings{Observable})
     @assert isempty(s.indices_g_dash) && return build_nonlocal_fixed_order(s)
 end
 
@@ -214,7 +224,7 @@ end
 Construct a diagram tree for a non-local second-order 
 moment (SOSEM) observable at the given loop order.
 """
-function build_diagtree(s::Settings; n_loop::Int=s.max_order, factor=1.0)
+function build_diagtree(s::Settings{Observable}; n_loop::Int=s.max_order, factor=1.0)
     # Initialize DiagGen configuration containing diagram parameters, partition,
     # propagator and vertex momentum/time data, (expansion) order info, etc.
     cfg = Config(s, n_loop)

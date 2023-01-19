@@ -28,7 +28,7 @@ function main()
     solver = :vegasmc
     expand_bare_interactions = false
 
-    neval34 = 1e10
+    neval34 = 5e10
     neval5 = 2e10
     neval = min(neval34, neval5)
     min_order = 3
@@ -128,7 +128,7 @@ function main()
 
     # Get vegas k-mesh for RPA(+FL)
     k_kf_grid_vegas = np.load("results/kgrids/kgrid_vegas_dimless_n=77_small.npy")
-    kgrid = param.kF * k_kf_grid_vegas
+    kgrid_vegas = param.kF * k_kf_grid_vegas
     k_kf_grid_quad = np.linspace(0.0, 3.0; num=600)
     # Bare result (stored in Hartree a.u.)
     c1b_bare_quad = sosem_lo.get("bare_b") / eTF_lo^2

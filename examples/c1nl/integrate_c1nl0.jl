@@ -23,81 +23,76 @@ function main()
         ENV["JULIA_DEBUG"] = SOSEM
     end
 
-    # Composite observable; measure all non-local moments
-    # with no vertex corrections (Γⁱ₃ = Γ₀) together, i.e.,
-    # the c1bL0, c1c, and c1d observables
-    settings = [
+    # Composite observable; measure all non-local moments together
+    settings_list = [
         DiagGen.Settings(;
             observable=obs,
-            min_order=3,  # TODO: special-purpose integrator for (2,0,0) partition
-            max_order=4,
+            min_order=2,  # TODO: special-purpose integrator for (2,0,0) partition
+            max_order=2,
             verbosity=DiagGen.quiet,
             expand_bare_interactions=false,
             filter=[NoHartree],
             interaction=[FeynmanDiagram.Interaction(ChargeCharge, Instant)],  # Yukawa-type interaction
-            # interaction=[FeynmanDiagram.Interaction(ChargeCharge, Dynamic)],  # TODO: test RPA-type interaction
-        ) for obs in DiagGen.c1nl0.observables
+        ) for obs in DiagGen.c1nl0_ueg.observables
     ]
-    @assert DiagGen.c1nl0.observables ==
+    @assert DiagGen.c1nl0_ueg.observables ==
             [DiagGen.c1bL0, DiagGen.c1c, DiagGen.c1d]
 
     # UEG parameters for MC integration
-    param = ParaMC(;
-        order=settings[1].max_order,
-        rs=1.0,
-        beta=40.0,
-        mass2=2.0,
-        isDynamic=false,
-    )
+    param =
+        ParaMC(; order=settings_list[1].max_order, rs=1.0, beta=40.0, mass2=2.0, isDynamic=false)
     @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)"
 
     # K-mesh for measurement
-    minK = 0.15 * param.kF
-    Nk, korder = 5, 6
-    kgrid =
-        CompositeGrid.LogDensedGrid(
-            :uniform,
-            [0.0, 3 * param.kF],
-            [param.kF],
-            Nk,
-            minK,
-            korder,
-        ).grid
-    k_kf_grid = kgrid / param.kF
+    kgrid = [0.0]
+    # minK = 0.15 * param.kF
+    # Nk, korder = 5, 6
+    # kgrid =
+    #     CompositeGrid.LogDensedGrid(
+    #         :uniform,
+    #         [0.0, 3 * param.kF],
+    #         [param.kF],
+    #         Nk,
+    #         minK,
+    #         korder,
+    #     ).grid
+    # k_kf_grid = kgrid / param.kF
     # k_kf_grid = np.load("results/kgrids/kgrid_vegas_dimless_n=77_small.npy")
     # kgrid = param.kF * k_kf_grid
 
     # Settings
-    alpha = 2.0
+    alpha = 3.0
     print = 0
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 1e5
+    neval = 1e8
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
     renorm_lambda = true
 
     # Build diagram and expression trees for all loop and counterterm partitions
-    partitions, diagparams, diagtrees, exprtrees = DiagGen.build_nonlocal_with_ct(
-        settings;
+    partitions, diagparams, diagtrees, exprtrees = DiagGen.build_full_nonlocal_with_ct(
+        settings_list;
         renorm_mu=renorm_mu,
         renorm_lambda=renorm_lambda,
     )
 
     println("Integrating partitions: $partitions")
-    @debug "diagtrees: $diagtrees"
-    @debug "exprtrees: $exprtrees"
+    println("diagtrees: $diagtrees")
+    println("exprtrees: $exprtrees")
+    # @debug "diagtrees: $diagtrees"
+    # @debug "exprtrees: $exprtrees"
 
-    # Check the diagram tree
-    for d in diagtrees
-        DiagGen.checktree(d, settings[1])
-    end
+    # # Check the diagram tree
+    # for d in diagtrees
+    #     DiagGen.checktree(d, settings[1])
+    # end
 
     # Bin external momenta, performing a single integration
-    res = UEG_MC.integrate_nonlocal_with_ct(
-        settings,
+    res = UEG_MC.integrate_full_nonlocal_with_ct(
+        # settings,
         param,
         diagparams,
         exprtrees;
@@ -110,7 +105,7 @@ function main()
 
     # Distinguish results with fixed vs re-expanded bare interactions
     intn_str = ""
-    if settings.expand_bare_interactions
+    if settings_list[1].expand_bare_interactions
         intn_str = "no_bare_"
     end
 
@@ -135,7 +130,7 @@ function main()
                 @warn("replacing existing data for $key")
                 delete!(f, key)
             end
-            return f[key] = (settings, param, kgrid, partitions, res)
+            return f[key] = (settings_list, param, kgrid, partitions, res)
         end
     end
 end
