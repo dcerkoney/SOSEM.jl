@@ -6,16 +6,42 @@
 end
 
 """Settings for diagram generation/integration of Σ₂[G, V, Γⁱ₃] and derived second-order moments."""
-@with_kw struct Settings
-    observable::Observable = sigma20
-    min_order::Int = _get_lowest_loop_order(observable)  # Minimum allowed total order ξ (loops + CTs)
-    max_order::Int = _get_lowest_loop_order(observable)  # Maximum allowed total order ξ (loops + CTs)
-    verbosity::Verbosity = quiet
-    expand_bare_interactions::Bool = false
-    filter::Vector{Filter} = [NoHartree]
-    interaction::Vector{Interaction} = [Interaction(ChargeCharge, Instant)]
-    name::Symbol = Symbol(string(observable))  # Derive SOSEM name from observable
+struct Settings{O}
+    observable::O
+    min_order::Int
+    max_order::Int
+    verbosity::Verbosity
+    expand_bare_interactions::Bool
+    filter::Vector{Filter}
+    interaction::Vector{Interaction}
+    name::Symbol
+    function Settings{O}(
+        obs::O;
+        min_order::Int=_get_lowest_loop_order(obs),  # Minimum allowed total order ξ (loops + CTs)
+        max_order::Int=_get_lowest_loop_order(obs),  # Maximum allowed total order ξ (loops + CTs)
+        verbosity::Verbosity=quiet,
+        expand_bare_interactions::Bool=false,
+        filter::Vector{Filter}=[NoHartree],
+        interaction::Vector{Interaction}=[Interaction(ChargeCharge, Instant)],
+        name::Symbol=Symbol(string(obs)),  # Derive SOSEM name from observable
+    ) where {O<:ObsType}
+        return new{O}(
+            obs,
+            min_order,
+            max_order,
+            verbosity,
+            expand_bare_interactions,
+            filter,
+            interaction,
+            name,
+        )
+    end
 end
+"""Split settings for a composite observable into a list of settings for each atomic observable."""
+function atomize(settings::Settings{CompositeObservable})
+    return [reconstruct(settings; observable=o) for o in settings.observable.observables]
+end
+# Settings(obs::CompositeObservable; kwargs...) = Settings.(obs.observables; kwargs...)
 
 """Call print on args when above the verbosity threshold v."""
 function vprint(s::Settings, v::Verbosity, args...)
@@ -86,7 +112,7 @@ end
 
 """Construct a Config struct via diagram parameters with/without Γⁱ₃ insertion."""
 function Config(
-    settings::Settings,
+    settings::Settings{Observable},
     n_loop=settings.max_order;
     g_names=(:G₁, :G₂, :G₃),
     v_names=(:V₁, :V₂),
@@ -106,9 +132,10 @@ function Config(
         return _Config(settings, n_loop, g_names, v_names)
     end
 end
+Config(settings::Settings{CompositeObservable}, kwargs...) = Config.(atomize(settings), kwargs...)
 
 """Construct a Config struct with trivial Γⁱ₃ insertion (Γⁱ₃ = Γ₀)."""
-function _Config(settings::Settings, n_loop, g_names, v_names)
+function _Config(settings::Settings{Observable}, n_loop, g_names, v_names)
     # Expansion order info
     n_g          = 3
     n_v          = 2
@@ -195,7 +222,7 @@ function _Config(settings::Settings, n_loop, g_names, v_names)
 end
 
 """Construct a Config struct with nontrivial Γⁱ₃ insertion (Γⁱ₃ > Γ₀)."""
-function _Config(settings::Settings, n_loop, g_names, v_names, gamma3_name)
+function _Config(settings::Settings{Observable}, n_loop, g_names, v_names, gamma3_name)
     # Expansion order info
     n_g          = 3
     n_v          = 2
@@ -212,7 +239,7 @@ function _Config(settings::Settings, n_loop, g_names, v_names, gamma3_name)
     # Biggest tau index (= n_loop + n_v, +1 for Tout switch)
     # nt = param.totalTauNum
     @assert param.totalTauNum == nk
-    
+
     @debug "nk = $nk, nt = $(param.totalTauNum - 1) (plus one fake extT)"
 
     # Basis momenta for loops of Σ₂
@@ -259,7 +286,7 @@ function _Config(settings::Settings, n_loop, g_names, v_names, gamma3_name)
     # Indices of (dashed) G lines in the expansion order list
     indices_g = collect(1:n_g)
     indices_g_dash = _get_dash_indices(settings.observable)
-    
+
     # Γⁱ₃ is last in the expansion order list by convention
     index_gamma3 = n_g + 1
 

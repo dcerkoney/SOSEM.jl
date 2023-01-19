@@ -22,7 +22,9 @@ function main()
 
     rs = 1.0
     beta = 40.0
-    neval = 1e10
+    neval34 = 1e10
+    neval = neval34
+    # neval_min = 1e9  # (in N=5 result)
     lambdas = [0.5, 1.0, 1.5, 2.0, 3.0]
     # lambdas = [1.0, 3.0]
     solver = :vegasmc
@@ -35,7 +37,7 @@ function main()
 
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
     min_order_plot = 2
-    max_order_plot = 4
+    max_order_plot = 5
 
     # Distinguish results with fixed vs re-expanded bare interactions
     intn_str = ""
@@ -89,6 +91,7 @@ function main()
 
     # Plot the results for each order ξ vs lambda and compare to RPA(+FL)
     fig, ax = plt.subplots()
+    ax.axvline(1.0, linestyle="--", color="dimgray", label="\$\\lambda^\\star = 1\$")
     if min_order_plot == 2
         if plot_rpa
             ax.plot(
@@ -140,28 +143,47 @@ function main()
         )
     end
     for (i, N) in enumerate(min_order:max_order_plot)
-        c1nl_N_means = []
-        c1nl_N_stdevs = []
+        c1nl_N_means = repeat([Inf], length(lambdas))
+        c1nl_N_stdevs = repeat([Inf], length(lambdas))
         for (j, filename) in enumerate(filenames)
+            if N == 5 && j != 4
+                # Currently no data for N = 5, lambda != 2
+                continue
+            end
             if j == 4
                 println("\nN = $N, lambda = $(lambdas[j]):")
             end
-            # Load the data for each observable
             f = jldopen("$filename.jld2", "r")
-            this_kgrid = f["c1d/N=$(N)_unif/neval=$neval/kgrid"]
-            @assert this_kgrid == [0.0]
-
-            r1 = f["c1b0/N=$(N)_unif/neval=$neval/meas"]
-            r2 = f["c1c/N=$(N)_unif/neval=$neval/meas"]
-            r3 = f["c1d/N=$(N)_unif/neval=$neval/meas"]
-            c1nl_N_total =
-                f["c1b0/N=$(N)_unif/neval=$neval/meas"] +
-                f["c1c/N=$(N)_unif/neval=$neval/meas"] +
-                f["c1d/N=$(N)_unif/neval=$neval/meas"]
+            if j == 4 && N == 5
+                # Load N = 5 data for lambda = 2 (currently, mixed nevals and multi-k)
+                k1 = f["c1b0/N=5/neval=2.0e10/kgrid"][[1]]
+                k2 = f["c1c/N=5/neval=1.0e9/kgrid"][[1]]
+                k3 = f["c1d/N=5/neval=2.0e10/kgrid"][[1]]
+                @assert k1 == k2 == k3 == [0.0]
+                r1 = f["c1b0/N=5/neval=2.0e10/meas"][[1]]
+                r2 = f["c1c/N=5/neval=1.0e9/meas"][[1]]
+                r3 = f["c1d/N=5/neval=2.0e10/meas"][[1]]
+            else
+                # Load the data for each observable
+                this_kgrid = f["c1d/N=$(N)_unif/neval=$neval/kgrid"]
+                @assert this_kgrid == [0.0]
+                r1 = f["c1b0/N=$(N)_unif/neval=$neval/meas"]
+                r2 = f["c1c/N=$(N)_unif/neval=$neval/meas"]
+                r3 = f["c1d/N=$(N)_unif/neval=$neval/meas"]
+            end
+            c1nl_N_total = r1 + r2 + r3
             # The c1b observable has no data for N = 2
             if N > 2
-                r4 = f["c1b/N=$(N)_unif/neval=$neval/meas"]
-                c1nl_N_total += f["c1b/N=$(N)_unif/neval=$neval/meas"]
+                if j == 4 && N == 5
+                    # Load N = 5 data for lambda = 2 (currently, mixed nevals and multi-k)
+                    k4 = f["c1b/N=5/neval=5.0e9/kgrid"][[1]]
+                    @assert k4 == [0.0]
+                    r4 = f["c1b/N=5/neval=5.0e9/meas"][[1]]
+                    c1nl_N_total += r4
+                else
+                    r4 = f["c1b/N=$(N)_unif/neval=$neval/meas"]
+                    c1nl_N_total += r4
+                end
                 if j == 4
                     println(
                         "c1b0_unif = $r1\nc1b_unif = $r4\nc1c_unif = $r2\nc1d_unif = $r3",
@@ -179,16 +201,18 @@ function main()
             @assert length(c1nl_N_total) == 1
 
             # Get means and error bars from the result up to this order
-            push!(c1nl_N_means, Measurements.value(c1nl_N_total[1]))
-            push!(c1nl_N_stdevs, Measurements.uncertainty(c1nl_N_total[1]))
+            c1nl_N_means[j] = Measurements.value(c1nl_N_total[1])
+            c1nl_N_stdevs[j] = Measurements.uncertainty(c1nl_N_total[1])
         end
+        # TODO: more points and consistent neval
+        label = N == 5 ? "\$N=$N, N_{\\mathrm{eval}}=\\mathrm{5.0e9}\$ ($solver)" : "\$N=$N\$ ($solver)"
         ax.plot(
             lambdas,
             c1nl_N_means,
             "o-";
             color="C$i",
             markersize=3,
-            label="\$N=$N\$ ($solver)",
+            label=label,
         )
         ax.fill_between(
             lambdas,
@@ -198,13 +222,14 @@ function main()
             alpha=0.3,
         )
     end
-    # ax.set_ylim(; top=-0.195)
+    ax.set_xlim(0.5, 3.0)
+    ax.set_ylim(; bottom=-0.75)
     ax.legend(; loc="best")
     ax.set_xlabel("\$\\lambda\$ (Ry)")
     ax.set_ylabel(
         "\$C^{(1)nl}(k=0,\\, \\lambda) \\,/\\, {\\epsilon}^{\\hspace{0.1em}2}_{\\mathrm{TF}}\$",
     )
-    xloc = 1.07
+    xloc = 1.325
     yloc = -0.54
     ydiv = -0.025
     # xloc = 1.7
@@ -213,7 +238,7 @@ function main()
     ax.text(
         xloc,
         yloc,
-        "\$r_s = 1,\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta), N_{\\mathrm{eval}} = \\mathrm{$(neval)},\$";
+        "\$r_s = 1,\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta), N_{\\mathrm{eval}} = \\mathrm{$(5e9)},\$";
         fontsize=14,
     )
     ax.text(
@@ -226,7 +251,7 @@ function main()
     plt.tight_layout()
     fig.savefig(
         "results/c1nl/c1nl_k=0_rs=$(rs)_" *
-        "beta_ef=$(beta)_neval=$(neval)_" *
+        "beta_ef=$(beta)_neval=$(5e9)_" *
         "$(intn_str)$(solver)_vs_lambda.pdf",
     )
     plt.close("all")

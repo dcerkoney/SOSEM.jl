@@ -177,28 +177,32 @@ const bare_observable_to_exact_k0 = Dict(
 """Composite of observables for different second-order moment (SOSEM) measurements."""
 struct CompositeObservable
     name::String
-    factors::Vector{Int}                # Multiplicative factor(s)
-    exact_unif::Union{Nothing,Float64}  # Exact uniform (k = 0) value, if available
     observables::Vector{Observable}
+    signs::Vector{Int}                  # Observable signs
+    factors::Vector{Int}                # Additional multiplicative prefactor(s)
+    exact_unif::Union{Nothing,Float64}  # Exact uniform (k = 0) value, if available
 end
 function CompositeObservable(observables; factors=ones(size(observables)), name="")
     exact_unif = sum(get_exact_k0.(observables))
-    return CompositeObservable(name, factors, exact_unif, observables)
+    signs = _get_obs_sign.(observables)
+    return CompositeObservable(name, observables, signs, factors, exact_unif)
 end
 
 # Total class (b) contribution (with/without vertex corrections):  C⁽¹ᵇ⁰⁾ᴸ + C⁽¹ᵇ⁾ᴸ + (L -> R)
-const c1b_total = CompositeObservable([c1bL0, c1bR0, c1bL, c1bR]; name="c1b_total")
+const c1b_total =
+    CompositeObservable([c1bL0, c1bR0, c1bL, c1bR]; name="C⁽¹ᵇ⁾[G, V, Γⁱ₃ ≥ Γ₀]")
 
 # Non-local SOSEM without vertex corrections: 
 #     C⁽¹⁾ⁿˡ⁰ = C⁽¹ᵇ⁰⁾ᴸ + C⁽¹ᵇ⁰⁾ᴿ + C⁽¹ᶜ⁾ + C⁽¹ᵈ⁾
-const c1nl0 = CompositeObservable([c1bL0, c1bR0, c1c, c1d]; name="c1nl0")
+const c1nl0 = CompositeObservable([c1bL0, c1bR0, c1c, c1d]; name="C⁽¹⁾ⁿˡ[G, V, Γⁱ₃ = Γ₀]")
 
 # Total non-local SOSEM:  C⁽¹⁾ⁿˡ = C⁽¹ᵇ⁰⁾ᴸ + C⁽¹ᵇ⁰⁾ᴿ + C⁽¹ᵇ⁾ᴸ + C⁽¹ᵇ⁾ᴿ + C⁽¹ᶜ⁾ + C⁽¹ᵈ⁾
-const c1nl = CompositeObservable([c1bL0, c1bR0, c1bL, c1bR, c1c, c1d]; name="c1nl")
+const c1nl =
+    CompositeObservable([c1bL0, c1bR0, c1bL, c1bR, c1c, c1d]; name="C⁽¹⁾ⁿˡ[G, V, Γⁱ₃ ≥ Γ₀]")
 
 # Total class (b) contribution for the UEG (with/without vertex corrections):  2C⁽¹ᵇ⁰⁾ᴸ + 2C⁽¹ᵇ⁾ᴸ
 const c1b_total_ueg =
-    CompositeObservable([c1bL0, c1bL]; factors=[2.0, 2.0], name="c1b_total_ueg")
+    CompositeObservable([c1bL0, c1bL]; factors=[2.0, 2.0], name="C⁽¹ᵇ⁾[G, V, Γⁱ₃ ≥ Γ₀]")
 
 # Non-local SOSEM for the UEG without vertex corrections (assuming TRS): 
 #     C⁽¹⁾ⁿˡ⁰ = 2C⁽¹ᵇ⁰⁾ᴸ + C⁽¹ᶜ⁾ + C⁽¹ᵈ⁾
@@ -220,24 +224,20 @@ const ObsType = Union{Observable,CompositeObservable}
 
 # String representations for atomic/composite observables
 const observable_to_string = Dict(
-    sigma20   => "Σ₂[G, V, Γⁱ₃ = Γ₀]",
-    sigma2    => "Σ₂[G, V, Γⁱ₃ > Γ₀]",
-    c1a       => "C⁽¹ᵃ⁾[G, V, Γⁱ₃ ≥ Γ₀]",
-    c1bL0     => "C⁽¹ᵇ⁾ᴸ[G, V, Γⁱ₃ = Γ₀]",
-    c1bR0     => "C⁽¹ᵇ⁾ᴿ[G, V, Γⁱ₃ = Γ₀]",
-    c1bL      => "C⁽¹ᵇ⁾ᴸ[G, V, Γⁱ₃ > Γ₀]",
-    c1bR      => "C⁽¹ᵇ⁾ᴿ[G, V, Γⁱ₃ > Γ₀]",
-    c1c       => "C⁽¹ᶜ⁾[G, V, Γⁱ₃ = Γ₀]",
-    c1d       => "C⁽¹ᵈ⁾[G, V, Γⁱ₃ = Γ₀]",
-    c1nl0_ueg => "C⁽¹⁾ⁿˡ[G, V, Γⁱ₃ = Γ₀]",
-    c1nl_ueg  => "C⁽¹⁾ⁿˡ[G, V, Γⁱ₃ ≥ Γ₀]",
+    sigma20 => "Σ₂[G, V, Γⁱ₃ = Γ₀]",
+    sigma2  => "Σ₂[G, V, Γⁱ₃ > Γ₀]",
+    c1a     => "C⁽¹ᵃ⁾[G, V, Γⁱ₃ ≥ Γ₀]",
+    c1bL0   => "C⁽¹ᵇ⁾ᴸ[G, V, Γⁱ₃ = Γ₀]",
+    c1bR0   => "C⁽¹ᵇ⁾ᴿ[G, V, Γⁱ₃ = Γ₀]",
+    c1bL    => "C⁽¹ᵇ⁾ᴸ[G, V, Γⁱ₃ > Γ₀]",
+    c1bR    => "C⁽¹ᵇ⁾ᴿ[G, V, Γⁱ₃ > Γ₀]",
+    c1c     => "C⁽¹ᶜ⁾[G, V, Γⁱ₃ = Γ₀]",
+    c1d     => "C⁽¹ᵈ⁾[G, V, Γⁱ₃ = Γ₀]",
 )
 
 """Overload print operator for string representations of observables."""
-# Base.print(io::IO, obs::ObsType) = print(io, observable_to_string[obs])
 Base.print(io::IO, obs::Observable) = print(io, observable_to_string[obs])
-Base.print(io::IO, obs::CompositeObservable) = print(io, observable_to_string[obs])
-# Base.print(io::IO, obs::CompositeObservable) = print(io, obs.name)
+Base.print(io::IO, obs::CompositeObservable) = print(io, obs.name)
 
 """Print the string representation of a (non-local) bare observable."""
 @inline function get_bare_string(obs::Observable)
