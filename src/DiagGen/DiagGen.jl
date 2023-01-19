@@ -30,7 +30,7 @@ export get_bare_string, get_exact_k0, getID, propagator_param
 
 include("common.jl")
 export Verbosity, quiet, info, verbose
-export Settings, Config, checktree
+export Settings, Config, checktree, atomize
 
 include("partitions.jl")
 export partition,
