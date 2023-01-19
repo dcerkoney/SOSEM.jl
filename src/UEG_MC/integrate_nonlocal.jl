@@ -134,7 +134,7 @@ end
 function integrate_full_nonlocal_with_ct(
     mcparam::UEG.ParaMC,
     diagparams::Vector{DiagParaF64},
-    exprtrees::Vector{ExprTreeF64},
+    exprtrees::Vector{ExprTreeF64};
     kgrid=[0.0],
     alpha=3.0,
     neval=1e5,
@@ -311,11 +311,14 @@ function integrand_full(vars, config)
         # Two roots: one for c1c, and one for the remaining observables (additional = mcparam)
         root1, root2 = exprtrees[i].root[1], exprtrees[i].root[2]
 
-        # Evaluate the expression tree for c1c
-        ExprTree.evalKT!(root1, varK, T.data, mcparam; eval=UEG_MC.Propagators.eval)
+        # # Evaluate the expression tree for c1c
+        # ExprTree.evalKT!(root1, varK, T.data, mcparam; eval=UEG_MC.Propagators.eval)
 
-        # Evaluate the expression tree for the remaining observables (additional = mcparam)
-        ExprTree.evalKT!(root2, varK, T.data, mcparam; eval=UEG_MC.Propagators.eval)
+        # # Evaluate the expression tree for the remaining observables (additional = mcparam)
+        # ExprTree.evalKT!(root2, varK, T.data, mcparam; eval=UEG_MC.Propagators.eval)
+
+        # Evaluate the expression tree (additional = mcparam)
+        ExprTree.evalKT!(exprtrees[i], varK, T.data, mcparam; eval=UEG_MC.Propagators.eval)
 
         # Non-dimensionalized integrand
         # NOTE: C⁽¹⁾ = Σ(τ = 0⁻) - Σ(τ = 0⁺), so there is an additional
