@@ -6,10 +6,6 @@ using JLD2
 using Measurements
 using SOSEM
 using SOSEM.DiagGen
-using PyCall
-
-# For saving/loading numpy data
-@pyimport numpy as np
 
 function main()
     # Change to project directory
@@ -27,8 +23,8 @@ function main()
     # Composite observable; measure all non-local moments together
     settings = Settings{CompositeObservable}(
         c1nl_ueg;
-        min_order=4,  # TODO: special-purpose integrator for (2,0,0) partition
-        max_order=4,
+        min_order=3,  # TODO: special-purpose integrator for (2,0,0) partition
+        max_order=5,
         verbosity=quiet,
         expand_bare_interactions=false,
         filter=[NoHartree],
@@ -41,7 +37,7 @@ function main()
         order=settings.max_order,
         rs=1.0,
         beta=40.0,
-        mass2=2.0,
+        mass2=1.0,
         isDynamic=false,
     )
     @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)"
@@ -67,7 +63,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 1e9
+    neval = 5e11
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
