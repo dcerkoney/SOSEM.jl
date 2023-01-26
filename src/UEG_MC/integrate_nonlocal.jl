@@ -219,16 +219,14 @@ end
 
 """Measurement for a single partition (without CTs, fixed order in V)."""
 @inline function measure_single(vars, obs, weights, config)
-    # ExtK bin index
-    ik = vars[3][1]
+    ik = vars[3][1]  # ExtK bin index
     obs[1][ik] += weights[1]
     return
 end
 
 """Measurement for multiple (N) partitions (with CTs, fixed order in ξ)."""
 function measure(vars, obs, weights, config)
-    # ExtK bin index
-    ik = vars[3][1]
+    ik = vars[3][1]  # ExtK bin index
     # Measure the weight of each partition
     for o in 1:(config.N)
         obs[o][ik] += weights[o]

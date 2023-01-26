@@ -98,7 +98,7 @@ function exchange_mc_variables(mcparam::UEG.ParaMC, n_kgrid::Int, alpha::Float64
     Theta = Continuous(0.0, 1π; alpha=alpha)
     Phi = Continuous(0.0, 2π; alpha=alpha)
     K = CompositeVar(R, Theta, Phi)
-    # Offset T pool by 3 for fixed external times (τout-, τout+, τin)
+    # Offset T pool by 2 for fixed external times (τin, τout)
     T = Continuous(0.0, mcparam.β; offset=2, alpha=alpha)
     # Bin in external momentum
     ExtKidx = Discrete(1, n_kgrid; alpha=alpha)
@@ -107,8 +107,7 @@ end
 
 """Measurement for a single diagram tree (without CTs, fixed order in V)."""
 function measure(vars, obs, weights, config)
-    # ExtK bin index
-    ik = vars[2][1]
+    ik = vars[3][1]  # ExtK bin index
     obs[1][ik] += weights[1]
     return
 end
@@ -195,7 +194,7 @@ function main()
     alpha = 2.0
     print = 0
     plot = true
-    solver = :vegas
+    solver = :vegasmc
 
     # Number of evals below and above kF
     neval = 1e6
@@ -245,8 +244,8 @@ function main()
     obs = [zeros(n_kgrid)]
 
     # External times are fixed for left/right measurement of the discontinuity at τ = 0
-    T.data[1] = 0      # τin  = 0
-    T.data[2] = 1e-6   # τout = 0⁺
+    T.data[1] = 1e-6  # τin  = 0⁺
+    T.data[2] = 0     # τout = 0
 
     res = integrate(
         integrand;
@@ -264,7 +263,6 @@ function main()
 
     # Save to JLD2 on main thread
     if !isnothing(res)
-        means, stdevs = res.mean, res.stdev
         savename =
             "results/data/sigma_x_rs=$(mcparam.rs)_" *
             "beta_ef=$(mcparam.beta)_neval=$(neval)_$(solver)"
@@ -275,39 +273,6 @@ function main()
                 delete!(f, key)
             end
             return f[key] = (settings, mcparam, kgrid, res)
-        end
-        # Plot the result
-        if plot
-            fig, ax = plt.subplots()
-            # Compare with exact non-dimensionalized Fock self-energy (ΣF(k) / ϵₖ)
-            epsilon_k = kgrid^2 / (2 * mcparam.me * mcparam.massratio)
-            ax.plot(
-                k_kf_grid,
-                fock_self_energy_exact.(kgrid, mcparam) / epsilon_k,
-                "k";
-                label="\$ \\sigma_{\\mathrm{F}}(k) / \\epsilon_k \$ (exact)",
-            )
-            sigma_x_label =
-                order == 1 ? "\\sigma_{\\mathrm{F}}(k) / \\epsilon_k ($solver)" :
-                "\\sigma^{($order)}_{\\mathrm{x}}(k) / \\epsilon_k ($solver)"
-            ax.plot(k_kf_grid, means, "-"; color="C0", label=sigma_x_label)
-            ax.fill_between(
-                k_kf_grid,
-                means - stdevs,
-                means + stdevs;
-                color="C0",
-                alpha=0.4,
-            )
-            ax.legend(; loc="best")
-            ax.set_xlabel("\$k / k_F\$")
-            # ax.set_ylabel("\$\\Sigma_{x}(\\mathbf{k}) \\,/\\, \\epsilon_{\\mathbf{k}}\$")
-            ax.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
-            plt.tight_layout()
-            fig.savefig(
-                "results/fock/sigma_x_rs=$(mcparam.rs)_" *
-                "beta_ef=$(mcparam.beta)_neval=$(neval)_$(solver).pdf",
-            )
-            plt.close("all")
         end
     end
 end
