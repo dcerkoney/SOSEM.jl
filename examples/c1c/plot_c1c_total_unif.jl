@@ -143,7 +143,7 @@ function main()
 
     if min_order_plot == 2
         # Set bare result manually using exact data to avoid statistical error in (2,0,0) calculation
-        merged_data[(2, 0)] = measurement.(c1c2_exact, 0.0)  # quadrature data assumed numerically exact
+        merged_data[(2, 0)] = measurement.(c1c2_exact, 0.0)  # treat quadrature data as numerically exact
     end
 
     # Get total data

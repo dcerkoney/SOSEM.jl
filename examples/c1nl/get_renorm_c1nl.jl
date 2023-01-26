@@ -117,7 +117,7 @@ function renorm_measurement(
             linear_interpolation(k_kf_grid_quad, c1class_bare_quad; extrapolation_bc=Line())
         c1class_2_exact = c1class_bare_interp(k_kf_grid)
         # Set bare results manually using exact data to avoid systematic error in (2,0,0) calculation
-        merged_data[(2, 0)] = measurement.(c1class_2_exact, 0.0)  # quadrature data assumed numerically exact
+        merged_data[(2, 0)] = measurement.(c1class_2_exact, 0.0)  # treat quadrature data as numerically exact
     end
     if renorm_mu
         # The lowest order is 2 for all measurements except

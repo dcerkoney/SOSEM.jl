@@ -5,6 +5,7 @@ using FeynmanDiagram
 using JLD2
 using Measurements
 using SOSEM
+using SOSEM.DiagGen
 using PyCall
 
 # For saving/loading numpy data
@@ -24,38 +25,35 @@ function main()
     end
 
     # Composite observable; measure all non-local moments together
-    settings_list = [
-        DiagGen.Settings(;
-            observable=obs,
-            min_order=2,  # TODO: special-purpose integrator for (2,0,0) partition
-            max_order=2,
-            verbosity=DiagGen.quiet,
-            expand_bare_interactions=false,
-            filter=[NoHartree],
-            interaction=[FeynmanDiagram.Interaction(ChargeCharge, Instant)],  # Yukawa-type interaction
-        ) for obs in DiagGen.c1nl0_ueg.observables
-    ]
-    @assert DiagGen.c1nl0_ueg.observables ==
-            [DiagGen.c1bL0, DiagGen.c1c, DiagGen.c1d]
+    settings = Settings{CompositeObservable}(
+        c1nl0_ueg;
+        min_order=2,  # TODO: special-purpose integrator for (2,0,0) partition
+        max_order=2,
+        verbosity=quiet,
+        expand_bare_interactions=false,
+        filter=[NoHartree],
+        interaction=[FeynmanDiagram.Interaction(ChargeCharge, Instant)],  # Yukawa-type interaction
+    )
+    @assert c1nl0_ueg.observables == [c1bL0, c1c, c1d]
 
     # UEG parameters for MC integration
     param =
-        ParaMC(; order=settings_list[1].max_order, rs=1.0, beta=40.0, mass2=2.0, isDynamic=false)
+        ParaMC(; order=settings.max_order, rs=1.0, beta=40.0, mass2=1.0, isDynamic=false)
     @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)"
 
     # K-mesh for measurement
-    kgrid = [0.0]
-    # minK = 0.15 * param.kF
-    # Nk, korder = 5, 6
-    # kgrid =
-    #     CompositeGrid.LogDensedGrid(
-    #         :uniform,
-    #         [0.0, 3 * param.kF],
-    #         [param.kF],
-    #         Nk,
-    #         minK,
-    #         korder,
-    #     ).grid
+    # kgrid = [0.0]
+    minK = 0.2 * param.kF
+    Nk, korder = 4, 7
+    kgrid =
+        CompositeGrid.LogDensedGrid(
+            :uniform,
+            [0.0, 3 * param.kF],
+            [param.kF],
+            Nk,
+            minK,
+            korder,
+        ).grid
     # k_kf_grid = kgrid / param.kF
     # k_kf_grid = np.load("results/kgrids/kgrid_vegas_dimless_n=77_small.npy")
     # kgrid = param.kF * k_kf_grid
@@ -73,11 +71,8 @@ function main()
     renorm_lambda = true
 
     # Build diagram and expression trees for all loop and counterterm partitions
-    partitions, diagparams, diagtrees, exprtrees = DiagGen.build_full_nonlocal_with_ct(
-        settings_list;
-        renorm_mu=renorm_mu,
-        renorm_lambda=renorm_lambda,
-    )
+    partitions, diagparams, diagtrees, exprtrees =
+        build_nonlocal_with_ct(settings; renorm_mu=renorm_mu, renorm_lambda=renorm_lambda)
 
     println("Integrating partitions: $partitions")
     println("diagtrees: $diagtrees")
@@ -87,12 +82,11 @@ function main()
 
     # # Check the diagram tree
     # for d in diagtrees
-    #     DiagGen.checktree(d, settings[1])
+    #     checktree(d, settings[1])
     # end
 
     # Bin external momenta, performing a single integration
     res = UEG_MC.integrate_full_nonlocal_with_ct(
-        # settings,
         param,
         diagparams,
         exprtrees;
@@ -105,7 +99,7 @@ function main()
 
     # Distinguish results with fixed vs re-expanded bare interactions
     intn_str = ""
-    if settings_list[1].expand_bare_interactions
+    if settings.expand_bare_interactions
         intn_str = "no_bare_"
     end
 
@@ -130,7 +124,7 @@ function main()
                 @warn("replacing existing data for $key")
                 delete!(f, key)
             end
-            return f[key] = (settings_list, param, kgrid, partitions, res)
+            return f[key] = (settings, param, kgrid, partitions, res)
         end
     end
 end

@@ -156,7 +156,7 @@ function main()
         # NOTE: Since C⁽¹ᵇ⁾ᴸ = C⁽¹ᵇ⁾ᴿ for the UEG, the
         #       full class (b) moment is C⁽¹ᵇ⁾ = 2C⁽¹ᵇ⁾ᴸ.
         c1b2L_exact = c1b2_exact / 2
-        merged_data[(2, 0)] = measurement.(c1b2L_exact, 0.0)  # quadrature data assumed numerically exact
+        merged_data[(2, 0)] = measurement.(c1b2L_exact, 0.0)  # treat quadrature data as numerically exact
     end
 
     # Get total data

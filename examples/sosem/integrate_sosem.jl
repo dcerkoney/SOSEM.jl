@@ -17,8 +17,8 @@ function main()
         ENV["JULIA_DEBUG"] = SOSEM
     end
 
-    settings = DiagGen.Settings(;
-        observable=DiagGen.c1c,
+    settings = DiagGen.Settings{DiagGen.Observable}(
+        DiagGen.c1c;
         max_order=4,
         verbosity=DiagGen.quiet,
         expand_bare_interactions=false,

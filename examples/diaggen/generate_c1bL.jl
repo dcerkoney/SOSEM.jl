@@ -6,8 +6,8 @@ if isinteractive()
     ENV["JULIA_DEBUG"] = SOSEM
 end
 
-settings = DiagGen.Settings(;
-    observable=DiagGen.c1bL,
+settings = DiagGen.Settings{DiagGen.Observable}(;
+    DiagGen.c1bL,
     min_order=5,
     max_order=5,
     verbosity=DiagGen.verbose,

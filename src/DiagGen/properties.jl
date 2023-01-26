@@ -183,8 +183,8 @@ struct CompositeObservable
     exact_unif::Union{Nothing,Float64}  # Exact uniform (k = 0) value, if available
 end
 function CompositeObservable(observables; factors=ones(size(observables)), name="")
-    exact_unif = sum(get_exact_k0.(observables))
     signs = _get_obs_sign.(observables)
+    exact_unif = sum(factors .* get_exact_k0.(observables))
     return CompositeObservable(name, observables, signs, factors, exact_unif)
 end
 
@@ -243,6 +243,10 @@ Base.print(io::IO, obs::CompositeObservable) = print(io, obs.name)
 @inline function get_bare_string(obs::Observable)
     @assert obs in [c1a, c1bL0, c1bR0, c1c, c1d]
     return bare_observable_to_string[obs]
+end
+
+@inline function _get_lowest_loop_order(obs::CompositeObservable)
+    return minimum(_get_lowest_loop_order(o) for o in obs.observables)
 end
 
 """Build the DiagramId for a second-order moment."""

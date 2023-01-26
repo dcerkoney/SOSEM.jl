@@ -29,8 +29,8 @@ function main()
     end
 
     # Settings for diagram generation
-    settings = DiagGen.Settings(;
-        observable=DiagGen.c1d,
+    settings = DiagGen.Settings{DiagGen.Observable}(
+        DiagGen.c1d;
         min_order=2,
         max_order=2,
         verbosity=DiagGen.quiet,

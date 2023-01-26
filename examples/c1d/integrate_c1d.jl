@@ -19,8 +19,8 @@ function main()
         ENV["JULIA_DEBUG"] = SOSEM
     end
 
-    settings = DiagGen.Settings(;
-        observable=DiagGen.c1d,
+    settings = DiagGen.Settings{DiagGen.Observable}(
+        DiagGen.c1d;
         min_order=3,  # TODO: write special-purpose integrator for (2,0,0) partition
         max_order=4,
         verbosity=DiagGen.quiet,

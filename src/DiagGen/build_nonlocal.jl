@@ -84,22 +84,24 @@ Construct diagram and expression trees for the full non-local second-order momen
 derived from Σ₂[G, V, Γⁱ₃ = Γ₀] (or Σ₂ itself) at O(Vⁿ) for a statically-screened interaction V[λ].
 """
 function build_nonlocal_fixed_order(settings::Settings{CompositeObservable})
-    @assert all(s.min_order == s.max_order for s in s_list)
+    settings_list = atomize(settings)  # atomized settings
+    @assert settings.min_order == settings.max_order
+
     DiagTree.uidreset()
     # Build trees for each (atomic) observable; we can merge them all except for c1c
     diagparams = DiagParaF64[]
     diagtrees_rest = DiagramF64[]
     extTs_rest = Tuple{Int,Int}[]
+    diagtree_c1c = nothing
     local id_rest
     namestr_rest = ""
-    diagtree_c1c = nothing
-    for (i, s) in enumerate(s_list)
-        if s.min_order < _get_lowest_loop_order(s)
+    for (i, s) in enumerate(settings_list)
+        if s.min_order < _get_lowest_loop_order(s.observable)
             @warn "Observable $(s.observable) does not enter at loop order $(s.min_order), skipping it..."
             continue
         end
         # Overall factor for this sub-observable
-        obs_factor = c1nl_ueg.signs[i] * c1nl_ueg.factors[i]
+        obs_factor = settings.observable.signs[i] * settings.observable.factors[i]
         diagparam, obstree = build_diagtree(s; factor=obs_factor)
         if s.observable == c1c
             push!(diagparams, diagparam)
@@ -110,7 +112,7 @@ function build_nonlocal_fixed_order(settings::Settings{CompositeObservable})
             push!(extTs_rest, Config(s).extT)
             id_rest = deepcopy(obstree.id)
             namestr_rest *= string(s.observable)
-            i > 1 && (namestr_rest *= " + ")
+            i > 1 && (namestr_rest = " + " * namestr_rest)
         end
     end
     # The external times and diagram parameters of all 
@@ -140,7 +142,8 @@ function build_nonlocal_with_ct(
     renorm_lambda=true,
 )
     settings_list = atomize(settings)  # atomized settings
-    @assert settings.min_order == settings.max_order
+    # TODO: Check that we don't need this assumption!
+    # @assert settings.min_order == settings.max_order
 
     DiagTree.uidreset()
     valid_partitions = Vector{PartitionType}()
@@ -148,17 +151,24 @@ function build_nonlocal_with_ct(
     diagtrees_list = Vector{Vector{DiagramF64}}()
     exprtrees = Vector{ExprTreeF64}()
     # Loop over all counterterm partitions for the given SOSEM observable settings
-    for p in counterterm_partitions(settings; renorm_mu=renorm_mu, renorm_lambda=renorm_lambda)
+    for p in
+        counterterm_partitions(settings; renorm_mu=renorm_mu, renorm_lambda=renorm_lambda)
         # Build diagram trees for each (atomic) observable for this partition
         @debug "Partition (n_loop, n_ct_mu, n_ct_lambda): $p"
         # Build trees for each (atomic) observable; we can merge them all except for c1c
         partn_diagparams = DiagParaF64[]
         partn_diagtrees_rest = DiagramF64[]
         partn_extTs_rest = ProprTauType[]
-        local partn_diagtree_c1c, partn_id_rest
+        partn_diagtree_c1c = nothing
+        local partn_id_rest
+        partn_namestr_rest = ""
         for (i, s) in enumerate(settings_list)
+            if p[1] < _get_lowest_loop_order(s.observable)
+                @warn "Observable $(s.observable) does not enter at loop order $(p[1]), skipping it..."
+                continue
+            end
             # Overall factor for this sub-observable
-            obs_factor = c1nl_ueg.signs[i] * c1nl_ueg.factors[i]
+            obs_factor = settings.observable.signs[i] * settings.observable.factors[i]
             partn_diagparam, partn_obstree =
                 build_diagtree(s; factor=obs_factor, n_loop=p[1])
             if s.observable == c1c
@@ -169,6 +179,8 @@ function build_nonlocal_with_ct(
                 push!(partn_diagtrees_rest, partn_obstree)
                 push!(partn_extTs_rest, Config(s).extT)
                 partn_id_rest = deepcopy(partn_obstree.id)
+                partn_namestr_rest *= string(s.observable)
+                i > 1 && (partn_namestr_rest = " + " * partn_namestr_rest)
             end
         end
         # The external times and diagram parameters of all 
@@ -179,14 +191,16 @@ function build_nonlocal_with_ct(
         @assert alleq(partn_extTs_rest)
         # Sum trees for the 3 observables with positive discontinuity side
         partn_diagparam = partn_diagparams[1]
-        diagtree_rest = DiagramF64(
+        partn_diagtree_rest = DiagramF64(
             partn_id_rest,
             Sum(),
             partn_diagtrees_rest;
-            name=Symbol("C⁽¹ᵇ⁰⁾ᴸ + C⁽¹ᵇ⁾ᴸ + C⁽¹ᵈ⁾"),
+            name=Symbol(partn_namestr_rest),
         )
-        # Diagtrees for c1c and rest for this partition
-        partn_diagtrees = [partn_diagtree_c1c, diagtree_rest]
+        # Up to two diagram trees ⟹ roots, one for each extT type
+        partn_diagtrees =
+            isnothing(partn_diagtree_c1c) ? [partn_diagtree_rest] :
+            [partn_diagtree_c1c, partn_diagtree_rest]
 
         # Build tree with counterterms (∂λ(∂μ(DT))) via automatic differentiation
         dμ_diagtrees = DiagTree.derivative(partn_diagtrees, BareGreenId, p[2]; index=1)

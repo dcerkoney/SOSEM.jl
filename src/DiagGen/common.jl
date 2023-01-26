@@ -15,31 +15,35 @@ struct Settings{O}
     filter::Vector{Filter}
     interaction::Vector{Interaction}
     name::Symbol
-    function Settings{O}(
-        obs::O;
-        min_order::Int=_get_lowest_loop_order(obs),  # Minimum allowed total order ξ (loops + CTs)
-        max_order::Int=_get_lowest_loop_order(obs),  # Maximum allowed total order ξ (loops + CTs)
-        verbosity::Verbosity=quiet,
-        expand_bare_interactions::Bool=false,
-        filter::Vector{Filter}=[NoHartree],
-        interaction::Vector{Interaction}=[Interaction(ChargeCharge, Instant)],
-        name::Symbol=Symbol(string(obs)),  # Derive SOSEM name from observable
-    ) where {O<:ObsType}
-        return new{O}(
-            obs,
-            min_order,
-            max_order,
-            verbosity,
-            expand_bare_interactions,
-            filter,
-            interaction,
-            name,
-        )
-    end
 end
+function Settings{O}(
+    obs::O;
+    min_order::Int=_get_lowest_loop_order(obs),  # Minimum allowed total order ξ (loops + CTs)
+    max_order::Int=_get_lowest_loop_order(obs),  # Maximum allowed total order ξ (loops + CTs)
+    verbosity::Verbosity=quiet,
+    expand_bare_interactions::Bool=false,
+    filter::Vector{Filter}=[NoHartree],
+    interaction::Vector{Interaction}=[Interaction(ChargeCharge, Instant)],
+    name::Symbol=Symbol(string(obs)),  # Derive SOSEM name from observable
+) where {O<:ObsType}
+    return Settings{O}(
+        obs,
+        min_order,
+        max_order,
+        verbosity,
+        expand_bare_interactions,
+        filter,
+        interaction,
+        name,
+    )
+end
+
 """Split settings for a composite observable into a list of settings for each atomic observable."""
 function atomize(settings::Settings{CompositeObservable})
-    return [reconstruct(settings; observable=o) for o in settings.observable.observables]
+    return [
+        reconstruct(Settings, settings; observable=o, name=Symbol(string(o))) for
+        o in settings.observable.observables
+    ]
 end
 # Settings(obs::CompositeObservable; kwargs...) = Settings.(obs.observables; kwargs...)
 
@@ -132,7 +136,9 @@ function Config(
         return _Config(settings, n_loop, g_names, v_names)
     end
 end
-Config(settings::Settings{CompositeObservable}, kwargs...) = Config.(atomize(settings), kwargs...)
+function Config(settings::Settings{CompositeObservable}, kwargs...)
+    return Config.(atomize(settings), kwargs...)
+end
 
 """Construct a Config struct with trivial Γⁱ₃ insertion (Γⁱ₃ = Γ₀)."""
 function _Config(settings::Settings{Observable}, n_loop, g_names, v_names)

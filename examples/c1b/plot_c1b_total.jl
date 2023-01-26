@@ -59,8 +59,8 @@ function main()
     #     order in fixed_orders
     # ]
 
-    # plotsettings = DiagGen.Settings(;
-    #     observable=DiagGen.c1bL,
+    # plotsettings = DiagGen.Settings{DiagGen.Observable}(;
+    #     DiagGen.c1bL,
     #     min_order=min_order,
     #     max_order=max_order,
     #     expand_bare_interactions=expand_bare_interactions,

@@ -1,20 +1,19 @@
+using SOSEM.DiagGen
+
 """Integration test for bare (O(V²)), uniform (k = 0) SOSEM observables."""
 function bare_integral_k0(;
-    observable::DiagGen.Observable,
+    observable::Observable,
     beta=200.0,
     alpha=2.0,
     neval=5e5,
     mcprint=-1,
     zscore_window=6,
     solver=:vegasmc,
-    verbosity=DiagGen.quiet,
+    verbosity=quiet,
 )
     # Settings for diagram generation
-    settings = DiagGen.Settings(;
-        observable=observable,
-        verbosity=verbosity,
-        expand_bare_interactions=false,
-    )
+    settings =
+        Settings{Observable}(observable; verbosity=verbosity, expand_bare_interactions=false)
 
     # UEG parameters for MC integration
     param = ParaMC(; order=settings.max_order, rs=1.0, beta=beta, isDynamic=false)
@@ -22,14 +21,14 @@ function bare_integral_k0(;
     # Generate the diagrams for the implicitly fixed-order calculation
 
     # Test against explicit fixed-order calculation
-    diagparam, diagtree, exprtree = DiagGen.build_nonlocal_fixed_order(settings)
-    diagparam_v2, _, _ = DiagGen.build_nonlocal(settings)
+    diagparam, diagtree, exprtree = build_nonlocal_fixed_order(settings)
+    diagparam_v2, _, _ = build_nonlocal(settings)
 
     # Check that explicit/implicit fixed-order calculations 
     # both give the same generated diagram parameters
     @test diagparam == diagparam_v2[1]
 
-    DiagGen.checktree(diagtree, settings)
+    checktree(diagtree, settings)
     @test length(exprtree.root) == 1
 
     # Integrate the non-local moment
@@ -46,12 +45,12 @@ function bare_integral_k0(;
     )
 
     # Get exact uniform value for this SOSEM observable
-    exact = DiagGen.get_exact_k0(observable)
+    exact = get_exact_k0(observable)
 
     # Test standard score (z-score) of the measurement
     meas = measurement(res.mean[1], res.stdev[1])
     score = stdscore(meas, exact)
-    obsstring = DiagGen.get_bare_string(observable)
+    obsstring = get_bare_string(observable)
 
     # Result should be accurate to within the specified standard score (by default, 5σ)
     if mcprint > -2
@@ -70,18 +69,18 @@ Integration test for bare (O(V²)), uniform (k = 0) SOSEM observable using
 the multi-partition integrator intended for evaluation with counterterms.
 """
 function bare_integral_k0_multipartition(;
-    observable::DiagGen.Observable,
+    observable::Observable,
     beta=200.0,
     alpha=2.0,
     neval=5e5,
     mcprint=-1,
     zscore_window=6,
     solver=:vegasmc,
-    verbosity=DiagGen.quiet,
+    verbosity=quiet,
 )
     # Settings for diagram generation
-    settings = DiagGen.Settings(;
-        observable=observable,
+    settings = Settings{Observable}(
+        observable;
         max_order=2,
         verbosity=verbosity,
         expand_bare_interactions=false,
@@ -92,7 +91,7 @@ function bare_integral_k0_multipartition(;
 
     # Build diagram and expression trees for all loop and counterterm partitions
     partitions, diagparams, diagtrees, exprtrees =
-        DiagGen.build_nonlocal_with_ct(settings; renorm_mu=false)
+        build_nonlocal_with_ct(settings; renorm_mu=false)
 
     @test partitions == [(2, 0, 0)]
     @test all(length(et.root) == 1 for et in exprtrees)
@@ -111,12 +110,12 @@ function bare_integral_k0_multipartition(;
     )
 
     # Get exact uniform value for this SOSEM observable
-    exact = DiagGen.get_exact_k0(observable)
+    exact = get_exact_k0(observable)
 
     # Test standard score (z-score) of the measurement
     meas = measurement(res.mean[1], res.stdev[1])
     score = stdscore(meas, exact)
-    obsstring = DiagGen.get_bare_string(observable)
+    obsstring = get_bare_string(observable)
 
     # Result should be accurate to within the specified standard score (by default, 5σ)
     if mcprint > -2
@@ -134,17 +133,17 @@ end
     test_solvers = [:vegasmc]
     @testset "C₂⁽¹ᵇ⁾ᴸ" begin
         for solver in test_solvers
-            @test_broken bare_integral_k0(; observable=DiagGen.c1bL0, solver=solver)
+            @test_broken bare_integral_k0(; observable=c1bL0, solver=solver)
         end
     end
     @testset "C₂⁽¹ᶜ⁾" begin
         for solver in test_solvers
-            @test bare_integral_k0(; observable=DiagGen.c1c, solver=solver)
+            @test bare_integral_k0(; observable=c1c, solver=solver)
         end
     end
     @testset "C₂⁽¹ᵈ⁾" begin
         for solver in test_solvers
-            @test_broken bare_integral_k0(; observable=DiagGen.c1d, solver=solver)
+            @test_broken bare_integral_k0(; observable=c1d, solver=solver)
         end
     end
 end
@@ -154,7 +153,7 @@ end
     @testset "C₂⁽¹ᵇ⁾ᴸ" begin
         for solver in test_solvers
             @test_broken bare_integral_k0_multipartition(;
-                observable=DiagGen.c1bL0,
+                observable=c1bL0,
                 solver=solver,
                 # mcprint=-2,
             )
@@ -163,7 +162,7 @@ end
     @testset "C₂⁽¹ᶜ⁾" begin
         for solver in test_solvers
             @test bare_integral_k0_multipartition(;
-                observable=DiagGen.c1c,
+                observable=c1c,
                 solver=solver,
                 # mcprint=-2,
             )
@@ -172,7 +171,7 @@ end
     @testset "C₂⁽¹ᵈ⁾" begin
         for solver in test_solvers
             @test_broken bare_integral_k0_multipartition(;
-                observable=DiagGen.c1d,
+                observable=c1d,
                 solver=solver,
                 # mcprint=-2,
             )

@@ -66,7 +66,7 @@ Get all (μ and/or λ) counterterm partitions (n1, n2, n3) satisfying the constr
 s.min_order ≤ n1 + n2 + n3 ≤ s.max_order for the given SOSEM measurement settings. 
 If `renorm_mu` is false, then n_ct_mu = 0. 
 """
-function counterterm_partitions(s::Settings{Observable}; renorm_mu=false, renorm_lambda=true)
+function counterterm_partitions(s::Settings; renorm_mu=false, renorm_lambda=true)
     return counterterm_partitions(
         s.min_order,
         s.max_order;

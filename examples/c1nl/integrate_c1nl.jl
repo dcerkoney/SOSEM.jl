@@ -5,6 +5,11 @@ using FeynmanDiagram
 using JLD2
 using Measurements
 using SOSEM
+using SOSEM.DiagGen
+using PyCall
+
+# For saving/loading numpy data
+@pyimport numpy as np
 
 function main()
     # Change to project directory
@@ -19,41 +24,42 @@ function main()
         ENV["JULIA_DEBUG"] = SOSEM
     end
 
-    settings = DiagGen.Settings{DiagGen.Observable}(
-        DiagGen.c1bL0;
-        min_order=3,  # TODO: special-purpose integrator for (2,0,0) partition
+    # Composite observable; measure all non-local moments together
+    settings = Settings{CompositeObservable}(
+        c1nl_ueg;
+        min_order=4,  # TODO: special-purpose integrator for (2,0,0) partition
         max_order=4,
-        verbosity=DiagGen.quiet,
+        verbosity=quiet,
         expand_bare_interactions=false,
         filter=[NoHartree],
         interaction=[FeynmanDiagram.Interaction(ChargeCharge, Instant)],  # Yukawa-type interaction
-        # interaction=[FeynmanDiagram.Interaction(ChargeCharge, Dynamic)],  # TODO: test RPA-type interaction
     )
-
-    # TODO: Write special-purpose integrator for bare result; currently using the old numerically
-    #       exact results from quadrature, wich are valid for `expand_bare_interactions=false` only!
-    @assert settings.expand_bare_interactions == false
+    @assert c1nl_ueg.observables == [c1bL0, c1bL, c1c, c1d]
 
     # UEG parameters for MC integration
-    param =
-        ParaMC(; order=settings.max_order, rs=1.0, beta=40.0, mass2=2.0, isDynamic=false)
+    param = ParaMC(;
+        order=settings.max_order,
+        rs=1.0,
+        beta=40.0,
+        mass2=2.0,
+        isDynamic=false,
+    )
     @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)"
 
-    println("lambda = $(param.mass2)")
-
     # K-mesh for measurement
-    kgrid = [0.0]
-    # minK = 0.2 * param.kF
-    # Nk, korder = 4, 7
-    # kgrid =
-    #     CompositeGrid.LogDensedGrid(
-    #         :uniform,
-    #         [0.0, 3 * param.kF],
-    #         [param.kF],
-    #         Nk,
-    #         minK,
-    #         korder,
-    #     ).grid
+    # kgrid = [0.0]
+    minK = 0.2 * param.kF
+    Nk, korder = 4, 7
+    kgrid =
+        CompositeGrid.LogDensedGrid(
+            :uniform,
+            [0.0, 3 * param.kF],
+            [param.kF],
+            Nk,
+            minK,
+            korder,
+        ).grid
+    # k_kf_grid = kgrid / param.kF
 
     # Settings
     alpha = 3.0
@@ -61,31 +67,33 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 1e10
+    neval = 1e9
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
     renorm_lambda = true
 
     # Build diagram and expression trees for all loop and counterterm partitions
-    partitions, diagparams, diagtrees, exprtrees = DiagGen.build_nonlocal_with_ct(
+    partitions, diagparams, diagtrees, exprtrees = build_nonlocal_with_ct(
+        # settings_list;
         settings;
         renorm_mu=renorm_mu,
         renorm_lambda=renorm_lambda,
     )
 
     println("Integrating partitions: $partitions")
-    @debug "diagtrees: $diagtrees"
-    @debug "exprtrees: $exprtrees"
+    println("diagtrees: $diagtrees")
+    println("exprtrees: $exprtrees")
+    # @debug "diagtrees: $diagtrees"
+    # @debug "exprtrees: $exprtrees"
 
-    # Check the diagram tree
+    # # Check the diagram tree
     # for d in diagtrees
-    #     DiagGen.checktree(d, settings)
+    #     checktree(d, settings[1])
     # end
 
     # Bin external momenta, performing a single integration
-    res = UEG_MC.integrate_nonlocal_with_ct(
-        # settings,
+    res = UEG_MC.integrate_full_nonlocal_with_ct(
         param,
         diagparams,
         exprtrees;
@@ -114,7 +122,7 @@ function main()
     # Save to JLD2 on main thread
     if !isnothing(res)
         savename =
-            "results/data/c1bL0_n=$(param.order)_rs=$(param.rs)_" *
+            "results/data/c1nl_n=$(param.order)_rs=$(param.rs)_" *
             "beta_ef=$(param.beta)_lambda=$(param.mass2)_" *
             "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)"
         jldopen("$savename.jld2", "a+") do f
@@ -124,26 +132,6 @@ function main()
                 delete!(f, key)
             end
             return f[key] = (settings, param, kgrid, partitions, res)
-        end
-    end
-
-    # Save to JLD2 on main thread using new format
-    if !isnothing(res)
-        savename =
-            "results/data/rs=$(param.rs)_beta_ef=$(param.beta)_" *
-            "lambda=$(param.mass2)_$(intn_str)$(solver)_$(ct_string)"
-        jldopen("$savename.jld2", "a+") do f
-            key = "c1bL0_n_min=$(settings.min_order)_n_max=$(settings.max_order)_neval=$(neval)"
-            if haskey(f, key)
-                @warn("replacing existing data for $key")
-                delete!(f, key)
-            end
-            f["$key/res"] = res
-            f["$key/settings"] = settings
-            f["$key/param"] = param
-            f["$key/kgrid"] = kgrid
-            f["$key/partitions"] = partitions
-            return
         end
     end
 end
