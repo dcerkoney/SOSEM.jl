@@ -27,7 +27,8 @@ function main()
     expand_bare_interactions = false
 
     neval3 = 1e8
-    neval4 = 1e9
+    neval4 = 1e8
+    neval5 = 1e8
     nevals = [neval3, neval4]
     neval = maximum(nevals)
 
@@ -52,37 +53,47 @@ function main()
     # Full renormalization
     ct_string = "with_ct_mu_lambda"
 
-    # Load the fixed-order results from JLD2 (and μ data from csv, if applicable)
-    kgrids = []
-    partitions_list = []
-    res_list = []
-    filenames = [
-        "results/data/c1nl_n=$(N)_rs=$(rs)_" *
+    savename =
+        "results/data/c1nl_n=$(max_order)_rs=$(rs)_" *
         "beta_ef=$(beta)_lambda=$(mass2)_" *
-        "neval=$(nevals[i])_$(intn_str)$(solver)_$(ct_string)" for
-        (i, N) in enumerate(min_order:max_order)
-    ]
-    local settings, param, kgrid
-    for (i, N) in enumerate(min_order:max_order)
-        settings, param, kgrid, partitions, res = jldopen("$(filenames[i]).jld2", "a+") do f
-            key = "$(UEG.short(loadparam))"
-            return f[key]
-        end
-        push!(kgrids, kgrid)
-        push!(partitions_list, partitions)
-        push!(res_list, res)
+        "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)"
+    settings, param, kgrid, partitions, res = jldopen("$savename.jld2", "a+") do f
+        key = "$(UEG.short(loadparam))"
+        return f[key]
     end
-    @assert SOSEM.alleq(kgrids)
+
+    # # Load the fixed-order results from JLD2 (and μ data from csv, if applicable)
+    # kgrids = []
+    # partitions_list = []
+    # res_list = []
+    # filenames = [
+    #     "results/data/c1nl_n=$(N)_rs=$(rs)_" *
+    #     "beta_ef=$(beta)_lambda=$(mass2)_" *
+    #     "neval=$(nevals[i])_$(intn_str)$(solver)_$(ct_string)" for
+    #     (i, N) in enumerate(min_order:max_order)
+    # ]
+    # local settings, param, kgrid
+    # for (i, N) in enumerate(min_order:max_order)
+    #     settings, param, kgrid, partitions, res = jldopen("$(filenames[i]).jld2", "a+") do f
+    #         key = "$(UEG.short(loadparam))"
+    #         return f[key]
+    #     end
+    #     push!(kgrids, kgrid)
+    #     push!(partitions_list, partitions)
+    #     push!(res_list, res)
+    # end
+    # @assert SOSEM.alleq(kgrids)
 
     # Get dimensionless k-grid (k / kF)
     k_kf_grid = kgrid / param.kF
 
     # Convert results to a Dict of measurements at each order with interaction counterterms merged
-    local data
-    for i in eachindex(min_order:max_order)
-        this_data = UEG_MC.restodict(res_list[i], partitions_list[i])
-        data = i == 1 ? this_data : merge!(data, this_data)
-    end
+    data = UEG_MC.restodict(res, partitions)
+    # local data
+    # for i in eachindex(min_order:max_order)
+    #     this_data = UEG_MC.restodict(res_list[i], partitions_list[i])
+    #     data = i == 1 ? this_data : merge!(data, this_data)
+    # end
     merged_data = CounterTerm.mergeInteraction(data)
     println([k for (k, _) in merged_data])
 
@@ -122,7 +133,7 @@ function main()
     z, μ = UEG_MC.load_z_mu(param)
     δz, δμ = CounterTerm.sigmaCT(max_order - 2, μ, z; verbose=1)
     println("Computed δμ: ", δμ)
-    c1nl = UEG_MC.chemicalpotential_renormalization(
+    c1nl = UEG_MC.chemicalpotential_renormalization_sosem(
         merged_data,
         δμ;
         lowest_order=2,
@@ -147,8 +158,10 @@ function main()
 
     println(settings)
     println(UEG.paraid(param))
-    println(partitions_list)
-    println(res_list)
+    println(partitions)
+    println(res)
+    # println(partitions_list)
+    # println(res_list)
 
     # Save total renormalized results
     if save
@@ -182,7 +195,7 @@ function main()
                 f["c1nl/RPA+FL/neval=$(1e7)/param"] = param
                 f["c1nl/RPA+FL/neval=$(1e7)/kgrid"] = kgrid
             else
-                neval = nevals[i - 1]  # +1 shift due to extra exact data at N = 2 
+                # neval = nevals[i - 1]  # +1 shift due to extra exact data at N = 2 
                 if haskey(f, "c1nl") &&
                    haskey(f["c1nl"], "N=$N") &&
                    haskey(f["c1nl/N=$N"], "neval=$(neval)")

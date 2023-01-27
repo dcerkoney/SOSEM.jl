@@ -174,7 +174,7 @@ function main()
                 c1d[2] = c1d2_exact
             end
         else
-            c1d = UEG_MC.chemicalpotential_renormalization(
+            c1d = UEG_MC.chemicalpotential_renormalization_sosem(
                 merged_data,
                 δμ;
                 lowest_order=2,

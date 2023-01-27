@@ -154,13 +154,13 @@ function main()
     @assert 0 in kgrid
 
     # Settings
-    alpha = 2.0
+    alpha = 3.0
     print = 0
     plot = true
     solver = :vegas
 
     # Number of evals below and above kF
-    neval = 1e8
+    neval = 1e6
 
     # Generate the diagram and expression trees
     diagparam = fock_param()
@@ -209,7 +209,7 @@ function main()
     exact = -lindhard.(kgrid / param.kF)
 
     # Check the MC result at k = 0 against the exact (non-dimensionalized)
-    # Fock (exhange) self-energy: Σx(0) / E²_{TF} = -F(0) = -1
+    # Fock (exhange) self-energy: Σx(0) / E_{TF} = -F(0) = -1
     means, stdevs = res.mean, res.stdev
     meas = measurement.(means, stdevs)
     scores = stdscore.(meas, exact)
@@ -217,7 +217,7 @@ function main()
     worst_score = argmax(abs, scores)
 
     # Summarize results
-    print("""
+    println("""
           Σₓ(k) ($solver):
            • Exact value    (k = 0): $(exact[1])
            • Measured value (k = 0): $(meas[1])
@@ -231,12 +231,12 @@ function main()
             "results/data/sigma_fock_rs=$(param.rs)_" *
             "beta_ef=$(param.beta)_neval=$(neval)_$(solver)"
         jldopen("$savename.jld2", "a+") do f
-            key = "$(short(param))"
+            key = "$(UEG.short(param))"
             if haskey(f, key)
                 @warn("replacing existing data for $key")
                 delete!(f, key)
             end
-            return f[key] = (settings, param, kgrid, res)
+            return f[key] = (param, kgrid, res)
         end
     end
 
@@ -249,7 +249,7 @@ function main()
         ax.fill_between(k_kf_grid, means - stdevs, means + stdevs; color="C0", alpha=0.4)
         ax.legend(; loc="best")
         ax.set_xlabel("\$k / k_F\$")
-        ax.set_ylabel("\$\\Sigma_{F}(\\mathbf{k}) \\,/\\, E^{2}_{\\mathrm{TF}}\$")
+        ax.set_ylabel("\$\\Sigma_{F}(k) \\,/\\, \\epsilon_{\\mathrm{TF}}\$")
         ax.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
         plt.tight_layout()
         fig.savefig(

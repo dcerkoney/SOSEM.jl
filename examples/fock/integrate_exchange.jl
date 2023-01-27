@@ -2,70 +2,20 @@ using AbstractTrees
 using CompositeGrids
 using ElectronGas
 using ElectronLiquid
-using ElectronLiquid.UEG: ParaMC, KOinstant
+using ElectronLiquid.UEG
 using FeynmanDiagram
 using JLD2
 using Measurements
 using MCIntegration
 using Lehmann
 using LinearAlgebra
+using Parameters
 using PyCall
-using SOSEM.UEG_MC: lindhard
+using SOSEM
 
 # For saving/loading numpy data
 @pyimport numpy as np
 @pyimport matplotlib.pyplot as plt
-
-"""Bare Coulomb interaction."""
-@inline function CoulombBareinstant(q, p::ParaMC)
-    return KOinstant(q, p.e0, p.dim, 0.0, 0.0, p.kF)
-end
-
-"""Evaluate a statically screened Coulomb interaction line."""
-function eval(id::BareInteractionId, K, _, varT, p::ParaMC)
-    # TODO: Implement check for bare interaction using: is_bare = (order[end] = 1)
-    e0, ϵ0, mass2 = p.e0, p.ϵ0, p.mass2
-    qd = sqrt(dot(K, K))
-    if id.order[4] == 1
-        # Bare Coulomb interaction (from EOM)
-        # @debug "Bare V, T = $(id.extT)" maxlog = 5
-        return CoulombBareinstant(qd, p)
-    elseif id.order[2] == 0
-        # Screened Coulomb interaction
-        return Coulombinstant(qd, p)
-    else
-        # Counterterms for screened interaction
-        invK = 1.0 / (qd^2 + mass2)
-        return e0^2 / ϵ0 * invK * (mass2 * invK)^id.order[2]
-    end
-end
-
-# """Evaluate an instantaneous bare Green's function."""
-# function DiagTree.eval(id::BareGreenId, K, extT, varT, p::ParaMC)
-#     @debug "Evaluating G: K = $K" maxlog = 3
-#     β, me, μ, massratio = p.β, p.me, p.μ, p.massratio
-#     ϵ = norm(K)^2 / (2me * massratio) - μ
-#     # Overall sign difference relative to the Negle & Orland convention
-#     return -Spectral.kernelFermiT(-1e-8, ϵ, β)
-# end
-
-"""Evaluate a bare Green's function line."""
-function eval(id::BareGreenId, K, _, varT, p::ParaMC)
-    β, me, μ, massratio = p.β, p.me, p.μ, p.massratio
-
-    # External time difference
-    τin, τout = varT[id.extT[1]], varT[id.extT[2]]
-    τ = τout - τin
-
-    # Get energy
-    ϵ = norm(K)^2 / (2me * massratio) - μ
-
-    # Normal-ordering for the equal-time case
-    if τ ≈ 0
-        return -Spectral.kernelFermiT(-1e-8, ϵ, β)
-    end
-    return -Spectral.kernelFermiT(τ, ϵ, β)
-end
 
 """
 Exact expression for the Fock self-energy
@@ -79,16 +29,160 @@ end
 
 """Constructs diagram parameters for the exchange self-energy."""
 function exchange_param(order=1)
-    # Instantaneous bare interaction (interactionTauNum = 1) 
-    # => innerLoopNum = innerTauNum = order
+    # Instantaneous interactions (interactionTauNum = 1) 
+    # => innerLoopNum = totalTauNum = order
     return DiagParaF64(;
         type=SigmaDiag,
         hasTau=true,
         firstTauIdx=1,
         innerLoopNum=order,
-        totalTauNum=order + 1,  # includes outgoing external time
+        totalTauNum=order,  # includes outgoing external time
         filter=[NoHartree],
         interaction=[FeynmanDiagram.Interaction(ChargeCharge, Instant)],
+    )
+end
+
+function build_sigma_x_with_ct(orders=[1])
+    DiagTree.uidreset()
+    valid_partitions = Vector{PartitionType}()
+    diagparams = Vector{DiagParaF64}()
+    diagtrees = Vector{DiagramF64}()
+    exprtrees = Vector{ExprTreeF64}()
+    # Build all counterterm partitions at the given orders (lowest order (Fock) is N = 1)
+    n_min, n_max = minimum(orders), maximum(orders)
+    for p in DiagGen.counterterm_partitions(
+        n_min,
+        n_max;
+        n_lowest=1,
+        renorm_mu=true,
+        renorm_lambda=true,
+    )
+        # Build diagram tree for this partition
+        @debug "Partition (n_loop, n_ct_mu, n_ct_lambda): $p"
+        diagparam, diagtree = build_diagtree(; n_loop=p[1])
+
+        # Build tree with counterterms (∂λ(∂μ(DT))) via automatic differentiation
+        dμ_diagtree = DiagTree.derivative([diagtree], BareGreenId, p[2]; index=1)
+        dλ_dμ_diagtree = DiagTree.derivative(dμ_diagtree, BareInteractionId, p[3]; index=2)
+        if isempty(dλ_dμ_diagtree)
+            @warn("Ignoring partition $p with no diagrams")
+            continue
+        end
+        @debug "\nDiagTree:\n" * repr_tree(dλ_dμ_diagtree)
+
+        # Compile to expression tree and save results for this partition
+        exprtree = ExprTree.build(dλ_dμ_diagtree)
+        push!(valid_partitions, p)
+        push!(diagparams, diagparam)
+        push!(exprtrees, exprtree)
+        append!(diagtrees, dλ_dμ_diagtree)
+    end
+    return valid_partitions, diagparams, diagtrees, exprtrees
+end
+
+function build_diagtree(; n_loop=1)
+    DiagTree.uidreset()
+
+    # Generate the diagram and expression trees
+    diagparam = exchange_param(n_loop)
+
+    # Momentum loop basis
+    nk = diagparam.totalLoopNum
+    k = DiagTree.getK(nk, 1)
+    q = DiagTree.getK(nk, 2)
+
+    # Σₓ is instantaneous
+    extT = (1, 1)
+    g_param = DiagParaF64(;
+        type=GreenDiag,
+        innerLoopNum=n_loop - 1,  # k and q already taken
+        totalLoopNum=n_loop + 1,  # Part of Sigma diagram
+        firstLoopIdx=3,           # k and q already taken
+        firstTauIdx=2,            # 1 external time (instantaneous Σ)
+        hasTau=true,
+    )
+    G = Parquet.green(g_param, k - q, extT; name=:G)
+
+    # Add outer lbare Coulomb interaction line
+    v_param = reconstruct(diagparam; type=Ver4Diag, innerLoopNum=0, firstLoopIdx=1)
+    v_id = BareInteractionId(
+        v_param,
+        ChargeCharge,
+        Instant,
+        [0, 0, 0, 1];
+        k=q,
+        t=extT,
+        permu=Di,
+    )
+    V = DiagramF64(v_id; name=:V, factor=-1.0)  # Factor of (-1) from Feynman rules
+
+    # Build the full exchange self-energy diagram
+    sigma_id = DiagTree.SigmaId(diagparam, Instant; k=k, t=extT)
+    diagtree = DiagramF64(sigma_id, Prod(), [V, G]; name=:Σx)
+
+    @debug "\nDiagTree:\n" * repr_tree(diagtree)
+    return diagparam, diagtree
+end
+
+function integrate_sigma_x_with_ct(
+    mcparam::UEG.ParaMC,
+    diagparams::Vector{DiagParaF64},
+    exprtrees::Vector{ExprTreeF64};
+    kgrid=[0.0],
+    alpha=3.0,
+    neval=1e5,
+    print=-1,
+    solver=:vegasmc,
+)
+    # We assume that each partition expression tree has a single root
+    @assert all(length(et.root) == 1 for et in exprtrees)
+
+    # List of expression tree roots, external times, and inner
+    # loop numbers for each tree (to be passed to integrand)
+    # roots = [et.root[1] for et in exprtrees]
+    innerLoopNums = [p.innerLoopNum for p in diagparams]
+
+    # Grid size
+    n_kgrid = length(kgrid)
+
+    # Temporary array for combined K-variables [ExtK, K].
+    # We use the maximum necessary loop basis size for K pool.
+    maxloops = maximum(p.totalLoopNum for p in diagparams)
+    varK = zeros(3, maxloops)
+
+    # Build adaptable MC integration variables
+    (K, T, ExtKidx) = exchange_mc_variables(mcparam, n_kgrid, alpha)
+
+    # MC configuration degrees of freedom (DOF): shape(K), shape(T), shape(ExtKidx)
+    # We do not integrate the external times and Σₓ is instantaneous, hence n_τ = totalTauNum - 1
+    dof = [[p.innerLoopNum, p.totalTauNum - 1, 1] for p in diagparams]
+
+    # UEG SOSEM diagram observables are a function of |k| only (equal-time)
+    obs = repeat([zeros(n_kgrid)], length(dof))  # observable for each partition
+
+    # External times are fixed for left/right measurement of the discontinuity at τ = 0
+    T.data[1] = 0  # τin = 0 (= τout⁺)
+
+    # We non-dimensionalize the result via division by the Thomas-Fermi energy
+    eTF = mcparam.qTF^2 / (2 * mcparam.me)
+
+    # Phase-space factors
+    phase_factors = [1.0 / (2π)^(mcparam.dim * nl) for nl in innerLoopNums]
+
+    # Total prefactors
+    prefactors = phase_factors / eTF
+
+    return integrate(
+        integrand;
+        solver=solver,
+        measure=measure,
+        neval=neval,
+        print=print,
+        # MC config kwargs
+        userdata=(mcparam, exprtrees, innerLoopNums, prefactors, varK, kgrid),
+        var=(K, T, ExtKidx),
+        dof=dof,
+        obs=obs,
     )
 end
 
@@ -98,8 +192,8 @@ function exchange_mc_variables(mcparam::UEG.ParaMC, n_kgrid::Int, alpha::Float64
     Theta = Continuous(0.0, 1π; alpha=alpha)
     Phi = Continuous(0.0, 2π; alpha=alpha)
     K = CompositeVar(R, Theta, Phi)
-    # Offset T pool by 2 for fixed external times (τin, τout)
-    T = Continuous(0.0, mcparam.β; offset=2, alpha=alpha)
+    # Offset T pool by 1 for fixed external times (instantaneous self-energy ⟹ τin = τout⁺)
+    T = Continuous(0.0, mcparam.β; offset=1, alpha=alpha)
     # Bin in external momentum
     ExtKidx = Discrete(1, n_kgrid; alpha=alpha)
     return (K, T, ExtKidx)
@@ -108,171 +202,200 @@ end
 """Measurement for a single diagram tree (without CTs, fixed order in V)."""
 function measure(vars, obs, weights, config)
     ik = vars[3][1]  # ExtK bin index
-    obs[1][ik] += weights[1]
+    # Measure the weight of each partition
+    for o in 1:(config.N)
+        obs[o][ik] += weights[o]
+    end
     return
 end
 
-"""Integrand for the exchange self-energy non-dimensionalized by ϵₖ."""
+"""Integrand for the exchange self-energy non-dimensionalized by E²_{TF} ~ q⁴_{TF}.."""
 function integrand(vars, config)
     # We sample internal momentum/times, and external momentum index
     K, T, ExtKidx = vars
     R, Theta, Phi = K
 
     # Unpack userdata
-    mcparam, exprtree, varK, kgrid = config.userdata
+    mcparam, exprtrees, innerLoopNums, prefactors, varK, kgrid = config.userdata
 
-    # External momentum via random index into kgrid (wlog, we place it along the x-axis)
-    ik = ExtKidx[1]
-    varK[1, 1] = kgrid[ik]
+    # Evaluate the integrand for each partition
+    integrand = Vector(undef, config.N)
+    for i in 1:(config.N)
+        # External momentum via random index into kgrid (wlog, we place it along the x-axis)
+        ik = ExtKidx[1]
+        varK[1, 1] = kgrid[ik]
 
-    phifactor = 1.0
-    innerLoopNum = config.dof[1][1]
-    for i in 1:innerLoopNum
-        r = R[i] / (1 - R[i])
-        θ = Theta[i]
-        ϕ = Phi[i]
-        varK[1, i + 1] = r * sin(θ) * cos(ϕ)
-        varK[2, i + 1] = r * sin(θ) * sin(ϕ)
-        varK[3, i + 1] = r * cos(θ)
-        phifactor *= r^2 * sin(θ) / (1 - R[i])^2
+        phifactor = 1.0
+        for j in 1:innerLoopNums[i]  # config.dof[i][1]
+            r = R[j] / (1 - R[j])
+            θ = Theta[j]
+            ϕ = Phi[j]
+            varK[1, j + 1] = r * sin(θ) * cos(ϕ)
+            varK[2, j + 1] = r * sin(θ) * sin(ϕ)
+            varK[3, j + 1] = r * cos(θ)
+            phifactor *= r^2 * sin(θ) / (1 - R[j])^2
+        end
+        @assert T.data[1] == 0
+
+        @debug "K = $(varK)" maxlog = 3
+        @debug "ik = $ik" maxlog = 3
+        @debug "ExtK = $(kgrid[ik])" maxlog = 3
+
+        # Evaluate the expression tree (additional = mcparam)
+        ExprTree.evalKT!(exprtrees[i], varK, T.data, mcparam; eval=UEG_MC.Propagators.eval)
+
+        # Evaluate the exchange integrand Σx(k) for this partition
+        root = exprtrees[i].root[1]  # there is only one root per partition
+        weight = exprtrees[i].node.current
+        integrand[i] = phifactor * prefactors[i] * weight[root]
     end
-    @assert (T.data[1] == 0) && (T.data[2] == 1e-6)
-
-    @debug "K = $(varK)" maxlog = 3
-    @debug "ik = $ik" maxlog = 3
-    @debug "ExtK = $(kgrid[ik])" maxlog = 3
-
-    # Evaluate the expression tree (additional = mcparam)
-    ExprTree.evalKT!(exprtree, varK, T.data, mcparam)
-
-    # Phase-space and Jacobian factor
-    # NOTE: extra minus sign on self-energy definition!
-    factor = 1.0 / (2π)^(mcparam.dim * innerLoopNum) * phifactor
-    epsilon_k = norm(K)^2 / (2 * mcparam.me * mcparam.massratio)
-
-    # Return the non-dimensionalized exchange integrand, Σx(k) / ϵₖ
-    weight = exprtree.node.current
-    root = exprtree.root[1]  # only one root
-    return factor * weight[root] / epsilon_k
-end
-
-function build_sigma_x(order=1)
-    # Generate the diagram and expression trees
-    diagparam = exchange_param(order)
-
-    # Momentum loop basis
-    nk = diagparam.totalLoopNum
-    k = DiagTree.getK(nk, 1)
-    q = DiagTree.getK(nk, 2)
-
-    g_param = DiagParaF64(type=GreenDiag, innerLoopNum=order-1, hasTau=true) 
-    G = Parquet.green(g_param, k - q; name=:G)
-
-    v_param = reconstruct(diagparam; type=Ver4Diag, innerLoopNum=0, firstLoopIdx=1)
-    v_id = BareInteractionId(v_param, ChargeCharge, Instant, [0, 0, 0, 1]; k=q, permu=Di)
-    V = DiagramF64(v_id; name=:V)
-
-    sigma_id = SigmaID(diagparam, Instant; k=k)
-    diagtree = DiagramF64(sigma_id, Prod(), [V, G]; name=:Σx)
-    exprtree = ExprTree.build([diagtree])
-
-    return diagparam, diagtree, exprtree
+    return integrand
 end
 
 """MC integration of the exchange self-energy"""
 function main()
+    # Change to project directory
+    if haskey(ENV, "SOSEM_CEPH")
+        cd(ENV["SOSEM_CEPH"])
+    elseif haskey(ENV, "SOSEM_HOME")
+        cd(ENV["SOSEM_HOME"])
+    end
+
     # Debug mode
     if isinteractive()
         ENV["JULIA_DEBUG"] = Main
     end
 
+    # Total loop order N (Fock self-energy is N = 1)
+    orders = [2, 3, 4]
+    max_order = maximum(orders)
+    sort!(orders)
+    @assert length(orders) > 0 && all(orders .> 0)
+
     # UEG parameters for MC integration
-    mcparam = ParaMC(; order=1, rs=1.0, beta=40.0, mass2=1.0, isDynamic=false)
-    @debug "β * EF = $(mcparam.beta), β = $(mcparam.β), EF = $(mcparam.EF)"
-
-    # Settings
-    alpha = 2.0
-    print = 0
-    plot = true
-    solver = :vegasmc
-
-    # Number of evals below and above kF
-    neval = 1e6
-
-    # Inner loop order (first order ⟹ Fock)
-    order = 1
-    @assert order > 0
+    param = ParaMC(; order=max_order, rs=1.0, beta=40.0, mass2=1.0, isDynamic=false)
+    @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)"
 
     # K-mesh for measurement
-    minK = 0.2 * mcparam.kF
+    minK = 0.2 * param.kF
     Nk, korder = 4, 7
     kgrid =
         CompositeGrid.LogDensedGrid(
             :uniform,
-            [0.0, 3 * mcparam.kF],
-            [mcparam.kF],
+            [0.0, 3 * param.kF],
+            [param.kF],
             Nk,
             minK,
             korder,
         ).grid
     # Dimensionless k-grid
-    k_kf_grid = kgrid / mcparam.kF
-    # Grid size
-    n_kgrid = length(kgrid)
+    k_kf_grid = kgrid / param.kF
 
-    # Build diagram/expression trees for the exchange self-energy
-    diagparam, sigma_x, exprtree = build_sigma_x(order)
+    # Settings
+    alpha = 3.0
+    print = 0
+    solver = :vegasmc
+    plot_fock = orders == [1]
 
-    # Check the diagram tree
-    print_tree(sigma_x)
+    # Number of evals below and above kF
+    neval = 1e8
 
-    # NOTE: We assume there is only a single root in the ExpressionTree
-    @assert length(exprtree.root) == 1
+    # Build diagram/expression trees for the exchange self-energy to order
+    # ξᴺ in the renormalized perturbation theory (includes CTs in μ and λ)
+    partitions, diagparams, diagtrees, exprtrees = build_sigma_x_with_ct(orders)
 
-    # Temporary array for combined K-variables [ExtK, K].
-    # We use the maximum necessary loop basis size for K pool.
-    varK = zeros(3, diagparam.totalLoopNum)
+    println("Integrating partitions: $partitions")
+    println("diagtrees: $diagtrees")
+    println("exprtrees: $exprtrees")
 
-    # Build adaptable MC integration variables
-    (K, T, ExtKidx) = exchange_mc_variables(mcparam, n_kgrid, alpha)
+    # Check the diagram trees
+    # for (i, d) in enumerate(diagtrees)
+        # println("\nDiagram tree #$i, partition P = $(partitions[i]):")
+        # print_tree(d)
+        # plot_tree(d)
+        # # println(diagparams[i])
+    # end
 
-    # MC configuration degrees of freedom (DOF): shape(K), shape(T), shape(ExtKidx)
-    # We do not integrate the two external times, hence n_τ = totalTauNum - 2
-    dof = [[diagparam.innerLoopNum, diagparam.totalTauNum - 2, 1]]
-
-    # UEG SOSEM diagram observables are a function of |k| only (equal-time)
-    obs = [zeros(n_kgrid)]
-
-    # External times are fixed for left/right measurement of the discontinuity at τ = 0
-    T.data[1] = 1e-6  # τin  = 0⁺
-    T.data[2] = 0     # τout = 0
-
-    res = integrate(
-        integrand;
-        solver=solver,
-        measure=measure,
+    res = integrate_sigma_x_with_ct(
+        param,
+        diagparams,
+        exprtrees;
+        kgrid=kgrid,
+        alpha=alpha,
         neval=neval,
         print=print,
-        # Config kwargs
-        userdata=(mcparam, exprtree, varK, kgrid),
-        var=(K, T, ExtKidx),
-        dof=dof,
-        obs=obs,
+        solver=solver,
     )
-    isnothing(res) && return
 
     # Save to JLD2 on main thread
     if !isnothing(res)
         savename =
-            "results/data/sigma_x_rs=$(mcparam.rs)_" *
-            "beta_ef=$(mcparam.beta)_neval=$(neval)_$(solver)"
+            "results/data/sigma_x_n=$(param.order)_rs=$(param.rs)_" *
+            "beta_ef=$(param.beta)_lambda=$(param.mass2)_neval=$(neval)_$(solver)"
         jldopen("$savename.jld2", "a+") do f
-            key = "$(short(mcparam))"
+            key = "$(UEG.short(param))"
             if haskey(f, key)
                 @warn("replacing existing data for $key")
                 delete!(f, key)
             end
-            return f[key] = (settings, mcparam, kgrid, res)
+            return f[key] = (orders, param, kgrid, partitions, res)
+        end
+        # Test the Fock self-energy
+        if orders == [1]
+            # The nondimensionalized Fock self-energy is the negative Lindhard function
+            exact = -UEG_MC.lindhard.(kgrid / param.kF)
+            # Check the MC result at k = 0 against the exact (non-dimensionalized)
+            # Fock (exhange) self-energy: Σx(0) / E_{TF} = -F(0) = -1
+            means_fock, stdevs_fock = res.mean, res.stdev
+            meas = measurement.(means_fock, stdevs_fock)
+            scores = stdscore.(meas, exact)
+            score_k0 = scores[1]
+            worst_score = argmax(abs, scores)
+            println(meas)
+            # Summarize results
+            println("""
+                  Σₓ(k) ($solver):
+                   • Exact value    (k = 0): $(exact[1])
+                   • Measured value (k = 0): $(meas[1])
+                   • Standard score (k = 0): $score_k0
+                   • Worst standard score: $worst_score
+                  """)
+            # Plot the Fock result on the main thread
+            if plot_fock
+                fig, ax = plt.subplots()
+                # Compare result to exact non-dimensionalized Fock self-energy (-F(k / kF))
+                ax.plot(
+                    k_kf_grid,
+                    -UEG_MC.lindhard.(k_kf_grid),
+                    "k";
+                    label="\$N=1\$ (exact)",
+                )
+                ax.plot(
+                    k_kf_grid,
+                    means_fock,
+                    "o-";
+                    markersize=2,
+                    color="C0",
+                    label="\$N=1\$ ($solver)",
+                )
+                ax.fill_between(
+                    k_kf_grid,
+                    means_fock - stdevs_fock,
+                    means_fock + stdevs_fock;
+                    color="C0",
+                    alpha=0.4,
+                )
+                ax.legend(; loc="best")
+                ax.set_xlabel("\$k / k_F\$")
+                ax.set_ylabel("\$\\Sigma_{x}(k) \\,/\\, \\epsilon_{\\mathrm{TF}}\$")
+                ax.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
+                plt.tight_layout()
+                fig.savefig(
+                    "results/fock/sigma_fock_comparison_rs=$(param.rs)_" *
+                    "beta_ef=$(param.beta)_lambda=$(param.mass2)_neval=$(neval)_$(solver).pdf",
+                )
+                plt.close("all")
+            end
         end
     end
 end

@@ -170,7 +170,7 @@ function main()
             z, μ = load_z_mu(param)
             δz, δμ = CounterTerm.sigmaCT(max_order - 2, μ, z; verbose=1)
             println("Computed δμ: ", δμ)
-            c1c = UEG_MC.chemicalpotential_renormalization(max_order_plot, merged_data, δμ)
+            c1c = UEG_MC.chemicalpotential_renormalization_sosem(max_order_plot, merged_data, δμ)
             # Test manual renormalization with exact lowest-order chemical potential
             if !renorm_mu_lo_ex && max_order >= 3
                 δμ1_exact = UEG_MC.delta_mu1(param)  # = ReΣ₁[λ](kF, 0)

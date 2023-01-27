@@ -152,7 +152,7 @@ function main()
     z, μ = UEG_MC.load_z_mu(param)
     δz, δμ = CounterTerm.sigmaCT(max_order - 2, μ, z; verbose=1)
     println("Computed δμ: ", δμ)
-    c1c = UEG_MC.chemicalpotential_renormalization(
+    c1c = UEG_MC.chemicalpotential_renormalization_sosem(
         merged_data,
         δμ;
         min_order=min_order_plot,

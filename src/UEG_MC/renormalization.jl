@@ -1,8 +1,45 @@
+function chemicalpotential_renormalization(data, δμ; min_order=1, max_order)
+    @assert max_order <= 4 "Order $max_order hasn't been implemented!"
+    println(δμ)
+    @assert length(δμ) + 1 >= max_order
+    d = CounterTerm.mergeInteraction(data)
+    # To maximum supported counterterm order, z = [O1, O2, O3, O4]
+    z = RenormMeasType()
+    # Requires order 1
+    if max_order >= 1
+        z[1] = d[(1, 0)]
+    end
+    # Requires order 2
+    if max_order >= 2
+        z[2] = d[(2, 0)] + δμ[1] * d[(1, 1)]
+    end
+    # Requires orders 2 and 3
+    if max_order >= 3
+        # Σ3 = Σ30+Σ11*δμ2+Σ12*δμ1^2+Σ21*δμ1
+        z[3] = d[(3, 0)] + δμ[1] * d[(2, 1)] + δμ[1]^2 * d[(1, 2)] + δμ[2] * d[(1, 1)]
+    end
+    # Requires orders 2, 3, and 4
+    if max_order >= 4
+        # Σ4 = Σ40+Σ11*δμ3+Σ12*(2*δμ1*δμ2)+Σ13*δμ1^3+Σ21*δμ2+Σ22*δμ1^2+Σ31*δμ1
+        #! format: off
+        z[4] = d[(4, 0)] + δμ[1] * d[(3, 1)] + δμ[1]^2 * d[(2, 2)] + δμ[2] * d[(2, 1)] +
+               (δμ[1])^3 * d[(1, 3)] + 2 * δμ[1] * δμ[2] * d[(1, 2)] + δμ[3] * d[(1, 1)]
+        #! format: on
+    end
+    return z
+end
+
 """
-Same as CounterTerm.chemicalpotential_renormalization, but with lowest loop 
+Same as chemicalpotential_renormalization, but with lowest loop 
 orders increased by 1 everywhere (SOSEM observables start at 2nd loop order).
 """
-function chemicalpotential_renormalization(data, δμ; lowest_order=2, min_order=2, max_order)
+function chemicalpotential_renormalization_sosem(
+    data,
+    δμ;
+    lowest_order=2,
+    min_order=2,
+    max_order,
+)
     @assert max_order <= 5 "Order $order hasn't been implemented!"
     println(δμ)
     @assert length(δμ) >= max_order - lowest_order
@@ -45,8 +82,8 @@ function chemicalpotential_renormalization(data, δμ; lowest_order=2, min_order
     end
     return z
 end
-function chemicalpotential_renormalization(order, data, δμ)
-    return chemicalpotential_renormalization(data, δμ; max_order=order)
+function chemicalpotential_renormalization_sosem(order, data, δμ)
+    return chemicalpotential_renormalization_sosem(data, δμ; max_order=order)
 end
 
 """
