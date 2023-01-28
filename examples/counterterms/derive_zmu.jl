@@ -5,8 +5,11 @@ using JLD2
 using SOSEM
 
 # Change to counterterm directory
-cd("$(ENV["SOSEM_CEPH"])/examples/counterterms")
-
+if haskey(ENV, "SOSEM_CEPH")
+    cd("$(ENV["SOSEM_CEPH"])/examples/counterterms")
+elseif haskey(ENV, "SOSEM_HOME")
+    cd("$(ENV["SOSEM_HOME"])/examples/counterterms")
+end
 # Physical params matching data for SOSEM observables
 order = [4]  # C^{(1)}_{N≤5} includes CTs up to 3rd order
 

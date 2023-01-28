@@ -2,7 +2,11 @@ using ElectronLiquid
 using JLD2
 
 # Change to counterterm directory
-cd("$(ENV["SOSEM_CEPH"])/examples/counterterms")
+if haskey(ENV, "SOSEM_CEPH")
+    cd("$(ENV["SOSEM_CEPH"])/examples/counterterms")
+elseif haskey(ENV, "SOSEM_HOME")
+    cd("$(ENV["SOSEM_HOME"])/examples/counterterms")
+end
 
 # Physical params matching data for SOSEM observables
 order = [4]  # C^{(1)}_{N≤5} includes CTs up to 3rd order
@@ -25,7 +29,7 @@ beta = [40.0]
 #beta = [<beta_opt>]
 
 # Total number of MCMC evaluations
-neval = 1e10
+neval = 1e7
 
 # Get self-energy data needed for the chemical potential and Z-factor measurements
 for (_rs, _mass2, _beta, _order) in Iterators.product(rs, mass2, beta, order)
