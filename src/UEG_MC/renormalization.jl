@@ -1,4 +1,32 @@
-function chemicalpotential_renormalization(data, δμ; min_order=1, max_order)
+function chemicalpotential_renormalization_poln(data, δμ; max_order)
+    @assert max_order <= 4 "Order $max_order hasn't been implemented!"
+    println(δμ)
+    @assert length(δμ) + 1 >= max_order
+    d = CounterTerm.mergeInteraction(data)
+    # To maximum supported counterterm order, z = [O1, O2, O3]
+    z = RenormMeasType()
+    # Requires order 1
+    if max_order >= 1
+        # Π1 = Π10 + δμ1*Π01
+        z[1] = d[(1, 0)] + δμ[1] * d[(0, 1)]
+    end
+    # Requires orders 1 and 2
+    if max_order >= 2
+        # Π2 = Π20 + Π11*δμ1 + Π02*δμ1^2 + Π01*δμ2
+        z[2] = d[(2, 0)] + δμ[1] * d[(1, 1)] + δμ[1]^2 * d[(0, 2)] + δμ[2] * d[(0, 1)]
+    end
+    # Requires orders 1, 2, and 3
+    if max_order >= 3
+        # Π3 = Π30 + Π21*δμ1 + Π12*δμ1^2 + Π11*δμ2 + Π03*δμ1^3 + Π02*(2*δμ1*δμ2) + Π01*δμ3
+        #! format: off
+        z[3] = d[(3, 0)] + δμ[1] * d[(2, 1)] + δμ[1]^2 * d[(1, 2)] + δμ[2] * d[(1, 1)] +
+               (δμ[1])^3 * d[(0, 3)] + 2 * δμ[1] * δμ[2] * d[(0, 2)] + δμ[3] * d[(0, 1)]
+        #! format: on
+    end
+    return z
+end
+
+function chemicalpotential_renormalization_sigma(data, δμ; max_order)
     @assert max_order <= 4 "Order $max_order hasn't been implemented!"
     println(δμ)
     @assert length(δμ) + 1 >= max_order
@@ -15,12 +43,12 @@ function chemicalpotential_renormalization(data, δμ; min_order=1, max_order)
     end
     # Requires orders 2 and 3
     if max_order >= 3
-        # Σ3 = Σ30+Σ11*δμ2+Σ12*δμ1^2+Σ21*δμ1
+        # Σ3 = Σ30 + Σ21*δμ1 + Σ12*δμ1^2 + Σ11*δμ2
         z[3] = d[(3, 0)] + δμ[1] * d[(2, 1)] + δμ[1]^2 * d[(1, 2)] + δμ[2] * d[(1, 1)]
     end
     # Requires orders 2, 3, and 4
     if max_order >= 4
-        # Σ4 = Σ40+Σ11*δμ3+Σ12*(2*δμ1*δμ2)+Σ13*δμ1^3+Σ21*δμ2+Σ22*δμ1^2+Σ31*δμ1
+        # Σ4 = Σ40 + Σ31*δμ1 + Σ22*δμ1^2 + Σ21*δμ2 + Σ13*δμ1^3 + Σ12*(2*δμ1*δμ2) + Σ11*δμ3
         #! format: off
         z[4] = d[(4, 0)] + δμ[1] * d[(3, 1)] + δμ[1]^2 * d[(2, 2)] + δμ[2] * d[(2, 1)] +
                (δμ[1])^3 * d[(1, 3)] + 2 * δμ[1] * δμ[2] * d[(1, 2)] + δμ[3] * d[(1, 1)]

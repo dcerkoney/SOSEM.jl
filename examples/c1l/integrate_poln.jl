@@ -16,41 +16,6 @@ using SOSEM.UEG_MC: lindhard
 @pyimport numpy as np
 @pyimport matplotlib.pyplot as plt
 
-"""Bare Coulomb interaction."""
-@inline function CoulombBareinstant(q, p::ParaMC)
-    return KOinstant(q, p.e0, p.dim, 0.0, 0.0, p.kF)
-end
-
-"""Evaluate a statically screened Coulomb interaction line."""
-function eval(id::BareInteractionId, K, _, varT, p::ParaMC)
-    # TODO: Implement check for bare interaction using: is_bare = (order[end] = 1)
-    e0, ϵ0, mass2 = p.e0, p.ϵ0, p.mass2
-    qd = sqrt(dot(K, K))
-    if id.order[2] == 0
-        # Screened Coulomb interaction
-        return Coulombinstant(qd, p)
-    else
-        # Counterterms for screened interaction
-        invK = 1.0 / (qd^2 + mass2)
-        return e0^2 / ϵ0 * invK * (mass2 * invK)^id.order[2]
-    end
-end
-
-"""Evaluate a bare Green's function line."""
-function eval(id::BareGreenId, K, _, varT, p::ParaMC)
-    β, me, μ, massratio = p.β, p.me, p.μ, p.massratio
-    # External time difference
-    τin, τout = varT[id.extT[1]], varT[id.extT[2]]
-    τ = τout - τin
-    # Get energy
-    ϵ = norm(K)^2 / (2me * massratio) - μ
-    # Normal-ordering for the equal-time case
-    if τ ≈ 0
-        return -Spectral.kernelFermiT(-1e-8, ϵ, β)
-    end
-    return -Spectral.kernelFermiT(τ, ϵ, β)
-end
-
 """Constructs diagram parameters for the polarization."""
 function polarization_param(order=0)
     # Instantaneous bare interaction (interactionTauNum = 1) 
@@ -64,6 +29,55 @@ function polarization_param(order=0)
         filter=[Proper, NoHartree],
         interaction=[FeynmanDiagram.Interaction(ChargeCharge, Instant)],
     )
+end
+
+function build_poln_with_ct(orders=[0])
+    DiagTree.uidreset()
+    valid_partitions = Vector{PartitionType}()
+    diagparams = Vector{DiagParaF64}()
+    diagtrees = Vector{DiagramF64}()
+    exprtrees = Vector{ExprTreeF64}()
+    # Build all counterterm partitions at the given orders (lowest order (Fock) is N = 1)
+    n_min, n_max = minimum(orders), maximum(orders)
+    for p in DiagGen.counterterm_partitions(
+        n_min,
+        n_max;
+        n_lowest=0,
+        renorm_mu=true,
+        renorm_lambda=true,
+    )
+        # Build diagram tree for this partition
+        @debug "Partition (n_loop, n_ct_mu, n_ct_lambda): $p"
+        diagparam, diagtree = build_diagtree(; n_loop=p[1])
+
+        # Build tree with counterterms (∂λ(∂μ(DT))) via automatic differentiation
+        dμ_diagtree = DiagTree.derivative([diagtree], BareGreenId, p[2]; index=1)
+        dλ_dμ_diagtree = DiagTree.derivative(dμ_diagtree, BareInteractionId, p[3]; index=2)
+        if isempty(dλ_dμ_diagtree)
+            @warn("Ignoring partition $p with no diagrams")
+            continue
+        end
+        @debug "\nDiagTree:\n" * repr_tree(dλ_dμ_diagtree)
+
+        # Compile to expression tree and save results for this partition
+        exprtree = ExprTree.build(dλ_dμ_diagtree)
+        push!(valid_partitions, p)
+        push!(diagparams, diagparam)
+        push!(exprtrees, exprtree)
+        append!(diagtrees, dλ_dμ_diagtree)
+    end
+    return valid_partitions, diagparams, diagtrees, exprtrees
+end
+
+function build_diagtree(; n_loop=1)
+    DiagTree.uidreset()
+    # Get diagram parameters
+    diagparam = polarization_param(n_loop)
+    # Build diagram/expression trees for the polarization
+    diagtree = Parquet.polarization(diagparam)
+    # Check the diagram tree
+    @debug "\nDiagTree:\n" * repr_tree(diagtree)
+    return diagparam, diagtree
 end
 
 """Build variable pools for the exchange self-energy integration."""
@@ -90,60 +104,128 @@ end
 function measure(vars, obs, weights, config)
     ik = vars[3][1]  # ExtK bin index
     iT = vars[4][1]  # ExtT bin index
-    obs[1][ik, iT] += weights[1]
+    # Measure the weight of each partition
+    for o in 1:(config.N)
+        obs[o][ik] += weights[o]
+    end
     return
 end
 
-"""Integrand for the exchange self-energy non-dimensionalized by ϵₖ."""
+function integrate_poln_with_ct(
+    mcparam::UEG.ParaMC,
+    diagparams::Vector{DiagParaF64},
+    exprtrees::Vector{ExprTreeF64};
+    kgrid=[0.0],
+    Tgrid,
+    alpha=3.0,
+    neval=1e5,
+    print=-1,
+    solver=:vegasmc,
+)
+    # We assume that each partition expression tree has a single root
+    @assert all(length(et.root) == 1 for et in exprtrees)
+
+    # List of expression tree roots, external times, and inner
+    # loop numbers for each tree (to be passed to integrand)
+    # roots = [et.root[1] for et in exprtrees]
+    innerLoopNums = [p.innerLoopNum for p in diagparams]
+
+    # Temporary array for combined K-variables [ExtK, K].
+    # We use the maximum necessary loop basis size for K pool.
+    maxloops = maximum(p.totalLoopNum for p in diagparams)
+    varK = zeros(3, maxloops)
+
+    # Grid sizes
+    n_kgrid = length(kgrid)
+    n_Tgrid = length(Tgrid)
+
+    # Build adaptable MC integration variables
+    (K, T, ExtKidx, ExtTidx) = polarization_mc_variables(mcparam, n_kgrid, n_Tgrid, alpha)
+
+    # MC configuration degrees of freedom (DOF): shape(K), shape(T), shape(ExtKidx)
+    # The two external times are fixed & discretized, respectively, hence
+    # n_τ = totalTauNum - 2 (number of continuous times).
+    dof = [[p.innerLoopNum, p.totalTauNum - 2, 1, 1] for p in diagparams]
+
+    # Π(q, τ) is a function of q and τ for each partition
+    obs = repeat([zeros(length(n_kgrid), length(n_Tgrid))], length(dof))
+
+    # The incoming external time is fixed at the origin (COM coordinates)
+    T.data[1] = 0
+
+    # We non-dimensionalize the result via division by the Thomas-Fermi energy
+    eTF = mcparam.qTF^2 / (2 * mcparam.me)
+
+    # Phase-space factors
+    phase_factors = [1.0 / (2π)^(mcparam.dim * nl) for nl in innerLoopNums]
+
+    # Total prefactors
+    prefactors = phase_factors / eTF
+
+    return integrate(
+        integrand;
+        solver=solver,
+        measure=measure,
+        neval=neval,
+        print=print,
+        # MC config kwargs
+        userdata=(mcparam, exprtrees, innerLoopNums, prefactors, varK, kgrid, Tgrid),
+        var=(K, T, ExtKidx, ExtTidx),
+        dof=dof,
+        obs=obs,
+    )
+end
+
+"""Integrand for the polarization."""
 function integrand(vars, config)
     # We sample internal momentum/times, and external momentum index
     K, T, ExtKidx, ExtTidx = vars
     R, Theta, Phi = K
 
     # Unpack userdata
-    mcparam, exprtree, varK, kgrid, Tgrid = config.userdata
+    mcparam, exprtrees, innerLoopNums, prefactors, varK, kgrid, Tgrid = config.userdata
 
-    # External momentum via random index into kgrid (wlog, we place it along the x-axis)
-    ik = ExtKidx[1]
-    varK[1, 1] = kgrid[ik]
+    # Evaluate the integrand for each partition
+    integrand = Vector(undef, config.N)
+    for i in 1:(config.N)
+        # External momentum via random index into kgrid (wlog, we place it along the x-axis)
+        ik = ExtKidx[1]
+        varK[1, 1] = kgrid[ik]
 
-    # Outgoing external time via random index into τ-grid
-    iT = ExtTidx[1]
-    T.data[2] = Tgrid[iT]
+        # Outgoing external time via random index into τ-grid
+        iT = ExtTidx[1]
+        T.data[2] = Tgrid[iT]
 
-    phifactor = 1.0
-    innerLoopNum = config.dof[1][1]
-    for i in 1:innerLoopNum
-        r = R[i] / (1 - R[i])
-        θ = Theta[i]
-        ϕ = Phi[i]
-        varK[1, i + 1] = r * sin(θ) * cos(ϕ)
-        varK[2, i + 1] = r * sin(θ) * sin(ϕ)
-        varK[3, i + 1] = r * cos(θ)
-        phifactor *= r^2 * sin(θ) / (1 - R[i])^2
+        phifactor = 1.0
+        for j in 1:innerLoopNums[i]  # config.dof[i][1]
+            r = R[j] / (1 - R[j])
+            θ = Theta[j]
+            ϕ = Phi[j]
+            varK[1, j + 1] = r * sin(θ) * cos(ϕ)
+            varK[2, j + 1] = r * sin(θ) * sin(ϕ)
+            varK[3, j + 1] = r * cos(θ)
+            phifactor *= r^2 * sin(θ) / (1 - R[j])^2
+        end
+        # @assert T.data[1] == 0
+
+        @debug "K = $(varK)" maxlog = 3
+        @debug "ik = $ik" maxlog = 3
+        @debug "ExtK = $(kgrid[ik])" maxlog = 3
+
+        @debug "T = $(T.data)" maxlog = 3
+        @debug "iT = $iT" maxlog = 3
+        @debug "τin = $(Tgrid[1])" maxlog = 3
+        @debug "τout = $(Tgrid[iT])" maxlog = 3
+
+        # Evaluate the expression tree (additional = mcparam)
+        ExprTree.evalKT!(exprtrees[i], varK, T.data, mcparam; eval=UEG_MC.Propagators.eval)
+
+        # Evaluate the exchange integrand Σx(k) for this partition
+        root = exprtrees[i].root[1]  # there is only one root per partition
+        weight = exprtrees[i].node.current
+        integrand[i] = phifactor * prefactors[i] * weight[root]
     end
-    # @assert (T.data[1] == 0) && (T.data[2] == 1e-6)
-
-    @debug "K = $(varK)" maxlog = 3
-    @debug "ik = $ik" maxlog = 3
-    @debug "ExtK = $(kgrid[ik])" maxlog = 3
-
-    @debug "T = $(T.data)" maxlog = 3
-    @debug "iT = $iT" maxlog = 3
-    @debug "τin = $(Tgrid[1])" maxlog = 3
-    @debug "τout = $(Tgrid[iT])" maxlog = 3
-
-    # Evaluate the expression tree (additional = mcparam)
-    ExprTree.evalKT!(exprtree, varK, T.data, mcparam)
-
-    # Phase-space and Jacobian factor
-    # NOTE: extra minus sign on self-energy definition!
-    factor = 1.0 / (2π)^(mcparam.dim * innerLoopNum) * phifactor
-
-    # Return the non-dimensionalized exchange integrand, Σx(k) / ϵₖ
-    weight = exprtree.node.current
-    root = exprtree.root[1]  # only one root
-    return factor * weight[root]
+    return integrand
 end
 
 """MC integration of the charge polarization."""
@@ -166,8 +248,8 @@ function main()
     neval = 1e6
 
     # Inner loop order (skipping zeroth order, where the exact function is available)
-    order = 1
-    @assert order > 0
+    order = 0
+    @assert order ≥ 0
 
     # K-mesh for measurement
     minK = 0.2 * mcparam.kF
@@ -188,7 +270,7 @@ function main()
     n_kgrid = length(kgrid)
 
     # We measure Π on a compact DLR grid, and will later
-    # upsample to uniform grid with N_τ ≈ 1000 for FFTs.
+    # upsample to uniform grid with N_τ ≈ Nw_unif for FFTs.
     Euv = 1.0        # ultraviolet energy cutoff of the Green's function
     rtol = 1e-8      # accuracy of the representation
     isFermi = false  # Π is bosonic
@@ -201,50 +283,107 @@ function main()
 
     @assert n_kgrid * n_Tgrid ≤ 150 "Requested number of grid points is too high (N = $(n_kgrid * n_Tgrid))!"
 
-    # Get diagram parameters
-    diagparam = polarization_param(order)
+    # Lowest-order result from exact expressions
+    c1ls_vs_Kcut = []
+    Kcuts = mcparam.kF * [3.0, 15.0, 50.0, 100.0, 500.0]
+    for Kcut in Kcuts
+        mcparam = ParaMC(; order=1, rs=2.0, beta=200.0, mass2=1.0, isDynamic=false)
+        interp_kind = "cubic"
+        Ncut = 10000              # Upper cutoff for Matsubara summation
+        # Kcut = 10 * mcparam.kF    # Upper cutoff for the momentum integration
+        minK = 0.20 * mcparam.kF  # Minimal spacing for the CompositeGrid
+        # Build kgrid
+        Nk, korder = 10, 10
+        kgrid =
+            CompositeGrid.LogDensedGrid(
+                :uniform,
+                [0.0, Kcut],
+                [0.0, mcparam.kF],
+                Nk,
+                minK,
+                korder,
+            ).grid
+        n_kgrid = length(kgrid)  # ~175 k-points
+        ngrid = collect(1:Ncut)  # dense uniform Matsubara grid
+        sum_q = [
+            (
+                2 * sum(Polarization.Polarization0_ZeroTemp(q, ngrid, mcparam)) +
+                Polarization.Polarization0_ZeroTemp(q, 0, mcparam)  # static contribution
+            ) / mcparam.β for q in kgrid
+        ]
+        @assert length(sum_q) == n_kgrid
+        sum_q_interp = interp.interp1d(kgrid, sum_q; kind=interp_kind)
+        push!(c1ls_vs_Kcut, measurement(integ.quad(sum_q_interp, 0, Kcut)...))
+    end
 
-    # Build diagram/expression trees for the polarization
-    diagtree = Parquet.polarization(diagparam)
-    exprtree = ExprTree.build([diagtree])
+    c1ls_vs_Ncut = []
+    Ncuts = [1000.0, 10000.0, 100000.0, 1000000.0, 10000000.0]
+    for Ncut in Ncuts
+        mcparam = ParaMC(; order=1, rs=2.0, beta=200.0, mass2=1.0, isDynamic=false)
+        interp_kind = "cubic"
+        # Ncut = 10000              # Upper cutoff for Matsubara summation
+        Kcut = 10 * mcparam.kF    # Upper cutoff for the momentum integration
+        minK = 0.20 * mcparam.kF  # Minimal spacing for the CompositeGrid
+        # Build kgrid
+        Nk, korder = 10, 10
+        kgrid =
+            CompositeGrid.LogDensedGrid(
+                :uniform,
+                [0.0, Kcut],
+                [0.0, mcparam.kF],
+                Nk,
+                minK,
+                korder,
+            ).grid
+        n_kgrid = length(kgrid)  # ~175 k-points
+        ngrid = collect(1:Ncut)  # dense uniform Matsubara grid
+        sum_q = [
+            (
+                2 * sum(Polarization.Polarization0_ZeroTemp(q, ngrid, mcparam)) +
+                Polarization.Polarization0_ZeroTemp(q, 0, mcparam)  # static contribution
+            ) / mcparam.β for q in kgrid
+        ]
+        @assert length(sum_q) == n_kgrid
+        sum_q_interp = interp.interp1d(kgrid, sum_q; kind=interp_kind)
+        push!(c1ls_vs_Ncut, measurement(integ.quad(sum_q_interp, 0, Kcut)...))
+    end
 
-    # Check the diagram tree
-    print_tree(diagtree)
+    # ...
 
-    # NOTE: We assume there is only a single root in the ExpressionTree
-    @assert length(exprtree.root) == 1
+    # Build diagram/expression trees for the polarization to order
+    # ξᴺ in the renormalized perturbation theory (includes CTs in μ and λ)
+    partitions, diagparams, diagtrees, exprtrees = build_poln_with_ct(orders)
 
-    # Temporary array for combined K-variables [ExtK, K].
-    # We use the maximum necessary loop basis size for K pool.
-    varK = zeros(3, diagparam.totalLoopNum)
+    println("Integrating partitions: $partitions")
+    println("diagtrees: $diagtrees")
+    println("exprtrees: $exprtrees")
 
-    # Build adaptable MC integration variables
-    (K, T, ExtKidx, ExtTidx) = polarization_mc_variables(mcparam, n_kgrid, n_Tgrid, alpha)
+    # # Check the diagram trees
+    # for (i, d) in enumerate(diagtrees)
+    #     println("\nDiagram tree #$i, partition P = $(partitions[i]):")
+    #     print_tree(d)
+    #     plot_tree(d)
+    #     # println(diagparams[i])
+    # end
 
-    # MC configuration degrees of freedom (DOF): shape(K), shape(T), shape(ExtKidx)
-    # The two external times are fixed & discretized, respectively, hence
-    # n_τ = totalTauNum - 2 (number of continuous times).
-    dof = [[diagparam.innerLoopNum, diagparam.totalTauNum - 2, 1, 1]]
-
-    # Π(q, τ) is a function of q and τ
-    obs = [zeros(length(n_kgrid), length(n_Tgrid))]
-
-    # The incoming external time is fixed at the origin (COM coordinates)
-    T.data[1] = 0
-
-    res = integrate(
-        integrand;
-        solver=solver,
-        measure=measure,
+    res = integrate_poln_with_ct(
+        param,
+        diagparams,
+        exprtrees;
+        kgrid=kgrid,
+        Tgrid=Tgrid,
+        alpha=alpha,
         neval=neval,
         print=print,
-        # Config kwargs
-        userdata=(mcparam, exprtree, varK, kgrid, Tgrid),
-        var=(K, T, ExtKidx, ExtTidx),
-        dof=dof,
-        obs=obs,
+        solver=solver,
     )
-    isnothing(res) && return
+
+    # TODO: Post-process result, upsample to Nτ = Nω ~ 1000, FT, and use to obtain the local moment
+    #   Qn: Can we use DLR for the FTs using the dense uniform grid instead of DLR grid, i.e.,
+    #
+    Nw_unif = 1000
+    coeff = DLR.tau2dlr(dlr, ...)
+    pi_kw = DLR.dlr2matfreq(dlr, coeff; ngrid=Nw_unif)
 
     # Save to JLD2 on main thread
     if !isnothing(res)
