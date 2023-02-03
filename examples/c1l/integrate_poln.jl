@@ -348,7 +348,7 @@ function main()
         push!(c1ls_vs_Ncut, measurement(integ.quad(sum_q_interp, 0, Kcut)...))
     end
 
-    # ...
+    # ... 
 
     # Build diagram/expression trees for the polarization to order
     # ξᴺ in the renormalized perturbation theory (includes CTs in μ and λ)
@@ -382,7 +382,7 @@ function main()
     #   Qn: Can we use DLR for the FTs using the dense uniform grid instead of DLR grid, i.e.,
     #
     Nw_unif = 1000
-    coeff = DLR.tau2dlr(dlr, ...)
+    coeff = DLR.tau2dlr(dlr, ...)  # from unif grid Nω ~ 1000
     pi_kw = DLR.dlr2matfreq(dlr, coeff; ngrid=Nw_unif)
 
     # Save to JLD2 on main thread
