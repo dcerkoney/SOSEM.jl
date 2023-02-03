@@ -8,6 +8,7 @@ using FeynmanDiagram
 using JLD2
 using Measurements
 using MCIntegration
+using Lehmann
 using LinearAlgebra
 using Parameters
 using PyCall
@@ -101,7 +102,7 @@ function integrate_occupation_with_ct(
     (K, T, ExtKidx) = occupation_mc_variables(mcparam, n_kgrid, alpha)
 
     # MC configuration degrees of freedom (DOF): shape(K), shape(T), shape(ExtKidx)
-    # We do not integrate the external times and Σₓ is instantaneous, hence n_τ = totalTauNum - 1
+    # We do not integrate the external times and nₖ is instantaneous, hence n_τ = totalTauNum - 1
     dof = [[p.innerLoopNum, p.totalTauNum - 1, 1] for p in diagparams]
 
     # UEG SOSEM diagram observables are a function of |k| only (equal-time)
@@ -188,7 +189,7 @@ function integrand(vars, config)
         # Evaluate the expression tree (additional = mcparam)
         ExprTree.evalKT!(exprtrees[i], varK, T.data, mcparam; eval=UEG_MC.Propagators.eval)
 
-        # Evaluate the exchange integrand Σx(k) for this partition
+        # Evaluate the occupation number integrand nₖ for this partition
         root = exprtrees[i].root[1]  # there is only one root per partition
         weight = exprtrees[i].node.current
         integrand[i] = phifactor * prefactors[i] * weight[root]
@@ -211,7 +212,7 @@ function main()
     end
 
     # Total loop order N
-    orders = [0, 1, 2, 3]
+    orders = [1, 2, 3]
     max_order = maximum(orders)
     sort!(orders)
 
@@ -277,8 +278,8 @@ function main()
         # Test the non-interacting result
         if orders == [0]
             # fₖ
-            ϵ = kgrid.^2 / (2 *param.me) - param.μ
-            exact = Spectral.kernelFermiT(-1e-8, ϵ, β)
+            ϵk = kgrid.^2 / (2 *param.me) .- param.μ
+            exact = -Spectral.kernelFermiT.(-1e-8, ϵk, param.β)
             # Check the N = 0 result against the bare occupation
             means_bare, stdevs_bare = res.mean, res.stdev
             meas = measurement.(means_bare, stdevs_bare)
