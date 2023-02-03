@@ -57,16 +57,17 @@ end
 function build_diagtree(; n_loop=0)
     DiagTree.uidreset()
 
-    # Momentum loop basis
-    nk = diagparam.totalLoopNum
-    k = DiagTree.getK(nk, 1)
+    # Instantaneous Green's function (occupation number) diagram parameters
+    diagparam = DiagParaF64(; type=GreenDiag, innerLoopNum=n_loop, firstTauIdx=2, hasTau=true)
+
+    # Loop basis vector for external momentum
+    k = DiagTree.getK(diagparam.totalLoopNum, 1)
 
     # NOTE: there is only 1 external time (instantaneous G)
     extT = (1, 1)
-    g_param = DiagParaF64(; type=GreenDiag, innerLoopNum=n_loop, firstTauIdx=2, hasTau=true)
-    G = Parquet.green(g_param, k, extT; name=:G)
+    diagtree = Parquet.green(diagparam, k, extT; name=:nₖ)
 
-    @debug "\nDiagTree:\n" * repr_tree(G)
+    @debug "\nDiagTree:\n" * repr_tree(diagtree)
     return diagparam, diagtree
 end
 
