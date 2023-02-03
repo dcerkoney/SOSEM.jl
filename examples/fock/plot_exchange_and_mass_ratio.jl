@@ -101,14 +101,14 @@ function main()
     # UEG parameters for MC integration
     loadparam = ParaMC(; order=max_order, rs=rs, beta=beta, mass2=mass2, isDynamic=false)
 
-    # NOTE: Taking N=3 data from N=4 run, renorm for N=4 not yet implemented!
+    # NOTE: Taking N=3 data from N=4 run
     # loadparam = ParaMC(; order=4, rs=rs, beta=beta, mass2=mass2, isDynamic=false)
 
     savename =
         "results/data/sigma_x_n=$(max_order)_rs=$(rs)_" *
         "beta_ef=$(beta)_lambda=$(mass2)_neval=$(neval)_$(solver)"
 
-    # NOTE: Taking N=3 data from N=4 run, renorm for N=4 not yet implemented!
+    # NOTE: Taking N=3 data from N=4 run
     # savename =
     #     "results/data/sigma_x_n=4_rs=$(rs)_" *
     #     "beta_ef=$(beta)_lambda=$(mass2)_neval=$(neval)_$(solver)"
@@ -243,7 +243,7 @@ function main()
     fig1.tight_layout()
     fig1.savefig(
         "results/fock/sigma_x_N=$(max_order_plot)_rs=$(param.rs)_" *
-        "beta_ef=$(param.beta)_lambda=$(param.mass2)_neval=$(neval)_$(solver).pdf",
+        "beta_ef=$(param.beta)_lambda=$(param.mass2)_neval=$(neval)_$(solver)_flipsign.pdf",
     )
 
     # Thomas-Fermi energy
@@ -426,8 +426,8 @@ function main()
         stdevs_qp = Measurements.uncertainty.(Eqp_over_eTF)
 
         # Gridded data for k ≤ kF
-        k_data = kgrid[kgrid ≤ param.kF]
-        Eqp_data = eTF * Eqp_over_eTF[kgrid ≤ param.kF]
+        k_data = kgrid[kgrid .≤ param.kF]
+        Eqp_data = eTF * means_qp[kgrid .≤ param.kF]
 
         # Constrain ZPE to measured data at k = 0
         E0 = Eqp_data[1]
@@ -506,7 +506,7 @@ function main()
     fig2.tight_layout()
     fig2.savefig(
         "results/fock/moment_qp_energy_N=$(max_order_plot)_rs=$(param.rs)_" *
-        "beta_ef=$(param.beta)_lambda=$(param.mass2)_neval=$(neval)_$(solver).pdf",
+        "beta_ef=$(param.beta)_lambda=$(param.mass2)_neval=$(neval)_$(solver)_flipsign.pdf",
     )
 
     # Mass ratio
@@ -587,7 +587,7 @@ function main()
     fig3.tight_layout()
     fig3.savefig(
         "results/fock/moment_energy_ratio_N=$(max_order_plot)_rs=$(param.rs)_" *
-        "beta_ef=$(param.beta)_lambda=$(param.mass2)_neval=$(neval)_$(solver).pdf",
+        "beta_ef=$(param.beta)_lambda=$(param.mass2)_neval=$(neval)_$(solver)_flipsign.pdf",
     )
 
     plt.close("all")
