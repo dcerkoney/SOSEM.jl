@@ -3,6 +3,7 @@ using Measurements
 using Printf
 using JLD2
 using SOSEM
+using CodecZlib
 
 # Change to counterterm directory
 if haskey(ENV, "SOSEM_CEPH")
@@ -100,7 +101,6 @@ if abspath(PROGRAM_FILE) == @__FILE__
     end
 
     f = jldopen(filename, "r")
-
     for (_rs, _mass2, _beta, _order) in Iterators.product(rs, mass2, beta, order)
         para = UEG.ParaMC(;
             rs=_rs,
