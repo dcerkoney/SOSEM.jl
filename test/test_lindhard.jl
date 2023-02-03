@@ -97,8 +97,8 @@ end
     # vegas/vegasmc solvers break down due to tail round-off error
     for solver in test_solvers
         # # NOTE: Passing a matching function to @test_throws requires julia≥1.8!
-        # @test_throws match_vegas_errmsgs integrate_lindhard(;
-        @test_throws Union{AssertionError,UndefVarError} integrate_lindhard(;
+        # @test_throws Union{AssertionError,UndefVarError} integrate_lindhard(;
+        @test_throws Union{AssertionError,ErrorException} integrate_lindhard(;
             taylor_expand=false,
             mcprint=-2,
             solver=solver,

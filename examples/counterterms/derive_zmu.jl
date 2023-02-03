@@ -68,7 +68,7 @@ function process(datatuple, isSave)
     ############# save to csv  #################
     # println(df)
     for o in keys(data)
-        # println(o)
+        println("Adding order $o")
         # global df
         paraid = UEG.paraid(para)
         df = CounterTerm.appendDict(

@@ -11,11 +11,6 @@ using ..UEG_MC: @todo
 # Bare Green's function and interaction evaluation #
 ####################################################
 
-# Unscreened Coulomb interaction (for outer V lines of non-local SOSEM)
-@inline function CoulombBareinstant(q, p::ParaMC)
-    return KOinstant(q, p.e0, p.dim, 0.0, 0.0, p.kF)
-end
-
 """Evaluate a bare Green's function line."""
 function eval(id::BareGreenId, K, _, varT, p::ParaMC)
     β, me, μ, massratio = p.β, p.me, p.μ, p.massratio
@@ -48,10 +43,14 @@ function eval(id::BareGreenId, K, _, varT, p::ParaMC)
     # Check for counterterms; note that we have:
     # \partial^(n)_\mu g(Ek - \mu, \tau) = (-1)^n * Spectral.kernelFermiT_dωn
     # NOTE: We have an overall sign difference relative to the Negle & Orland convention
+    #
+    # TODO: Benchmark this; should introduce a single overall sign. 
+    #       Better to add that sign globally.
     green = -s
     order = id.order[1]
     if order == 0
-        if τ == 0.0
+        # if τ == 0.0
+        if τ ≈ 0.0
             green *= Spectral.kernelFermiT(-1e-8, ϵ, β)
         else
             green *= Spectral.kernelFermiT(τ, ϵ, β)
@@ -66,6 +65,11 @@ function eval(id::BareGreenId, K, _, varT, p::ParaMC)
         @todo
     end
     return green
+end
+
+# Unscreened Coulomb interaction (for outer V lines of non-local SOSEM)
+@inline function CoulombBareinstant(q, p::ParaMC)
+    return KOinstant(q, p.e0, p.dim, 0.0, 0.0, p.kF)
 end
 
 """Evaluate a statically screened Coulomb interaction line."""

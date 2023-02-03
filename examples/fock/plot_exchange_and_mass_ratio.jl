@@ -1,9 +1,11 @@
+using CodecZlib
 using ElectronGas
 using ElectronLiquid
 using Interpolations
 using JLD2
 using LsqFit
 using Measurements
+using Parameters
 using Polynomials
 using PyCall
 using SOSEM
@@ -79,13 +81,13 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 1e8
+    neval = 5e10
 
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
     min_order = 2
-    max_order = 3
+    max_order = 4
     min_order_plot = 1
-    max_order_plot = 3
+    max_order_plot = 4
 
     # Save total results
     save = true
@@ -97,19 +99,19 @@ function main()
     ct_string = "with_ct_mu_lambda"
 
     # UEG parameters for MC integration
-    # loadparam = ParaMC(; order=max_order, rs=rs, beta=beta, mass2=mass2, isDynamic=false)
+    loadparam = ParaMC(; order=max_order, rs=rs, beta=beta, mass2=mass2, isDynamic=false)
 
     # NOTE: Taking N=3 data from N=4 run, renorm for N=4 not yet implemented!
-    loadparam = ParaMC(; order=4, rs=rs, beta=beta, mass2=mass2, isDynamic=false)
+    # loadparam = ParaMC(; order=4, rs=rs, beta=beta, mass2=mass2, isDynamic=false)
 
-    # savename =
-    #     "results/data/sigma_x_n=$(max_order)_rs=$(rs)_" *
-    #     "beta_ef=$(beta)_lambda=$(mass2)_neval=$(neval)_$(solver)"
-
-    # NOTE: Taking N=3 data from N=4 run, renorm for N=4 not yet implemented!
     savename =
-        "results/data/sigma_x_n=4_rs=$(rs)_" *
+        "results/data/sigma_x_n=$(max_order)_rs=$(rs)_" *
         "beta_ef=$(beta)_lambda=$(mass2)_neval=$(neval)_$(solver)"
+
+    # NOTE: Taking N=3 data from N=4 run, renorm for N=4 not yet implemented!
+    # savename =
+    #     "results/data/sigma_x_n=4_rs=$(rs)_" *
+    #     "beta_ef=$(beta)_lambda=$(mass2)_neval=$(neval)_$(solver)"
 
     orders, param, kgrid, partitions, res = jldopen("$savename.jld2", "a+") do f
         key = "$(UEG.short(loadparam))"
@@ -132,8 +134,13 @@ function main()
         merged_data[(1, 0)] = measurement.(sigma_fock_over_eTF_exact, 0.0)  # treat quadrature data as numerically exact
     end
 
+    println(param)
+    ctparam = param
+    # ctparam = reconstruct(param; order=3)
+
     # Reexpand merged data in powers of μ
-    z, μ = UEG_MC.load_z_mu(param)
+    z, μ = UEG_MC.load_z_mu(ctparam)
+    # z, μ = UEG_MC.load_z_mu(param)
     δz, δμ = CounterTerm.sigmaCT(max_order, μ, z; verbose=1)
     println("Computed δμ: ", δμ)
     sigma_x =
@@ -156,6 +163,7 @@ function main()
     println(UEG.paraid(param))
     println(partitions)
     println(res)
+    @assert worst_score ≤ 10
 
     if save
         savename =
@@ -299,16 +307,19 @@ function main()
 
     # No fixed point (zpe is a free parameter)
     @. model(k, p) = p[1] + k^2 / (2.0 * p[2])
+
     # Fixed point at Eqp(0) = -1 (exact Fock zpe)
-    @. model_fix_E0(k, p) = -eTF + k^2 / (2.0 * p[1])
+    # @. model_fix_E0(k, p) = -eTF + k^2 / (2.0 * p[1])
     # Fixed point at Eqp(kF) (exact Fock energy at k = kF)
-    @. model_fix_EF(k, p) = EF_fock + (k^2 - param.kF^2) / (2.0 * p[1])
+    # @. model_fix_EF(k, p) = EF_fock + (k^2 - param.kF^2) / (2.0 * p[1])
     # General quadratic fit
     # @. model_quadratic(k, p) = p[1] + p[2] * k + p[3] * k^2
 
     # Initial parameters for curve fitting procedure
-    p0          = [-1.0, 1.0]  # E₀=0 and m=mₑ
-    p0_fixed_pt = [1.0]        # m=mₑ
+    p0 = [1.0]        # m=mₑ
+
+    # p0          = [-1.0, 1.0]  # E₀=0 and m=mₑ
+    # p0_fixed_pt = [1.0]        # m=mₑ
     # p0_quadratic = [-1.0, 0.1, 1.0]
 
     # Gridded data for k ≤ kF
@@ -316,38 +327,46 @@ function main()
     E_fock_data = E_fock_quad[kgrid_quad .≤ param.kF]
 
     # Least-squares fit of models to data
-    fit_fock = curve_fit(model, k_data, E_fock_data, p0)
-    fit_fock_fix_E0 = curve_fit(model_fix_E0, k_data, E_fock_data, p0_fixed_pt)
-    fit_fock_fix_EF = curve_fit(model_fix_EF, k_data, E_fock_data, p0_fixed_pt)
+    fit_fock = curve_fit((k, p) -> model(k, [-eTF, p[1]]), k_data, E_fock_data, p0)
+
+    # fit_fock_fix_E0 = curve_fit(model_fix_E0, k_data, E_fock_data, p0_fixed_pt)
+    # fit_fock_fix_EF = curve_fit(model_fix_EF, k_data, E_fock_data, p0_fixed_pt)
     # fit_quadratic = curve_fit(model_quadratic, k_data, E_fock_data, p0_quadratic)
 
     # QP params
-    zpe_fock         = fit_fock.param[1]
-    meff_fock        = fit_fock.param[2]
-    meff_fock_fix_E0 = fit_fock_fix_E0.param[1]
-    meff_fock_fix_EF = fit_fock_fix_EF.param[1]
+    meff_fock = fit_fock.param[1]
+    println(meff_fock)
+
+    # zpe_fock         = fit_fock.param[1]
+    # meff_fock        = fit_fock.param[2]
+    # meff_fock_fix_E0 = fit_fock_fix_E0.param[1]
+    # meff_fock_fix_EF = fit_fock_fix_EF.param[1]
     # meff_quadratic   = 1 / (2 * fit_quadratic.param[3])
-    println(meff_fock, " ", meff_fock_fix_E0, " ", meff_fock_fix_EF)
+    # println(meff_fock, " ", meff_fock_fix_E0, " ", meff_fock_fix_EF)
     # println(meff_fock, " ", meff_fock_fix_E0, " ", meff_fock_fix_EF, " ", meff_quadratic)
 
     # Fits to Eqp(k)
-    qp_fit_fock(k)        = model(k, fit_fock.param)
-    qp_fit_fock_fix_E0(k) = model_fix_E0(k, fit_fock_fix_E0.param)
-    qp_fit_fock_fix_EF(k) = model_fix_EF(k, fit_fock_fix_EF.param)
+    qp_fit_fock(k) = model(k, [-eTF, meff_fock])
+    @assert qp_fit_fock(0) ≈ -eTF
+
+    # qp_fit_fock_fix_E0(k) = model_fix_E0(k, fit_fock_fix_E0.param)
+    # qp_fit_fock_fix_EF(k) = model_fix_EF(k, fit_fock_fix_EF.param)
     # qp_fit_quadratic(k)   = model_quadratic(k, fit_quadratic.param)
-    @assert qp_fit_fock_fix_E0(0) ≈ -eTF
-    @assert qp_fit_fock_fix_EF(param.kF) ≈ param.EF - eTF / 2
+    # @assert qp_fit_fock_fix_E0(0) ≈ -eTF
+    # @assert qp_fit_fock_fix_EF(param.kF) ≈ param.EF - eTF / 2
 
     # Coefficients of determination (r²)
-    r2        = rsquared(k_data, E_fock_data, qp_fit_fock(k_data), fit_fock)
-    r2_fix_E0 = rsquared(k_data, E_fock_data, qp_fit_fock_fix_E0(k_data), fit_fock_fix_E0)
-    r2_fix_EF = rsquared(k_data, E_fock_data, qp_fit_fock_fix_EF(k_data), fit_fock_fix_EF)
+    r2 = rsquared(k_data, E_fock_data, qp_fit_fock(k_data), fit_fock)
+
+    # r2_fix_E0 = rsquared(k_data, E_fock_data, qp_fit_fock_fix_E0(k_data), fit_fock_fix_E0)
+    # r2_fix_EF = rsquared(k_data, E_fock_data, qp_fit_fock_fix_EF(k_data), fit_fock_fix_EF)
     # r2_quadratic = rsquared(k_data, E_fock_data, qp_fit_quadratic(k_data), fit_quadratic)
 
     # Low-energy effective mass ratios (mₑ/m⋆)(k≈0) from quasiparticle fits
-    low_en_mass_ratio_fock        = param.me / meff_fock
-    low_en_mass_ratio_fock_fix_E0 = param.me / meff_fock_fix_E0
-    low_en_mass_ratio_fock_fix_EF = param.me / meff_fock_fix_EF
+    low_en_mass_ratio_fock = param.me / meff_fock
+
+    # low_en_mass_ratio_fock_fix_E0 = param.me / meff_fock_fix_E0
+    # low_en_mass_ratio_fock_fix_EF = param.me / meff_fock_fix_EF
     # low_en_mass_ratio_quadratic   = param.me / meff_quadratic
 
     # RESULT: Best fit is given by model 2, although this is not the fit with highest r².
@@ -355,33 +374,22 @@ function main()
     #         While the exact zero-point energy is not known beyond HF level, we will
     #         simply constrain it to the data at k = 0.
 
+    # println(
+    #     "Fock effective zero-point energy over eTF from quadratic fit: E₀ = $(zpe_fock / eTF)",
+    # )
+
     # ZPEs
-    println(
-        "Fock effective zero-point energy over eTF from quadratic fit: E₀ = $(zpe_fock / eTF)",
-    )
     println("Exact Fock ZPE over eTF: Eqp(0) = $(E_fock_quad[1] / eTF)")
 
     # Mass ratios
     println(
         "Fock low-energy effective mass ratio from quadratic fit: " *
-        "(mₑ/m⋆)(k=0) ≈ $low_en_mass_ratio_fock_fix_E0, r2=$r2",
+        "(mₑ/m⋆)(k=0) ≈ $low_en_mass_ratio_fock, r2=$r2",
     )
-    mass_ratio_fit   = 1 / low_en_mass_ratio_fock_fix_E0
+    mass_ratio_fit   = 1 / low_en_mass_ratio_fock
     mass_ratio_exact = 1 / fock_mass_ratio_k0(param)
     rel_error        = abs(mass_ratio_exact - mass_ratio_fit) / mass_ratio_exact
     println("Percent error vs exact low-energy limit: $(rel_error * 100)%")
-    # println(
-    #     "Fock low-energy effective mass ratio from quadratic fit (fixed Eqp(0)): " *
-    #     "(mₑ/m⋆)(k=0) ≈ $low_en_mass_ratio_fock_fix_E0, r2=$r2_fix_E0",
-    # )
-    # println(
-    #     "Fock low-energy effective mass ratio from quadratic fit (fixed Eqp(kF)): " *
-    #     "(mₑ/m⋆)(k=0) ≈ $low_en_mass_ratio_fock_fix_EF, r2=$r2_fix_EF",
-    # )
-    # println(
-    #     "Fock low-energy effective mass ratio from general quadratic fit: " *
-    #     "(mₑ/m⋆)(k=0) ≈ $low_en_mass_ratio_quadratic, r2=$r2_quadratic",
-    # )
 
     ax2.axhline(0; linestyle="--", color="gray")
     # ax2.plot(
@@ -399,8 +407,8 @@ function main()
     )
     ax2.plot(
         kgrid_quad / param.kF,
-        qp_fit_fock_fix_E0(kgrid_quad) / eTF,
-        "r";
+        qp_fit_fock(kgrid_quad) / eTF,
+        "gray";
         label="\$\\left(\\epsilon_0 + \\frac{k^2}{2 m^\\star_{\\mathrm{HF}}} \\right) \\Big/ \\epsilon_{\\mathrm{TF}}\$ (quasiparticle fit)",
     )
     ax2.plot(
@@ -412,10 +420,39 @@ function main()
     for (i, N) in enumerate(min_order:max_order_plot)
         N == 1 && continue
         # Eqp = ϵ(k) + Σₓ(k)
-        Eqp = Ek_over_eTF .+ sigma_x_over_eTF_total[N]
+        Eqp_over_eTF = Ek_over_eTF .+ sigma_x_over_eTF_total[N]
         # Get means and error bars
-        means_qp = Measurements.value.(Eqp)
-        stdevs_qp = Measurements.uncertainty.(Eqp)
+        means_qp = Measurements.value.(Eqp_over_eTF)
+        stdevs_qp = Measurements.uncertainty.(Eqp_over_eTF)
+
+        # Gridded data for k ≤ kF
+        k_data = kgrid[kgrid ≤ param.kF]
+        Eqp_data = eTF * Eqp_over_eTF[kgrid ≤ param.kF]
+
+        # Constrain ZPE to measured data at k = 0
+        E0 = Eqp_data[1]
+
+        # Least-squares fit of models to data
+        fit_N = curve_fit((k, p) -> model(k, [E0, p[1]]), k_data, Eqp_data, p0)
+
+        # QP params
+        meff_N = fit_N.param[1]
+
+        # Fits to Eqp(k)
+        qp_fit(k) = model(k, [E0, meff_N])
+        @assert qp_fit(0) ≈ E0
+
+        # Coefficients of determination (r²)
+        r2 = rsquared(k_data, Eqp_data, qp_fit(k_data), fit_N)
+
+        # Low-energy effective mass ratios (mₑ/m⋆)(k≈0) from quasiparticle fits
+        low_en_mass_ratio = param.me / meff_N
+
+        # Mass ratio
+        println(
+            "N=$N low-energy effective mass ratio from quadratic fit: " *
+            "(mₑ/m⋆)(k=0) ≈ $low_en_mass_ratio, r2=$r2",
+        )
 
         # Data gets noisy above 3rd loop order
         # marker = N > 2 ? "o-" : "-"
@@ -487,7 +524,7 @@ function main()
     # m_e / m_{momt}(k) ≈ 1 + Σₓ(k) / ϵ(k)
     effmass_ratio = 1.0 .+ sigma_fock_over_Ek
     effmass_ratio_kF = (1.0 .+ sigma_fock_exact ./ Ek)[ikF]
-    println("Naive effective mass at k = kF (N=1): ", effmass_ratio_kF)
+    # println("Naive effective mass at k = kF (N=1): ", effmass_ratio_kF)
     ax3.plot(k_kf_grid_quad, effmass_ratio, "C0"; label="\$N=1\$ (exact, \$T=0\$)")
     for (i, N) in enumerate(min_order:max_order_plot)
         N == 1 && continue
@@ -499,7 +536,7 @@ function main()
         means_mass_ratio = Measurements.value.(mass_ratio)
         stdevs_mass_ratio = Measurements.uncertainty.(mass_ratio)
 
-        println("Naive effective mass at k = kF (N=$N): ", means_mass_ratio[ikF])
+        # println("Naive effective mass at k = kF (N=$N): ", means_mass_ratio[ikF])
         # Data gets noisy above 3rd loop order
         # marker = N > 2 ? "o-" : "-"
         marker = "o-"

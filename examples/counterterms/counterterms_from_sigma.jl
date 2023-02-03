@@ -1,3 +1,4 @@
+using CodecZlib
 using ElectronLiquid
 using FeynmanDiagram
 using JLD2
@@ -24,6 +25,7 @@ function integrandKW(idx, var, config)
     wn = ngrid[l]
 
     ExprTree.evalKT!(diagram, varK.data, varT.data, para; eval=UEG_MC.Propagators.eval)
+    # ExprTree.evalKT!(diagram, varK.data, varT.data, para)
     w = sum(
         weight[r] * Sigma.phase(varT, extT[idx][ri], wn, para.β) for
         (ri, r) in enumerate(diagram.root)
@@ -150,7 +152,7 @@ function main()
     #beta = [<beta_opt>]
 
     # Total number of MCMC evaluations
-    neval = 1e10
+    neval = 1e7
 
     # Get self-energy data needed for the chemical potential and Z-factor measurements
     for (_rs, _mass2, _beta, _order) in Iterators.product(rs, mass2, beta, order)
@@ -175,7 +177,8 @@ function main()
         #! format: on
 
         # Integrate
-        sigma, result = KW(
+        # sigma, result = KW(
+        sigma, result = Sigma.KW(
             para,
             diagram;
             kgrid=kgrid,
@@ -189,7 +192,9 @@ function main()
 
         # Save data to JLD2
         if isnothing(sigma) == false
+            println("Saving data to JLD2...")
             jldopen("data_Z.jld2", "a+"; compress=true) do f
+                # jldopen("data_Z.jld2", "a+") do f
                 key = "$(UEG.short(para))"
                 if haskey(f, key)
                     @warn("replacing existing data for $key")
@@ -197,6 +202,7 @@ function main()
                 end
                 return f[key] = (para, ngrid, kgrid, sigma)
             end
+            println("done!")
         end
     end
 end

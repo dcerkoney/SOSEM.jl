@@ -198,7 +198,7 @@ function exchange_mc_variables(mcparam::UEG.ParaMC, n_kgrid::Int, alpha::Float64
     return (K, T, ExtKidx)
 end
 
-"""Measurement for a single diagram tree (without CTs, fixed order in V)."""
+"""Measurement for multiple diagram trees (counterterm partitions)."""
 function measure(vars, obs, weights, config)
     ik = vars[3][1]  # ExtK bin index
     # Measure the weight of each partition
@@ -308,10 +308,10 @@ function main()
 
     # Check the diagram trees
     # for (i, d) in enumerate(diagtrees)
-        # println("\nDiagram tree #$i, partition P = $(partitions[i]):")
-        # print_tree(d)
-        # plot_tree(d)
-        # # println(diagparams[i])
+    # println("\nDiagram tree #$i, partition P = $(partitions[i]):")
+    # print_tree(d)
+    # plot_tree(d)
+    # # println(diagparams[i])
     # end
 
     res = integrate_sigma_x_with_ct(
