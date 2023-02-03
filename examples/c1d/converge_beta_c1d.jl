@@ -129,7 +129,7 @@ function main()
             "results/data/converge_beta_$(meshtypestr)c1d_" *
             "n=$(params[1].order)_rs=$(params[1].rs)_lambda=$(params[1].mass2)_" *
             "neval=$(neval)_$(intn_str)$(solver)"
-        jldopen("$savename.jld2", "a+") do f
+        jldopen("$savename.jld2", "a+"; compress=true) do f
             # UEG.short without beta
             short_no_beta =
                 join(["$(k)_$(v)" for (k, v) in sort(delete!(paraid(p), "beta"))], "_")

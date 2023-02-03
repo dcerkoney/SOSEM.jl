@@ -117,7 +117,7 @@ function main()
             "results/data/c1d_n=$(param.order)_rs=$(param.rs)_" *
             "beta_ef=$(param.beta)_lambda=$(param.mass2)_" *
             "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)"
-        jldopen("$savename.jld2", "a+") do f
+        jldopen("$savename.jld2", "a+"; compress=true) do f
             key = "$(short(param))"
             if haskey(f, key)
                 @warn("replacing existing data for $key")
@@ -132,7 +132,7 @@ function main()
         savename =
             "results/data/rs=$(param.rs)_beta_ef=$(param.beta)_" *
             "lambda=$(param.mass2)_$(intn_str)$(solver)_$(ct_string)"
-        jldopen("$savename.jld2", "a+") do f
+        jldopen("$savename.jld2", "a+"; compress=true) do f
             key = "c1d_n_min=$(settings.min_order)_n_max=$(settings.max_order)_neval=$(neval)"
             if haskey(f, key)
                 @warn("replacing existing data for $key")

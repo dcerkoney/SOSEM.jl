@@ -390,7 +390,7 @@ function main()
         savename =
             "results/data/poln_kt_rs=$(mcparam.rs)_" *
             "beta_ef=$(mcparam.beta)_neval=$(neval)_$(solver)"
-        jldopen("$savename.jld2", "a+") do f
+        jldopen("$savename.jld2", "a+"; compress=true) do f
             key = "$(short(mcparam))"
             if haskey(f, key)
                 @warn("replacing existing data for $key")

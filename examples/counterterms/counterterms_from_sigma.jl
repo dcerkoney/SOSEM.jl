@@ -2,6 +2,7 @@ using ElectronLiquid
 using FeynmanDiagram
 using JLD2
 using MCIntegration
+using Measurements
 using SOSEM
 
 # Change to counterterm directory
@@ -149,7 +150,7 @@ function main()
     #beta = [<beta_opt>]
 
     # Total number of MCMC evaluations
-    neval = 1e7
+    neval = 1e10
 
     # Get self-energy data needed for the chemical potential and Z-factor measurements
     for (_rs, _mass2, _beta, _order) in Iterators.product(rs, mass2, beta, order)
@@ -188,7 +189,7 @@ function main()
 
         # Save data to JLD2
         if isnothing(sigma) == false
-            jldopen("data_Z.jld2", "a+") do f
+            jldopen("data_Z.jld2", "a+"; compress=true) do f
                 key = "$(UEG.short(para))"
                 if haskey(f, key)
                     @warn("replacing existing data for $key")

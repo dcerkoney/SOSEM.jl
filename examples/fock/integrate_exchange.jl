@@ -332,7 +332,7 @@ function main()
         savename =
             "results/data/sigma_x_n=$(param.order)_rs=$(param.rs)_" *
             "beta_ef=$(param.beta)_lambda=$(param.mass2)_neval=$(neval)_$(solver)"
-        jldopen("$savename.jld2", "a+") do f
+        jldopen("$savename.jld2", "a+"; compress=true) do f
             key = "$(UEG.short(param))"
             if haskey(f, key)
                 @warn("replacing existing data for $key")

@@ -151,7 +151,7 @@ function renorm_measurement(
         savename =
             "results/data/rs=$(param.rs)_beta_ef=$(param.beta)_" *
             "lambda=$(param.mass2)_$(intn_str)$(solver)_$(ct_string)"
-        f = jldopen("$savename.jld2", "a+")
+        f = jldopen("$savename.jld2", "a+"; compress=true)
         # Get savename for this measurement class
         class_savename = class_savenames[class]
         for N in min_order:max_order
