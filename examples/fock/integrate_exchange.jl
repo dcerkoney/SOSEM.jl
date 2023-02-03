@@ -1,4 +1,4 @@
-using AbstractTrees
+# using AbstractTrees
 using CompositeGrids
 using ElectronGas
 using ElectronLiquid
@@ -7,7 +7,6 @@ using FeynmanDiagram
 using JLD2
 using Measurements
 using MCIntegration
-using Lehmann
 using LinearAlgebra
 using Parameters
 using PyCall
@@ -15,7 +14,6 @@ using SOSEM
 
 # For saving/loading numpy data
 @pyimport numpy as np
-@pyimport matplotlib.pyplot as plt
 
 """
 Exact expression for the Fock self-energy
@@ -295,10 +293,9 @@ function main()
     alpha = 3.0
     print = 0
     solver = :vegasmc
-    plot_fock = orders == [1]
 
     # Number of evals below and above kF
-    neval = 1e8
+    neval = 5e10
 
     # Build diagram/expression trees for the exchange self-energy to order
     # ξᴺ in the renormalized perturbation theory (includes CTs in μ and λ)
@@ -360,42 +357,6 @@ function main()
                    • Standard score (k = 0): $score_k0
                    • Worst standard score: $worst_score
                   """)
-            # Plot the Fock result on the main thread
-            if plot_fock
-                fig, ax = plt.subplots()
-                # Compare result to exact non-dimensionalized Fock self-energy (-F(k / kF))
-                ax.plot(
-                    k_kf_grid,
-                    -UEG_MC.lindhard.(k_kf_grid),
-                    "k";
-                    label="\$N=1\$ (exact)",
-                )
-                ax.plot(
-                    k_kf_grid,
-                    means_fock,
-                    "o-";
-                    markersize=2,
-                    color="C0",
-                    label="\$N=1\$ ($solver)",
-                )
-                ax.fill_between(
-                    k_kf_grid,
-                    means_fock - stdevs_fock,
-                    means_fock + stdevs_fock;
-                    color="C0",
-                    alpha=0.4,
-                )
-                ax.legend(; loc="best")
-                ax.set_xlabel("\$k / k_F\$")
-                ax.set_ylabel("\$\\Sigma_{x}(k) \\,/\\, \\epsilon_{\\mathrm{TF}}\$")
-                ax.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
-                plt.tight_layout()
-                fig.savefig(
-                    "results/fock/sigma_fock_comparison_rs=$(param.rs)_" *
-                    "beta_ef=$(param.beta)_lambda=$(param.mass2)_neval=$(neval)_$(solver).pdf",
-                )
-                plt.close("all")
-            end
         end
     end
 end
