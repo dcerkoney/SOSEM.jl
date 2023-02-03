@@ -152,7 +152,7 @@ function main()
     #beta = [<beta_opt>]
 
     # Total number of MCMC evaluations
-    neval = 1e7
+    neval = 1e10
 
     # Get self-energy data needed for the chemical potential and Z-factor measurements
     for (_rs, _mass2, _beta, _order) in Iterators.product(rs, mass2, beta, order)
