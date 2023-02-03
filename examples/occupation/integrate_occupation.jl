@@ -195,7 +195,7 @@ function integrand(vars, config)
     return integrand
 end
 
-"""MC integration of the exchange self-energy"""
+"""MC integration of the occupation number."""
 function main()
     # Change to project directory
     if haskey(ENV, "SOSEM_CEPH")
@@ -209,11 +209,10 @@ function main()
         ENV["JULIA_DEBUG"] = Main
     end
 
-    # Total loop order N (Fock self-energy is N = 1)
-    orders = [2, 3, 4]
+    # Total loop order N
+    orders = [0, 1, 2, 3]
     max_order = maximum(orders)
     sort!(orders)
-    @assert length(orders) > 0 && all(orders .> 0)
 
     # UEG parameters for MC integration
     param = ParaMC(; order=max_order, rs=1.0, beta=40.0, mass2=1.0, isDynamic=false)
@@ -242,7 +241,7 @@ function main()
     # Number of evals below and above kF
     neval = 1e10
 
-    # Build diagram/expression trees for the exchange self-energy to order
+    # Build diagram/expression trees for the occupation number to order
     # ξᴺ in the renormalized perturbation theory (includes CTs in μ and λ)
     partitions, diagparams, diagtrees, exprtrees = build_occupation_with_ct(orders)
 
