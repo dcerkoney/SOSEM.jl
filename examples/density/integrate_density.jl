@@ -99,10 +99,10 @@ function integrate_density_with_ct(
 
     # MC configuration degrees of freedom (DOF): shape(K), shape(T)
     # We do not integrate the external times and nₖ is instantaneous, hence n_τ = totalTauNum - 1
-    dof = [[p.totalLoopNum, p.totalTauNum - 1, 1] for p in diagparams]
+    dof = [[p.totalLoopNum, p.totalTauNum - 1] for p in diagparams]
 
     # Total density is a scalar
-    obs = repeat([0.0], length(dof))  # observable for each partition
+    obs = zeros(length(dof))  # observable for each partition
 
     # External times are fixed for left/right measurement of the discontinuity at τ = 0
     T.data[1] = 0  # τin = 0 (= τout⁺)
@@ -142,8 +142,7 @@ end
 function measure(vars, obs, weights, config)
     # Measure the weight of each partition
     for o in 1:(config.N)
-        # obs[o][ik] += weights[o]
-        obs[o][1] += weights[o]
+        obs[o] += weights[o]
     end
     return
 end
@@ -199,7 +198,7 @@ function main()
     end
 
     # Total loop order N
-    orders = [1, 2, 3]
+    orders = [0, 1, 2, 3]
     max_order = maximum(orders)
     sort!(orders)
 
@@ -213,7 +212,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 1e10
+    neval = 1e6
 
     # Build diagram/expression trees for the occupation number to order
     # ξᴺ in the renormalized perturbation theory (includes CTs in μ and λ)
