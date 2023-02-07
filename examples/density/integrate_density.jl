@@ -204,7 +204,7 @@ function main()
     end
 
     # Total loop order N
-    orders = [0, 1, 2, 3, 4]
+    orders = [0, 1, 2, 3]
     max_order = maximum(orders)
     sort!(orders)
 
