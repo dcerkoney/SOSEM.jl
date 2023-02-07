@@ -212,7 +212,7 @@ function main()
     end
 
     # Total loop order N
-    orders = [1, 2, 3]
+    orders = [1, 2, 3, 4]
     max_order = maximum(orders)
     sort!(orders)
 
@@ -226,7 +226,7 @@ function main()
     kgrid =
         CompositeGrid.LogDensedGrid(
             :uniform,
-            [0.0, 3 * param.kF],
+            [0.0, 2 * param.kF],
             [param.kF],
             Nk,
             minK,
@@ -241,7 +241,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 1e10
+    neval = 5e10
 
     # Build diagram/expression trees for the occupation number to order
     # ξᴺ in the renormalized perturbation theory (includes CTs in μ and λ)
