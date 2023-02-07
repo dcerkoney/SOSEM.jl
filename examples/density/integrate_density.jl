@@ -59,7 +59,8 @@ function build_diagtree(; n_loop=0)
     DiagTree.uidreset()
 
     # Instantaneous Green's function (occupation number) diagram parameters
-    diagparam = DiagParaF64(; type=GreenDiag, innerLoopNum=n_loop, firstTauIdx=2, hasTau=true)
+    diagparam =
+        DiagParaF64(; type=GreenDiag, innerLoopNum=n_loop, firstTauIdx=2, hasTau=true)
 
     # Loop basis vector for external momentum
     k = DiagTree.getK(diagparam.totalLoopNum, 1)
@@ -84,14 +85,14 @@ function integrate_density_with_ct(
     # We assume that each partition expression tree has a single root
     @assert all(length(et.root) == 1 for et in exprtrees)
 
-    # List of expression tree roots, external times, and inner
+    # List of expression tree roots, external times, and total
     # loop numbers for each tree (to be passed to integrand)
     # roots = [et.root[1] for et in exprtrees]
-    innerLoopNums = [p.innerLoopNum for p in diagparams]
+    totalLoopNums = [p.totalLoopNum for p in diagparams]
 
     # Temporary array for combined K-variables.
     # We use the maximum necessary loop basis size for K pool.
-    maxloops = maximum(p.totalLoopNum for p in diagparams)
+    maxloops = maximum(totalLoopNums)
     varK = zeros(3, maxloops)
 
     # Build adaptable MC integration variables
@@ -100,6 +101,7 @@ function integrate_density_with_ct(
     # MC configuration degrees of freedom (DOF): shape(K), shape(T)
     # We do not integrate the external times and nₖ is instantaneous, hence n_τ = totalTauNum - 1
     dof = [[p.totalLoopNum, p.totalTauNum - 1] for p in diagparams]
+    println(dof)
 
     # Total density is a scalar
     obs = zeros(length(dof))  # observable for each partition
@@ -108,7 +110,7 @@ function integrate_density_with_ct(
     T.data[1] = 0  # τin = 0 (= τout⁺)
 
     # Phase-space factors
-    phase_factors = [1.0 / (2π)^(mcparam.dim * nl) for nl in innerLoopNums]
+    phase_factors = [1.0 / (2π)^(mcparam.dim * nl) for nl in totalLoopNums]
 
     # Total prefactors
     prefactors = phase_factors
@@ -120,7 +122,7 @@ function integrate_density_with_ct(
         neval=neval,
         print=print,
         # MC config kwargs
-        userdata=(mcparam, exprtrees, innerLoopNums, prefactors, varK),
+        userdata=(mcparam, exprtrees, totalLoopNums, prefactors, varK),
         var=(K, T),
         dof=dof,
         obs=obs,
@@ -154,23 +156,27 @@ function integrand(vars, config)
     R, Theta, Phi = K
 
     # Unpack userdata
-    mcparam, exprtrees, innerLoopNums, prefactors, varK = config.userdata
+    mcparam, exprtrees, totalLoopNums, prefactors, varK = config.userdata
+
+    @debug "totalLoopNums = $totalLoopNums" maxlog = 3
+    @debug "config.N = $(config.N)" maxlog = 3
 
     # Evaluate the integrand for each partition
     integrand = Vector(undef, config.N)
     for i in 1:(config.N)
         phifactor = 1.0
-        for j in 1:innerLoopNums[i]  # config.dof[i][1]
+        for j in 1:totalLoopNums[i]  # config.dof[i][1]
             r = R[j] / (1 - R[j])
             θ = Theta[j]
             ϕ = Phi[j]
-            varK[1, j + 1] = r * sin(θ) * cos(ϕ)
-            varK[2, j + 1] = r * sin(θ) * sin(ϕ)
-            varK[3, j + 1] = r * cos(θ)
+            varK[1, j] = r * sin(θ) * cos(ϕ)
+            varK[2, j] = r * sin(θ) * sin(ϕ)
+            varK[3, j] = r * cos(θ)
             phifactor *= r^2 * sin(θ) / (1 - R[j])^2
         end
         # @assert T.data[1] == 0
         @debug "K = $(varK)" maxlog = 3
+        @debug "T = $(T.data)" maxlog = 3
 
         # Evaluate the expression tree (additional = mcparam)
         ExprTree.evalKT!(exprtrees[i], varK, T.data, mcparam; eval=UEG_MC.Propagators.eval)
@@ -212,7 +218,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 1e6
+    neval = 1e8
 
     # Build diagram/expression trees for the occupation number to order
     # ξᴺ in the renormalized perturbation theory (includes CTs in μ and λ)
