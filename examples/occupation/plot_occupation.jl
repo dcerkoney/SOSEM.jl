@@ -14,6 +14,7 @@ using SOSEM
 # For saving/loading numpy data
 @pyimport numpy as np
 @pyimport matplotlib.pyplot as plt
+@pyimport mpl_toolkits.axes_grid1.inset_locator as il
 
 function main()
     # Change to project directory
@@ -29,13 +30,13 @@ function main()
     solver = :vegasmc
 
     # Number of evals
-    neval = 1e7
+    neval = 5e10
 
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
     min_order = 0
-    max_order = 0
+    max_order = 3
     min_order_plot = 0
-    max_order_plot = 0
+    max_order_plot = 3
 
     # Save total results
     save = true
@@ -169,9 +170,9 @@ function main()
     ax.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
     ax.set_xlabel("\$k / k_F\$")
     ax.set_ylabel("\$n_k\$")
-    xloc = 1.75
-    yloc = 0.7
-    ydiv = -0.095
+    xloc = 1.125
+    yloc = -2.5
+    ydiv = -1.75
     ax.text(
         xloc,
         yloc,
@@ -181,11 +182,48 @@ function main()
     ax.text(
         xloc,
         yloc + ydiv,
-        "\$\\lambda = $(mass2)\\epsilon_{\\mathrm{Ry}},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)},\$";
+        "\$\\lambda = $(mass2)\\epsilon_{\\mathrm{Ry}},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)}\$";
         # "\$\\lambda = \\frac{\\epsilon_{\\mathrm{Ry}}}{10},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)},\$";
         fontsize=14,
     )
     fig.tight_layout()
+
+    # Plot inset
+    ax_inset = il.inset_axes(ax; width="38%", height="28.5%", loc=2, borderpad=0)
+    # Compare result to bare occupation fₖ
+    ax_inset.plot(k_kf_grid_fine, bare_occupation_fine, "k"; label="\$N=0\$ (exact)")
+    ax_inset.axvline(1.0; linestyle="--", linewidth=1, color="gray")
+    for (i, N) in enumerate(min_order:max_order_plot)
+        # N == 0 && continue
+        # Get means and error bars from the result up to this order
+        means = Measurements.value.(occupation_total[N])
+        stdevs = Measurements.uncertainty.(occupation_total[N])
+        marker = "o-"
+        ax_inset.plot(
+            k_kf_grid,
+            means,
+            marker;
+            markersize=2,
+            color="C$(i-1)",
+            label="\$N=$N\$ ($solver)",
+        )
+        ax_inset.fill_between(
+            k_kf_grid,
+            means - stdevs,
+            means + stdevs;
+            color="C$(i-1)",
+            alpha=0.4,
+        )
+    end
+    xpad = 0.025
+    ypad = 0.4
+    ax_inset.set_xlim(0.8 - xpad, 1.2 + xpad)
+    ax_inset.set_ylim(-ypad, 1 + ypad)
+    ax_inset.set_xlabel("\$k / k_F\$")
+    ax_inset.set_ylabel("\$n_k\$")
+    ax_inset.yaxis.set_label_position("right")
+    ax_inset.yaxis.tick_right()
+
     fig.savefig(
         "results/occupation/occupation_N=$(max_order_plot)_rs=$(param.rs)_" *
         "beta_ef=$(param.beta)_lambda=$(param.mass2)_neval=$(neval)_$(solver).pdf",
