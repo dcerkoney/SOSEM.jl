@@ -59,8 +59,6 @@ function main()
         ]
         #! format: on
 
-        # Integrate
-        # sigma, result = KW(
         sigma, result = Sigma.KW(
             para,
             diagram;
