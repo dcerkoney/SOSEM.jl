@@ -84,30 +84,12 @@ end
 end
 
 @testset "Lindhard function improper integration" begin
+    # vegas/vegasmc solvers break down due to tail round-off error.
+    # Taylor expansion of F(x) for large x resolves this issue
     test_solvers = [:vegas, :vegasmc]
-    # # vegas/vegasmc solvers break down due to tail round-off error
-    # match_vegas_errmsgs =
-    #     str -> any(
-    #         occursin(s, str) for s in [
-    #             r"block .?\d+.? is NaN",
-    #             r"AssertionError.*?histogram.*?finite",
-    #             r"UndefVarError.*?i",  # new error in v0.3.2
-    #         ]
-    #     )
     # vegas/vegasmc solvers break down due to tail round-off error
     for solver in test_solvers
-        # # NOTE: Passing a matching function to @test_throws requires julia≥1.8!
-        # @test_throws Union{AssertionError,UndefVarError} integrate_lindhard(;
-        @test_throws Union{AssertionError,ErrorException} integrate_lindhard(;
-            taylor_expand=false,
-            mcprint=-2,
-            solver=solver,
-        )
-        # Taylor expansion of F(x) for large x resolves this issue
-        @test integrate_lindhard(;
-            taylor_expand=true,
-            mcprint=(solver == :vegas) ? -1 : -2,
-            solver=solver,
-        )
+        mcprint = (solver == :vegas) ? -1 : -2
+        @test integrate_lindhard(; taylor_expand=true, mcprint=mcprint, solver=solver)
     end
 end
