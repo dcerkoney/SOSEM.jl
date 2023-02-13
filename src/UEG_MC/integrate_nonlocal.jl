@@ -43,7 +43,7 @@ function integrate_nonlocal(
     phase_factor = 1.0 / (2π)^(mcparam.dim * innerLoopNum)
 
     # Total prefactors
-    prefactor = phase_factor / eTF2
+    prefactor = -phase_factor / eTF2
 
     return integrate(
         integrand_single;
@@ -115,7 +115,7 @@ function integrate_nonlocal_with_ct(
     phase_factors = [1.0 / (2π)^(mcparam.dim * nl) for nl in innerLoopNums]
 
     # Total prefactors
-    prefactors = phase_factors / eTF2
+    prefactors = -phase_factors / eTF2
 
     return integrate(
         integrand_single;
@@ -189,7 +189,7 @@ function integrate_full_nonlocal_with_ct(
     phase_factors = [1.0 / (2π)^(mcparam.dim * nl) for nl in innerLoopNums]
 
     # Total prefactors
-    prefactors = phase_factors / eTF2
+    prefactors = -phase_factors / eTF2
 
     return integrate(
         integrand_full;

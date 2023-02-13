@@ -21,7 +21,7 @@ function eval(id::BareGreenId, K, _, varT, p::ParaMC)
 
     # Dashed line = Θ(τ)
     if id.order[3] == 1
-        return (sign(τ) + 1) / 2.0
+        return -(sign(τ) + 1) / 2.0
     end
 
     # Get energy
@@ -46,10 +46,9 @@ function eval(id::BareGreenId, K, _, varT, p::ParaMC)
     #
     # TODO: Benchmark this; should introduce a single overall sign. 
     #       Better to add that sign globally.
-    green = -s
+    green = s
     order = id.order[1]
     if order == 0
-        # if τ == 0.0
         if τ ≈ 0.0
             green *= Spectral.kernelFermiT(-1e-8, ϵ, β)
         else

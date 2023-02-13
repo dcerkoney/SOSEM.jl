@@ -1,4 +1,4 @@
-function chemicalpotential_renormalization_poln(data, δμ; max_order)
+function chemicalpotential_renormalization_poln(data, δμ; min_order=0, max_order)
     @assert max_order ≤ 3 "Order $max_order hasn't been implemented!"
     println(δμ)
     @assert length(δμ) ≥ max_order
@@ -6,21 +6,21 @@ function chemicalpotential_renormalization_poln(data, δμ; max_order)
     # To maximum supported counterterm order, z = [O1, O2, O3]
     z = RenormMeasType()
     # Requires order 0
-    if max_order ≥ 0
+    if min_order ≤ 0 ≤ max_order
         z[0] = d[(0, 0)]
     end
     # Requires order 1
-    if max_order ≥ 1
+    if min_order ≤ 1 ≤ max_order
         # Π1 = Π10 + δμ1*Π01
         z[1] = d[(1, 0)] + δμ[1] * d[(0, 1)]
     end
     # Requires orders 1 and 2
-    if max_order ≥ 2
+    if min_order ≤ 2 ≤ max_order
         # Π2 = Π20 + Π11*δμ1 + Π02*δμ1^2 + Π01*δμ2
         z[2] = d[(2, 0)] + δμ[1] * d[(1, 1)] + δμ[1]^2 * d[(0, 2)] + δμ[2] * d[(0, 1)]
     end
     # Requires orders 1, 2, and 3
-    if max_order ≥ 3
+    if min_order ≤ 3 ≤ max_order
         # Π3 = Π30 + Π21*δμ1 + Π12*δμ1^2 + Π11*δμ2 + Π03*δμ1^3 + Π02*(2*δμ1*δμ2) + Π01*δμ3
         #! format: off
         z[3] = d[(3, 0)] + δμ[1] * d[(2, 1)] + δμ[1]^2 * d[(1, 2)] + δμ[2] * d[(1, 1)] +
@@ -30,7 +30,7 @@ function chemicalpotential_renormalization_poln(data, δμ; max_order)
     return z
 end
 
-function chemicalpotential_renormalization_sigma(data, δμ; max_order)
+function chemicalpotential_renormalization_sigma(data, δμ; min_order=1, max_order)
     @assert max_order ≤ 4 "Order $max_order hasn't been implemented!"
     println(δμ)
     @assert length(δμ) + 1 ≥ max_order
@@ -38,25 +38,25 @@ function chemicalpotential_renormalization_sigma(data, δμ; max_order)
     # To maximum supported counterterm order, z = [O1, O2, O3, O4]
     z = RenormMeasType()
     # Requires order 1
-    if max_order ≥ 1
+    if min_order ≤ 1 ≤ max_order
         z[1] = d[(1, 0)]
     end
     # Requires order 2
-    if max_order ≥ 2
+    if min_order ≤ 2 ≤ max_order
         # Σ2 = Σ20 + Σ11*δμ1
         z[2] = d[(2, 0)] + δμ[1] * d[(1, 1)]
     end
     # Requires orders 2 and 3
-    if max_order ≥ 3
+    if min_order ≤ 3 ≤ max_order
         # Σ3 = Σ30 + Σ21*δμ1 + Σ12*δμ1^2 + Σ11*δμ2
-        z[3] = d[(3, 0)] + δμ[1] * d[(2, 1)] + δμ[1]^2 * d[(1, 2)] - δμ[2] * d[(1, 1)]
+        z[3] = d[(3, 0)] + δμ[1] * d[(2, 1)] + δμ[1]^2 * d[(1, 2)] + δμ[2] * d[(1, 1)]
         # z[3] = d[(3, 0)] + δμ[1] * d[(2, 1)] + δμ[1]^2 * d[(1, 2)] + δμ[2] * d[(1, 1)]
     end
     # Requires orders 2, 3, and 4
-    if max_order ≥ 4
+    if min_order ≤ 4 ≤ max_order
         # Σ4 = Σ40 + Σ31*δμ1 + Σ22*δμ1^2 + Σ21*δμ2 + Σ13*δμ1^3 + Σ12*(2*δμ1*δμ2) + Σ11*δμ3
         #! format: off
-        z[4] = d[(4, 0)] + δμ[1] * d[(3, 1)] + δμ[1]^2 * d[(2, 2)] - δμ[2] * d[(2, 1)] +
+        z[4] = d[(4, 0)] + δμ[1] * d[(3, 1)] + δμ[1]^2 * d[(2, 2)] + δμ[2] * d[(2, 1)] +
                (δμ[1])^3 * d[(1, 3)] - 2 * δμ[1] * δμ[2] * d[(1, 2)] + δμ[3] * d[(1, 1)]
         # z[4] = d[(4, 0)] + δμ[1] * d[(3, 1)] + δμ[1]^2 * d[(2, 2)] + δμ[2] * d[(2, 1)] +
         #        (δμ[1])^3 * d[(1, 3)] + 2 * δμ[1] * δμ[2] * d[(1, 2)] + δμ[3] * d[(1, 1)]
@@ -65,7 +65,7 @@ function chemicalpotential_renormalization_sigma(data, δμ; max_order)
     return z
 end
 
-function chemicalpotential_renormalization_green(data, δμ; max_order)
+function chemicalpotential_renormalization_green(data, δμ; min_order=0, max_order)
     @assert max_order ≤ 3 "Order $max_order hasn't been implemented!"
     println(δμ)
     @assert length(δμ) ≥ max_order
@@ -73,21 +73,21 @@ function chemicalpotential_renormalization_green(data, δμ; max_order)
     # To maximum supported counterterm order, z = [O1, O2, O3, O4]
     z = RenormMeasType()
     # Requires order 0
-    if max_order ≥ 0
+    if min_order ≤ 0 ≤ max_order
         z[0] = d[(0, 0)]
     end
     # Requires order 1
-    if max_order ≥ 1
+    if min_order ≤ 1 ≤ max_order
         # G1 = G10 + G01*δμ1
         z[1] = d[(1, 0)] + δμ[1] * d[(0, 1)]
     end
     # Requires orders 1 and 2
-    if max_order ≥ 2
+    if min_order ≤ 2 ≤ max_order
         # G2 = G20 + G11*δμ1 + G02*δμ1^2 + G01*δμ2
         z[2] = d[(2, 0)] + δμ[1] * d[(1, 1)] + δμ[1]^2 * d[(0, 2)] + δμ[2] * d[(0, 1)]
     end
     # Requires orders 1, 2, and 3
-    if max_order ≥ 3
+    if min_order ≤ 3 ≤ max_order
         # G3 = G30 + G21*δμ1 + G12*δμ1^2 + G11*δμ2 + G03*δμ1^3 + G02*(2*δμ1*δμ2) + G01*δμ3
         #! format: off
         z[3] = d[(3, 0)] + δμ[1] * d[(2, 1)] + δμ[1]^2 * d[(1, 2)] + δμ[2] * d[(1, 1)] +

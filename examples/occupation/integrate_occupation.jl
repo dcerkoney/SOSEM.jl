@@ -59,7 +59,8 @@ function build_diagtree(; n_loop=0)
     DiagTree.uidreset()
 
     # Instantaneous Green's function (occupation number) diagram parameters
-    diagparam = DiagParaF64(; type=GreenDiag, innerLoopNum=n_loop, firstTauIdx=2, hasTau=true)
+    diagparam =
+        DiagParaF64(; type=GreenDiag, innerLoopNum=n_loop, firstTauIdx=2, hasTau=true)
 
     # Loop basis vector for external momentum
     k = DiagTree.getK(diagparam.totalLoopNum, 1)
@@ -115,7 +116,7 @@ function integrate_occupation_with_ct(
     phase_factors = [1.0 / (2π)^(mcparam.dim * nl) for nl in innerLoopNums]
 
     # Total prefactors
-    prefactors = phase_factors
+    prefactors = -phase_factors
 
     return integrate(
         integrand;
@@ -212,7 +213,7 @@ function main()
     end
 
     # Total loop order N
-    orders = [1, 2, 3]
+    orders = [1, 2]
     max_order = maximum(orders)
     sort!(orders)
 
@@ -221,17 +222,28 @@ function main()
     @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)"
 
     # K-mesh for measurement
-    minK = 0.2 * param.kF
+    minK = 0.15 * param.kF
     Nk, korder = 4, 7
-    kgrid =
+    kleft =
         CompositeGrid.LogDensedGrid(
             :uniform,
-            [0.0, 2 * param.kF],
-            [param.kF],
+            [0.0, param.kF - 1e-8],
+            [param.kF - 1e-8],
             Nk,
             minK,
             korder,
         ).grid
+    kright =
+        CompositeGrid.LogDensedGrid(
+            :uniform,
+            [param.kF + 1e-8, 2 * param.kF],
+            [param.kF + 1e-8],
+            Nk,
+            minK,
+            korder,
+        ).grid
+    kgrid = [kleft; kright]
+
     # Dimensionless k-grid
     k_kf_grid = kgrid / param.kF
 
@@ -241,7 +253,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 5e10
+    neval = 1e7
 
     # Build diagram/expression trees for the occupation number to order
     # ξᴺ in the renormalized perturbation theory (includes CTs in μ and λ)
@@ -278,7 +290,7 @@ function main()
         # Test the non-interacting result
         if orders == [0]
             # fₖ
-            ϵk = kgrid.^2 / (2 *param.me) .- param.μ
+            ϵk = kgrid .^ 2 / (2 * param.me) .- param.μ
             exact = -Spectral.kernelFermiT.(-1e-8, ϵk, param.β)
             # Check the N = 0 result against the bare occupation
             means_bare, stdevs_bare = res.mean, res.stdev
