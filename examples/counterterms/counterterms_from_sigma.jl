@@ -22,7 +22,7 @@ function main()
     rs = [1.0]
     #mass2 = LinRange(1.0, 5.0, 5)
     mass2 = [1.0]
-    beta = [20.0, 40.0, 80.0]
+    beta = [25.0, 40.0, 80.0]
 
     # Grid-search 2: rs, beta
     #rs = LinRange(0.1, 2.0, 5)
@@ -71,6 +71,7 @@ function main()
 
         # Save data to JLD2
         if isnothing(sigma) == false
+            println("Current working directory: $(pwd())")
             println("Saving data to JLD2...")
             jldopen("data_Z.jld2", "a+"; compress=true) do f
                 # jldopen("data_Z.jld2", "a+") do f

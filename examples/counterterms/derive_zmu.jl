@@ -19,7 +19,7 @@ order = [4]  # C^{(1)}_{N≤5} includes CTs up to 3rd order
 rs = [1.0]
 #mass2 = LinRange(1.0, 5.0, 5)
 mass2 = [1.0]
-beta = [20.0, 40.0, 80.0]
+beta = [25.0, 40.0, 80.0]
 
 # Grid-search 2: rs, beta
 #rs = LinRange(0.1, 2.0, 5)
@@ -86,7 +86,13 @@ function process(datatuple, isSave)
     end
 
     # println("new dataframe\n$df")
-    return isSave && UEG_MC.toFile(df, parafilename)
+    if isSave
+        println("Current working directory: $(pwd())")
+        println("Saving results...")
+        UEG_MC.toFile(df, parafilename)
+        println("Done!")
+    end
+    return
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
@@ -102,13 +108,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
 
     f = jldopen(filename, "r")
     for (_rs, _mass2, _beta, _order) in Iterators.product(rs, mass2, beta, order)
-        para = UEG.ParaMC(;
-            rs=_rs,
-            beta=_beta,
-            order=_order,
-            mass2=_mass2,
-            isDynamic=false,
-        )
+        para = UEG.ParaMC(; rs=_rs, beta=_beta, order=_order, mass2=_mass2, isDynamic=false)
 
         kF = para.kF
         for key in keys(f)
