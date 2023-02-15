@@ -153,7 +153,7 @@ function integrate_sigma_x_with_ct(
     (K, T, ExtKidx) = exchange_mc_variables(mcparam, n_kgrid, alpha)
 
     # MC configuration degrees of freedom (DOF): shape(K), shape(T), shape(ExtKidx)
-    # We do not integrate the external times and Σₓ is instantaneous, hence n_τ = totalTauNum - 1
+    # We do not integrate the incoming external time and Σₓ is instantaneous, hence n_τ = totalTauNum - 1
     dof = [[p.innerLoopNum, p.totalTauNum - 1, 1] for p in diagparams]
 
     # UEG SOSEM diagram observables are a function of |k| only (equal-time)
@@ -266,7 +266,7 @@ function main()
     end
 
     # Total loop order N (Fock self-energy is N = 1)
-    orders = [2, 3, 4]
+    orders = [1, 2, 3, 4]
     max_order = maximum(orders)
     sort!(orders)
     @assert length(orders) > 0 && all(orders .> 0)
@@ -276,17 +276,39 @@ function main()
     @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)"
 
     # K-mesh for measurement
-    minK = 0.2 * param.kF
+    minK = 0.1 * param.kF
     Nk, korder = 4, 7
-    kgrid =
+    kleft =
         CompositeGrid.LogDensedGrid(
             :uniform,
-            [0.0, 3 * param.kF],
-            [param.kF],
+            [0.0, param.kF - 1e-8],
+            [param.kF - 1e-8],
             Nk,
             minK,
             korder,
         ).grid
+    kright =
+        CompositeGrid.LogDensedGrid(
+            :uniform,
+            [param.kF + 1e-8, 3 * param.kF],
+            [param.kF + 1e-8],
+            Nk,
+            minK,
+            korder,
+        ).grid
+    kgrid = [kleft; kright]
+    # minK = 0.2 * param.kF
+    # Nk, korder = 4, 7
+    # kgrid =
+    #     CompositeGrid.LogDensedGrid(
+    #         :uniform,
+    #         [0.0, 3 * param.kF],
+    #         [param.kF],
+    #         Nk,
+    #         minK,
+    #         korder,
+    #     ).grid
+
     # Dimensionless k-grid
     k_kf_grid = kgrid / param.kF
 
@@ -296,7 +318,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 5e10
+    neval = 5e9
 
     # Build diagram/expression trees for the exchange self-energy to order
     # ξᴺ in the renormalized perturbation theory (includes CTs in μ and λ)

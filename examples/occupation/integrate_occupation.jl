@@ -59,8 +59,13 @@ function build_diagtree(; n_loop=0)
     DiagTree.uidreset()
 
     # Instantaneous Green's function (occupation number) diagram parameters
-    diagparam =
-        DiagParaF64(; type=GreenDiag, innerLoopNum=n_loop, firstTauIdx=2, hasTau=true)
+    diagparam = DiagParaF64(;
+        type=GreenDiag,
+        innerLoopNum=n_loop,
+        firstTauIdx=2,
+        totalTauNum=n_loop + 1,
+        hasTau=true,
+    )
 
     # Loop basis vector for external momentum
     k = DiagTree.getK(diagparam.totalLoopNum, 1)
@@ -103,7 +108,7 @@ function integrate_occupation_with_ct(
     (K, T, ExtKidx) = occupation_mc_variables(mcparam, n_kgrid, alpha)
 
     # MC configuration degrees of freedom (DOF): shape(K), shape(T), shape(ExtKidx)
-    # We do not integrate the external times and nₖ is instantaneous, hence n_τ = totalTauNum - 1
+    # We do not integrate the incoming external time and nₖ is instantaneous, hence n_τ = totalTauNum - 1
     dof = [[p.innerLoopNum, p.totalTauNum - 1, 1] for p in diagparams]
 
     # UEG SOSEM diagram observables are a function of |k| only (equal-time)
@@ -222,7 +227,7 @@ function main()
     @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)"
 
     # K-mesh for measurement
-    minK = 0.15 * param.kF
+    minK = 0.1 * param.kF
     Nk, korder = 4, 7
     kleft =
         CompositeGrid.LogDensedGrid(
@@ -253,7 +258,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 1e9
+    neval = 1e7
 
     # Build diagram/expression trees for the occupation number to order
     # ξᴺ in the renormalized perturbation theory (includes CTs in μ and λ)

@@ -59,8 +59,13 @@ function build_diagtree(; n_loop=0)
     DiagTree.uidreset()
 
     # Instantaneous Green's function (occupation number) diagram parameters
-    diagparam =
-        DiagParaF64(; type=GreenDiag, innerLoopNum=n_loop, firstTauIdx=2, hasTau=true)
+    diagparam = DiagParaF64(;
+        type=GreenDiag,
+        innerLoopNum=n_loop,
+        firstTauIdx=2,
+        totalTauNum=n_loop + 1,
+        hasTau=true,
+    )
 
     # Loop basis vector for external momentum
     k = DiagTree.getK(diagparam.totalLoopNum, 1)
@@ -99,7 +104,7 @@ function integrate_density_with_ct(
     (K, T) = density_mc_variables(mcparam, alpha)
 
     # MC configuration degrees of freedom (DOF): shape(K), shape(T)
-    # We do not integrate the external times and nₖ is instantaneous, hence n_τ = totalTauNum - 1
+    # We do not integrate the incoming external time and nₖ is instantaneous, hence n_τ = totalTauNum - 1
     dof = [[p.totalLoopNum, p.totalTauNum - 1] for p in diagparams]
     println(dof)
 
@@ -209,7 +214,7 @@ function main()
     sort!(orders)
 
     # UEG parameters for MC integration
-    param = ParaMC(; order=max_order, rs=1.0, beta=40.0, mass2=1.0, isDynamic=false)
+    param = ParaMC(; order=max_order, rs=1.0, beta=80.0, mass2=1.0, isDynamic=false)
     @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)"
 
     # Settings
@@ -218,7 +223,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 1e10
+    neval = 1e9
 
     # Build diagram/expression trees for the occupation number to order
     # ξᴺ in the renormalized perturbation theory (includes CTs in μ and λ)

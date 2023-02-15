@@ -121,70 +121,146 @@ function main()
 
     # δn^{(1)}_F(kσ) = f'(ϵₖ) (Σ^λ_F(k) - Σ^λ_F(k_F)) = f'(ϵₖ) (Σ^λ_F(k) + δμ₁)
     # δn^{(2)}_F(kσ) = f''(ϵₖ) (Σ^λ_F(k) - Σ^λ_F(k_F))^2 = f''(ϵₖ) (Σ^λ_F(k) + δμ₁)^2
-    dn1F_exact_fine = @. fpe_fine * (sigma_lambda_fock_exact(kgrid_fine, [param]) + δμ1)
-    dn2F_exact_fine = @. fppe_fine * (sigma_lambda_fock_exact(kgrid_fine, [param]) + δμ1)^2
-    dn3F_exact_fine = @. fpppe_fine * (sigma_lambda_fock_exact(kgrid_fine, [param]) + δμ1)^3
+    sigma_lambda_F_fine = sigma_lambda_fock_exact.(kgrid_fine, [param])
+    dn1F_exact_fine = @. fpe_fine * (sigma_lambda_F_fine - δμ1)
+    dn2F_exact_fine = @. fppe_fine * (δμ1^2 / 2 + (sigma_lambda_F_fine - δμ1)^2 / 2)
+
+    @assert δμ1 ≈ sigma_lambda_fock_exact(param.kF, param)
 
     println("f''(0): $(Spectral.kernelFermiT_dω2.(-1e-8, 0.0, param.β))")
 
     # Mean and error bars for the computed results
     dn2F_calc = data[(2, 0, 0)] + δμ[1] * data[(1, 1, 0)] + δμ[1]^2 * data[(0, 2, 0)]
     dn2F_calc_exact_mu = data[(2, 0, 0)] + δμ1 * data[(1, 1, 0)] + δμ1^2 * data[(0, 2, 0)]
-    dn2F_means = Measurements.value.(dn2F_calc)
-    dn2F_stdevs = Measurements.uncertainty.(dn2F_calc)
-    dn2F_means_exact_mu = Measurements.value.(dn2F_calc_exact_mu)
-    dn2F_stdevs_exact_mu = Measurements.uncertainty.(dn2F_calc_exact_mu)
+    dn2F_means = Measurements.value.(dn2F_calc) / param.β
+    dn2F_stdevs = Measurements.uncertainty.(dn2F_calc) / param.β
+    dn2F_means_exact_mu = Measurements.value.(dn2F_calc_exact_mu) / param.β
+    dn2F_stdevs_exact_mu = Measurements.uncertainty.(dn2F_calc_exact_mu) / param.β
 
-    dn2F_exact = @. fppe * (sigma_lambda_fock_exact(kgrid, [param]) + δμ1)^2
+    sigma_lambda_F = sigma_lambda_fock_exact.(kgrid, [param])
+    dn2F_exact = @. fppe * (δμ1^2 / 2 + (sigma_lambda_F - δμ1)^2 / 2)
     ratio = dn2F_exact ./ dn2F_means_exact_mu
     max_ratio = argmax(abs, ratio)
     println(ratio)
     println(max_ratio)
 
+    term1_exact_fine = @. fppe_fine * sigma_lambda_F_fine^2 / 2
+    term2_exact_fine = @. -fppe_fine * sigma_lambda_F_fine
+    term3_exact_fine = fppe_fine
+    dn2F_exact_fine_v2 =
+        term1_exact_fine + term2_exact_fine * δμ1 + term3_exact_fine * δμ1^2
+
+    # Plot each term in the 2nd order Fock series benchmark
+    fig, ax = plt.subplots()
+    for (i, (P,)) in enumerate(partitions_list)
+        # Get means and error bars from the result up to this order
+        means = Measurements.value.(data[P]) / param.β
+        stdevs = Measurements.uncertainty.(data[P]) / param.β
+        marker = "o"
+        ax.plot(
+            k_kf_grid,
+            means,
+            marker;
+            markersize=3,
+            color="C$(i-1)",
+            label="\$i=$i \\in $P\$ ($solver)",
+        )
+        # ax.fill_between(
+        #     k_kf_grid,
+        #     means - stdevs,
+        #     means + stdevs;
+        #     color="C$(i-1)",
+        #     alpha=0.4,
+        # )
+    end
+    ax.plot(
+        k_kf_grid_fine,
+        term1_exact_fine,
+        "-";
+        label="\$\\frac{1}{2} f^{\\prime\\prime}(\\xi_k) \\left(\\Sigma^\\lambda_F(k)\\right)^2\$ (exact)",
+    )
+    ax.plot(
+        k_kf_grid_fine,
+        term2_exact_fine,
+        "-";
+        label="\$-f^{\\prime\\prime}(\\xi_k) \\Sigma^\\lambda_F(k)\$ (exact)",
+    )
+    ax.plot(
+        k_kf_grid_fine,
+        term3_exact_fine,
+        "-";
+        label="\$f^{\\prime\\prime}(\\xi_k)\$ (exact)",
+    )
+    ax.legend(; loc="best")
+    ax.set_xlim(0.75, 1.25)
+    # ax.set_ylim(-27, 27)
+    ax.set_xlabel("\$k / k_F\$")
+    ax.set_ylabel("\$\\delta n^{(2)i}_{F}({k,\\sigma})\$")
+    xloc = 1.025
+    yloc = -50
+    ydiv = -25
+    ax.text(
+        xloc,
+        yloc,
+        "\$r_s = 1,\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
+        fontsize=14,
+    )
+    ax.text(
+        xloc,
+        yloc + ydiv,
+        "\$\\lambda = $(mass2)\\epsilon_{\\mathrm{Ry}},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)}\$";
+        fontsize=14,
+    )
+    fig.tight_layout()
+    fig.savefig(
+        "results/occupation/occupation_shift_n=2_fock_rs=$(param.rs)_" *
+        "beta_ef=$(param.beta)_lambda=$(param.mass2)_neval=$(neval)_$(solver)_partitions.pdf",
+    )
+
     # Plot the Fock series contribution to the second-order occupation shift
     fig, ax = plt.subplots()
-    ax.axhline(0.0; linestyle="--", linewidth=1, color="gray")
+    ax.axvline(1.0; linestyle="--", linewidth=1, color="gray")
     # Exact result
     ax.plot(
         k_kf_grid_fine,
         dn2F_exact_fine,
         "k";
-        label="\$f^{\\prime\\prime}(\\xi_k) \\left(\\Sigma^\\lambda_F(k) - \\Sigma^\\lambda_F(k_F)\\right)^2\$ (exact)",
+        label="\$f^{\\prime\\prime}(\\xi_k) \\left[\\frac{1}{2}\\left(\\Sigma^\\lambda_F(k_F)\\right)^2  + \\frac{1}{2}\\left(\\Sigma^\\lambda_F(k) - \\Sigma^\\lambda_F(k_F)\\right)^2\\right]\$ (exact)",
     )
     # ax.plot(
     #     k_kf_grid_fine,
-    #     dn3F_exact_fine,
-    #     "r";
-    #     label="\$\\delta n^3_F(k) = f^{\\prime\\prime\\prime}(\\epsilon_k) \\left(\\Sigma^\\lambda_F(k) - \\Sigma^\\lambda_F(k_F)\\right)^3\$ (exact)",
+    #     term1_exact_fine + term2_exact_fine * δμ1 + term3_exact_fine * δμ1^2,
+    #     "k";
+    #     label="exact",
     # )
     # Plot mean and error bar for the computed result
-    marker = "o-"
+    marker = "o"
     ax.plot(
         k_kf_grid,
         # dn2F_means,
         dn2F_means_exact_mu,
         marker;
-        markersize=2,
-        color="r",
-        label="\$\\delta n^{(2)}_{F}(k)\$ ($solver)",
+        markersize=3,
+        color="k",
+        label="$solver",
     )
-    ax.fill_between(
-        k_kf_grid,
-        # dn2F_means - dn2F_stdevs,
-        # dn2F_means + dn2F_stdevs;
-        dn2F_means_exact_mu - dn2F_stdevs_exact_mu,
-        dn2F_means_exact_mu + dn2F_stdevs_exact_mu;
-        color="r",
-        alpha=0.4,
-    )
-    ax.legend(; loc="best")
+    # ax.fill_between(
+    #     k_kf_grid,
+    #     # dn2F_means - dn2F_stdevs,
+    #     # dn2F_means + dn2F_stdevs;
+    #     dn2F_means_exact_mu - dn2F_stdevs_exact_mu,
+    #     dn2F_means_exact_mu + dn2F_stdevs_exact_mu;
+    #     color="r",
+    #     alpha=0.4,
+    # )
+    ax.legend(; loc="best", framealpha=1)
     ax.set_xlim(0.75, 1.25)
-    ax.set_ylim(-27, 27)
+    ax.set_ylim(-3.5, 3.5)
     ax.set_xlabel("\$k / k_F\$")
     ax.set_ylabel("\$\\delta n^{(2)}_F({k,\\sigma})\$")
     xloc = 1.025
-    yloc = -8
-    ydiv = -5
+    yloc = -1
+    ydiv = -0.75
     ax.text(
         xloc,
         yloc,
@@ -206,7 +282,6 @@ function main()
     dn0F_total = fe_fine
     dn1F_total = dn0F_total + dn1F_exact_fine
     dn2F_total = dn1F_total + dn2F_exact_fine
-    dn3F_total = dn2F_total + dn3F_exact_fine
 
     # # Plot the occupation shift to second order in the Fock series
     # fig, ax = plt.subplots()
@@ -235,40 +310,42 @@ function main()
     # fig.tight_layout()
     # fig.savefig("results/occupation/occupation_N=1_plus_N=2_fock.pdf")
 
-    # Plot the occupation Fock insertion series
-    fig, ax = plt.subplots()
-    ax.axhspan(0, 1; alpha=0.2, facecolor="k", edgecolor=nothing)
-    ax.axvline(1.0; linestyle="--", linewidth=1, color="gray")
-    # Exact results
-    ax.plot(k_kf_grid_fine, dn0F_total; label="\$N=0\$")
-    ax.plot(k_kf_grid_fine, dn1F_total; label="\$N=1\$")
-    ax.plot(k_kf_grid_fine, dn2F_total; label="\$N=2\$")
-    # ax.plot(
-    #     k_kf_grid_fine,
-    #     dn3F_total;
-    #     label="\$N=3\$",
+    # # Plot the occupation Fock insertion series
+    # fig, ax = plt.subplots()
+    # # ax.axhspan(0, 1; alpha=0.2, facecolor="k", edgecolor=nothing)
+    # ax.axhline(0.0; linestyle="-", linewidth=0.5, color="k")
+    # ax.axhline(1.0; linestyle="-", linewidth=0.5, color="k")
+    # ax.axvline(1.0; linestyle="--", linewidth=1, color="gray")
+    # # Exact results
+    # ax.plot(k_kf_grid_fine, dn0F_total; label="\$N=0\$")
+    # ax.plot(k_kf_grid_fine, dn1F_total; label="\$N=1\$")
+    # ax.plot(k_kf_grid_fine, dn2F_total; label="\$N=2\$")
+    # # ax.plot(
+    # #     k_kf_grid_fine,
+    # #     dn3F_total;
+    # #     label="\$N=3\$",
+    # # )
+    # ax.legend(; loc="best")
+    # ax.set_xlim(0.75, 1.25)
+    # # ax.set_ylim(-17, 22)
+    # ax.set_xlabel("\$k / k_F\$")
+    # ax.set_ylabel(
+    #     "\$\\sum^N_{n=0} f^{(n)}(\\xi_k) (\\Sigma^\\lambda_F(k) - \\Sigma^\\lambda_F(k_F))^n \$",
     # )
-    ax.legend(; loc="best")
-    ax.set_xlim(0.75, 1.25)
-    ax.set_ylim(-17, 22)
-    ax.set_xlabel("\$k / k_F\$")
-    ax.set_ylabel(
-        "\$\\sum^N_{n=0} f^{(n)}(\\xi_k) (\\Sigma^\\lambda_F(k) - \\Sigma^\\lambda_F(k_F))^n \$",
-    )
-    xloc = 1.03
-    yloc = -8.5
-    ydiv = -6
-    ax.text(
-        xloc,
-        yloc,
-        "\$r_s = 1,\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta), \\lambda = $(mass2)\\epsilon_{\\mathrm{Ry}}\$";
-        fontsize=12,
-    )
-    fig.tight_layout()
-    fig.savefig(
-        "results/occupation/occupation_shift_N=2_fock_exact_rs=$(param.rs)_" *
-        "beta_ef=$(param.beta)_lambda=$(param.mass2).pdf",
-    )
+    # xloc = 1.03
+    # yloc = -8.5
+    # ydiv = -6
+    # ax.text(
+    #     xloc,
+    #     yloc,
+    #     "\$r_s = 1,\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta), \\lambda = $(mass2)\\epsilon_{\\mathrm{Ry}}\$";
+    #     fontsize=12,
+    # )
+    # fig.tight_layout()
+    # fig.savefig(
+    #     "results/occupation/occupation_shift_N=2_fock_exact_rs=$(param.rs)_" *
+    #     "beta_ef=$(param.beta)_lambda=$(param.mass2).pdf",
+    # )
 
     plt.close("all")
     return

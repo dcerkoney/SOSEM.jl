@@ -26,12 +26,12 @@ function main()
 
     rs = 1.0
     # betas = [25.0, 40.0, 80.0]
-    betas = [80.0]
+    betas = [40.0]
     mass2 = 1.0
     solver = :vegasmc
 
     # Number of evals
-    neval = 1e9
+    neval = 5e10
 
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
     min_order = 1
@@ -72,6 +72,11 @@ function main()
         println([k for (k, _) in merged_data])
         # println(merged_data)
 
+        # TODO: Fix factor of β by removing extra τ integration
+        for (k, v) in merged_data
+            merged_data[k] = v / param.β
+        end
+
         if min_order_plot == 0
             # Set bare result manually using exact Fermi function
             ϵk = kgrid .^ 2 / (2 * param.me) .- param.μ
@@ -79,13 +84,9 @@ function main()
             merged_data[(0, 0)] = measurement.(bare_occupation_exact, 0.0)  # treat quadrature data as numerically exact
         end
 
-        println(param)
-        ctparam = param
-        # ctparam = reconstruct(param; order=2)
 
         # Reexpand merged data in powers of μ
-        z, μ = UEG_MC.load_z_mu(ctparam)
-        # z, μ = UEG_MC.load_z_mu(param)
+        z, μ = UEG_MC.load_z_mu(param)
         δz, δμ = CounterTerm.sigmaCT(max_order, μ, z; verbose=1)
         println("Computed δμ: ", δμ)
         occupation = UEG_MC.chemicalpotential_renormalization_green(
@@ -180,12 +181,12 @@ function main()
         ax.set_xlabel("\$k / k_F\$")
         ax.set_ylabel("\$n_{k\\sigma}\$")
         xloc = 1.125
-        # yloc = -0.75
-        # ydiv = -0.5
+        yloc = 0.4
+        ydiv = -0.1
         # yloc = -2.5
         # ydiv = -1.75
-        yloc = 40
-        ydiv = -10
+        # yloc = 40
+        # ydiv = -10
         ax.text(
             xloc,
             yloc,
@@ -203,10 +204,11 @@ function main()
 
         # Plot inset
         ax_inset =
-            il.inset_axes(ax; width="38%", height="28.5%", loc="upper left", borderpad=0)
+            il.inset_axes(ax; width="38%", height="28.5%", loc="lower left", borderpad=0)
         # Compare result to bare occupation fₖ
         ax_inset.plot(k_kf_grid_fine, bare_occupation_fine, "k"; label="\$N=0\$ (exact)")
         ax_inset.axvline(1.0; linestyle="--", linewidth=1, color="gray")
+        # ax_inset.axhspan(0, 1; alpha=0.2, facecolor="k", edgecolor=nothing)
         ax_inset.axhline(0.0; linestyle="-", linewidth=0.5, color="k")
         ax_inset.axhline(1.0; linestyle="-", linewidth=0.5, color="k")
         for (i, N) in enumerate(min_order:max_order_plot)
@@ -237,9 +239,9 @@ function main()
         ax_inset.set_ylim(-ypad, 1 + ypad)
         ax_inset.set_xlabel("\$k / k_F\$"; labelpad=7)
         ax_inset.set_ylabel("\$n_{k\\sigma}\$")
-        # ax_inset.xaxis.set_label_position("top")
+        ax_inset.xaxis.set_label_position("top")
         ax_inset.yaxis.set_label_position("right")
-        # ax_inset.xaxis.tick_top()
+        ax_inset.xaxis.tick_top()
         ax_inset.yaxis.tick_right()
         # fig.savefig(
         #     "results/occupation/occupation_N=$(max_order_plot)_rs=$(param.rs)_" *

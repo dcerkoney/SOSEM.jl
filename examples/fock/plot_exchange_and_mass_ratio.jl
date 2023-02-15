@@ -80,13 +80,13 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 1e8
+    neval = 5e10
 
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
     min_order = 2
-    max_order = 3
+    max_order = 4
     min_order_plot = 1
-    max_order_plot = 3
+    max_order_plot = 4
 
     # Save total results
     save = true
@@ -384,7 +384,7 @@ function main()
     #     "(mₑ/m⋆)(k=0) ≈ $low_en_mass_ratio_quadratic, r2=$r2_quadratic",
     # )
 
-    ax2.axhline(0; linestyle="--", color="gray")
+    ax2.axhline(0; color="k", linewidth=1)
     # ax2.plot(
     #     k_kf_grid_quad,
     #     Ek_quad / eTF,
@@ -401,7 +401,8 @@ function main()
     ax2.plot(
         kgrid_quad / param.kF,
         qp_fit_fock_fix_E0(kgrid_quad) / eTF,
-        "r";
+        "k";
+        linestyle="--",
         label="\$\\left(\\epsilon_0 + \\frac{k^2}{2 m^\\star_{\\mathrm{HF}}} \\right) \\Big/ \\epsilon_{\\mathrm{TF}}\$ (quasiparticle fit)",
     )
     ax2.plot(
@@ -471,87 +472,6 @@ function main()
     fig2.savefig(
         "results/fock/moment_qp_energy_N=$(max_order_plot)_rs=$(param.rs)_" *
         "beta_ef=$(param.beta)_lambda=$(param.mass2)_neval=$(neval)_$(solver).pdf",
-    )
-
-    # Mass ratio
-    fig3, ax3 = plt.subplots()
-    ax3.axhline(1; linestyle="--", color="gray")
-    # ax3.plot(
-    #     k_kf_grid,
-    #     1.0 .+ sigma_fock_exact ./ Ek,
-    #     "k";
-    #     label="\$N=1\$ (exact, \$T=0\$)",
-    # )
-    # First order from exact expressions
-    # Σₓ(k) / ϵ(k)
-    sigma_fock_over_Ek = sigma_fock_exact_quad ./ Ek_quad
-    # m_e / m_{momt}(k) ≈ 1 + Σₓ(k) / ϵ(k)
-    effmass_ratio = 1.0 .+ sigma_fock_over_Ek
-    effmass_ratio_kF = (1.0 .+ sigma_fock_exact ./ Ek)[ikF]
-    println("Naive effective mass at k = kF (N=1): ", effmass_ratio_kF)
-    ax3.plot(k_kf_grid_quad, effmass_ratio, "C0"; label="\$N=1\$ (exact, \$T=0\$)")
-    for (i, N) in enumerate(min_order:max_order_plot)
-        N == 1 && continue
-        # Σₓ(k) / ϵ(k)
-        sigma_x_over_Ek = eTF * sigma_x_over_eTF_total[N] ./ Ek
-        # m_e / m_{momt}(k) ≈ 1 + Σₓ(k) / ϵ(k)
-        mass_ratio = 1.0 .+ sigma_x_over_Ek
-        # Get means and error bars from the mass ratio up to this order
-        means_mass_ratio = Measurements.value.(mass_ratio)
-        stdevs_mass_ratio = Measurements.uncertainty.(mass_ratio)
-
-        println("Naive effective mass at k = kF (N=$N): ", means_mass_ratio[ikF])
-        # Data gets noisy above 3rd loop order
-        # marker = N > 2 ? "o-" : "-"
-        marker = "o-"
-        ax3.plot(
-            k_kf_grid,
-            means_mass_ratio,
-            marker;
-            markersize=2,
-            color="C$i",
-            label="\$N=$N\$ ($solver)",
-        )
-        ax3.fill_between(
-            k_kf_grid,
-            means_mass_ratio - stdevs_mass_ratio,
-            means_mass_ratio + stdevs_mass_ratio;
-            color="C$i",
-            alpha=0.4,
-        )
-    end
-    ax3.legend(; loc="lower right")
-    ax3.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
-    ax3.set_ylim(0, 1.1)
-    ax3.set_xlabel("\$k / k_F\$")
-    ax3.set_ylabel("\$\\epsilon_{\\mathrm{momt.}}(k) / \\epsilon_k\$")
-    # ax3.set_ylabel("\$m_e \\,/\\, m_{\\mathrm{momt.}}\$")
-    xloc = 1.75
-    yloc = 0.75
-    ydiv = -0.095
-    ax3.text(
-        xloc,
-        yloc,
-        "\$r_s = 1,\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
-        fontsize=14,
-    )
-    ax3.text(
-        xloc,
-        yloc,
-        "\$r_s = 1,\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
-        fontsize=14,
-    )
-    ax3.text(
-        xloc,
-        yloc + ydiv,
-        "\$\\lambda = $(mass2)\\epsilon_{\\mathrm{Ry}},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)},\$";
-        # "\$\\lambda = \\frac{\\epsilon_{\\mathrm{Ry}}}{10},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)},\$";
-        fontsize=14,
-    )
-    fig3.tight_layout()
-    fig3.savefig(
-        "results/fock/moment_energy_ratio_N=$(max_order_plot)_rs=$(param.rs)_" *
-        "beta_ef=$(param.beta)_lambda=$(param.mass2)_neval=$(neval)_$(solver)_v2.pdf",
     )
 
     plt.close("all")
