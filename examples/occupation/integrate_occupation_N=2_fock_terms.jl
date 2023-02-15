@@ -45,7 +45,7 @@ function integrate_occupation(
     (K, T, ExtKidx) = occupation_mc_variables(mcparam, n_kgrid, alpha)
 
     # MC configuration degrees of freedom (DOF): shape(K), shape(T), shape(ExtKidx)
-    # We do not integrate the external times and nₖ is instantaneous, hence n_τ = totalTauNum - 1
+    # We do not integrate the incoming external time and nₖ is instantaneous, hence n_τ = totalTauNum - 1
     dof = [[diagparam.innerLoopNum, diagparam.totalTauNum - 1, 1]]
     println("Integration DOF: $dof")
 
@@ -165,7 +165,7 @@ function build_term1(print=false, plot=false)
         type=GreenDiag,
         innerLoopNum=n_loop,
         firstTauIdx=4,
-        totalTauNum=4,
+        totalTauNum=n_loop + 1,
         hasTau=true,
     )
     g_param = DiagParaF64(;
@@ -207,7 +207,7 @@ function build_term2(print=false, plot=false)
         type=GreenDiag,
         innerLoopNum=n_loop,
         firstTauIdx=3,
-        totalTauNum=3,
+        totalTauNum=n_loop + 1,
         hasTau=true,
     )
     g_param = DiagParaF64(;
@@ -248,7 +248,7 @@ function build_term3(print=false, plot=false)
         type=GreenDiag,
         innerLoopNum=n_loop,
         firstTauIdx=2,
-        totalTauNum=2,
+        totalTauNum=n_loop + 1,
         hasTau=true,
     )
 
@@ -318,7 +318,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 1e9
+    neval = 1e7
 
     # Integrate each term in the N=2 Fock series benchmark
     second_order_fock_terms = [build_term1(), build_term2(), build_term3()]
@@ -337,7 +337,7 @@ function main()
         println("Done!")
         # Save to JLD2 on main thread
         if !isnothing(res)
-            savename = "results/data/occupation_N=2_fock_term_$i"
+            savename = "results/data/occupation_N=2_fock_term_$(i)_neval=$(neval)"
             jldopen("$savename.jld2", "a+"; compress=true) do f
                 key = "$(UEG.short(param))"
                 if haskey(f, key)

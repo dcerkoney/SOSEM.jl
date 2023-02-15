@@ -42,7 +42,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals
-    neval = 1e9
+    neval = 1e7
 
     # # UEG parameters
     # max_order = 3
@@ -61,7 +61,7 @@ function main()
     local param, kgrid
     loadparam = ParaMC(; order=2, rs=rs, beta=beta, mass2=mass2, isDynamic=false)
     for i in 1:3
-        savename = "results/data/occupation_N=2_fock_term_$i"
+        savename = "results/data/occupation_N=2_fock_term_$(i)_neval=$(neval)"
         param, kgrid, res = jldopen("$savename.jld2", "a+") do f
             key = "$(UEG.short(loadparam))"
             return f[key]
@@ -132,10 +132,10 @@ function main()
     # Mean and error bars for the computed results
     dn2F_calc = data[(2, 0, 0)] + δμ[1] * data[(1, 1, 0)] + δμ[1]^2 * data[(0, 2, 0)]
     dn2F_calc_exact_mu = data[(2, 0, 0)] + δμ1 * data[(1, 1, 0)] + δμ1^2 * data[(0, 2, 0)]
-    dn2F_means = Measurements.value.(dn2F_calc) / param.β
-    dn2F_stdevs = Measurements.uncertainty.(dn2F_calc) / param.β
-    dn2F_means_exact_mu = Measurements.value.(dn2F_calc_exact_mu) / param.β
-    dn2F_stdevs_exact_mu = Measurements.uncertainty.(dn2F_calc_exact_mu) / param.β
+    dn2F_means = Measurements.value.(dn2F_calc)
+    dn2F_stdevs = Measurements.uncertainty.(dn2F_calc)
+    dn2F_means_exact_mu = Measurements.value.(dn2F_calc_exact_mu)
+    dn2F_stdevs_exact_mu = Measurements.uncertainty.(dn2F_calc_exact_mu)
 
     sigma_lambda_F = sigma_lambda_fock_exact.(kgrid, [param])
     dn2F_exact = @. fppe * (δμ1^2 / 2 + (sigma_lambda_F - δμ1)^2 / 2)
@@ -154,8 +154,8 @@ function main()
     fig, ax = plt.subplots()
     for (i, (P,)) in enumerate(partitions_list)
         # Get means and error bars from the result up to this order
-        means = Measurements.value.(data[P]) / param.β
-        stdevs = Measurements.uncertainty.(data[P]) / param.β
+        means = Measurements.value.(data[P])
+        stdevs = Measurements.uncertainty.(data[P])
         marker = "o"
         ax.plot(
             k_kf_grid,
@@ -197,8 +197,8 @@ function main()
     ax.set_xlabel("\$k / k_F\$")
     ax.set_ylabel("\$\\delta n^{(2)i}_{F}({k,\\sigma})\$")
     xloc = 1.025
-    yloc = -50
-    ydiv = -25
+    yloc = -5
+    ydiv = -2.5
     ax.text(
         xloc,
         yloc,
@@ -279,11 +279,10 @@ function main()
         "beta_ef=$(param.beta)_lambda=$(param.mass2)_neval=$(neval)_$(solver).pdf",
     )
 
-    dn0F_total = fe_fine
-    dn1F_total = dn0F_total + dn1F_exact_fine
-    dn2F_total = dn1F_total + dn2F_exact_fine
-
     # # Plot the occupation shift to second order in the Fock series
+    # dn0F_total = fe_fine
+    # dn1F_total = dn0F_total + dn1F_exact_fine
+    # dn2F_total = dn1F_total + dn2F_exact_fine
     # fig, ax = plt.subplots()
     # ax.axhspan(0, 1; alpha=0.2, facecolor="k", edgecolor=nothing)
     # ax.axvline(1.0; linestyle="--", linewidth=1, color="gray")
