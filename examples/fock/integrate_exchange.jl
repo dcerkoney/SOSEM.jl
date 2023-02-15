@@ -156,6 +156,7 @@ function integrate_sigma_x_with_ct(
     # MC configuration degrees of freedom (DOF): shape(K), shape(T), shape(ExtKidx)
     # We do not integrate the incoming external time and Σₓ is instantaneous, hence n_τ = totalTauNum - 1
     dof = [[p.innerLoopNum, p.totalTauNum - 1, 1] for p in diagparams]
+    println("Integration DOF: $dof")
 
     # UEG SOSEM diagram observables are a function of |k| only (equal-time)
     obs = repeat([zeros(n_kgrid)], length(dof))  # observable for each partition
@@ -170,7 +171,7 @@ function integrate_sigma_x_with_ct(
     phase_factors = [1.0 / (2π)^(mcparam.dim * nl) for nl in innerLoopNums]
 
     # Total prefactors
-    prefactors = phase_factors / eTF
+    prefactors = -phase_factors / eTF
 
     return integrate(
         integrand;
