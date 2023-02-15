@@ -258,7 +258,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 1e7
+    neval = 5e9
 
     # Build diagram/expression trees for the occupation number to order
     # ξᴺ in the renormalized perturbation theory (includes CTs in μ and λ)
