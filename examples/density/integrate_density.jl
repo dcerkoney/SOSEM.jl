@@ -214,7 +214,7 @@ function main()
     sort!(orders)
 
     # UEG parameters for MC integration
-    param = ParaMC(; order=max_order, rs=1.0, beta=80.0, mass2=1.0, isDynamic=false)
+    param = ParaMC(; order=max_order, rs=1.0, beta=40.0, mass2=1.0, isDynamic=false)
     @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)"
 
     # Settings
