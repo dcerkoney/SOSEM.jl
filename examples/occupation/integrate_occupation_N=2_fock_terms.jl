@@ -287,8 +287,8 @@ function main()
     @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)"
 
     # K-mesh for measurement
-    minK = 0.075 * param.kF
-    Nk, korder = 3, 5
+    minK = 0.05 * param.kF
+    Nk, korder = 4, 5
     kleft =
         CompositeGrid.LogDensedGrid(
             :uniform,

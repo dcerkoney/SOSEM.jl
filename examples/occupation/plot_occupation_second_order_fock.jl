@@ -42,7 +42,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals
-    neval = 1e7
+    neval = 1e9
 
     # # UEG parameters
     # max_order = 3
@@ -73,6 +73,7 @@ function main()
     # Get dimensionless k-grid (k / kF) and index corresponding to the Fermi energy
     k_kf_grid = kgrid / param.kF
     println(k_kf_grid)
+    println(length(k_kf_grid))
 
     # Convert results to a Dict of measurements at each order with interaction counterterms merged
     partitions_list = [[(2, 0, 0)], [(1, 1, 0)], [(0, 2, 0)]]
@@ -107,11 +108,16 @@ function main()
 
     fppe_exact =
         @. (param.β^2 / 4) * sech(param.β * ϵk_fine / 2)^2 * tanh.(param.β * ϵk_fine / 2)
-    abs_errs = @. abs((fppe_fine - fppe_exact) / fppe_fine)
+    abs_errs = @. abs((fppe_fine - fppe_exact) / fppe_exact)
     worst_abs_err = maximum(abs_errs)
     println(
         "Worst absolute percent error (exact vs. computed f''(ϵₖ)): $(100 * worst_abs_err)",
     )
+
+    # Get ratio of exact to calculated result on coarse kgrid
+    ϵk = @. kgrid^2 / (2 * param.me) - param.μ
+    # fppe = -Spectral.kernelFermiT_dω2.(-1e-8, ϵk, param.β)
+    fppe = @. (param.β^2 / 4) * sech(param.β * ϵk / 2)^2 * tanh.(param.β * ϵk / 2)
 
     # δn^{(1)}_F(kσ) = f'(ϵₖ) (Σ^λ_F(k) - Σ^λ_F(k_F)) = f'(ϵₖ) (Σ^λ_F(k) + δμ₁)
     # δn^{(2)}_F(kσ) = f''(ϵₖ) (Σ^λ_F(k) - Σ^λ_F(k_F))^2 = f''(ϵₖ) (Σ^λ_F(k) + δμ₁)^2
@@ -129,10 +135,6 @@ function main()
     dn2F_means_exact_mu = Measurements.value.(dn2F_calc_exact_mu)
     dn2F_stdevs_exact_mu = Measurements.uncertainty.(dn2F_calc_exact_mu)
 
-    # Get ratio of exact to calculated result on coarse kgrid
-    ϵk = @. kgrid^2 / (2 * param.me) - param.μ
-    # fppe = -Spectral.kernelFermiT_dω2.(-1e-8, ϵk, param.β)
-    fppe = @. (param.β^2 / 4) * sech(param.β * ϵk / 2)^2 * tanh.(param.β * ϵk / 2)
     dn2F_exact = @. fppe * (sigma_lambda_fock_exact(kgrid, [param]) + δμ1)^2
     ratio = dn2F_exact ./ dn2F_means_exact_mu
     max_ratio = argmax(abs, ratio)
@@ -177,7 +179,7 @@ function main()
     )
     ax.legend(; loc="best")
     ax.set_xlim(0.75, 1.25)
-    ax.set_ylim(-20, 27)
+    ax.set_ylim(-27, 27)
     ax.set_xlabel("\$k / k_F\$")
     ax.set_ylabel("\$\\delta n^{(2)}_F({k,\\sigma})\$")
     xloc = 1.025
@@ -265,7 +267,7 @@ function main()
     fig.tight_layout()
     fig.savefig(
         "results/occupation/occupation_shift_N=2_fock_exact_rs=$(param.rs)_" *
-        "beta_ef=$(param.beta)_lambda=$(param.mass2)_neval=$(neval)_$(solver).pdf",
+        "beta_ef=$(param.beta)_lambda=$(param.mass2).pdf",
     )
 
     plt.close("all")
