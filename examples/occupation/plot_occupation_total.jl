@@ -31,7 +31,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals
-    neval = 1e7
+    neval = 5e9
 
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
     min_order = 1
