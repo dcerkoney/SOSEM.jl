@@ -98,6 +98,7 @@ function build_diagtree(; n_loop=1)
         totalLoopNum=n_loop + 1,  # Part of Sigma diagram
         firstLoopIdx=3,           # k and q already taken
         firstTauIdx=2,            # 1 external time (instantaneous Σ)
+        totalTauNum=n_loop,       # includes outgoing external time
         hasTau=true,
     )
     G = Parquet.green(g_param, k - q, extT; name=:G)
@@ -268,8 +269,6 @@ function main()
     # Total loop order N (Fock self-energy is N = 1)
     orders = [1, 2, 3, 4]
     max_order = maximum(orders)
-    sort!(orders)
-    @assert length(orders) > 0 && all(orders .> 0)
 
     # UEG parameters for MC integration
     param = ParaMC(; order=max_order, rs=1.0, beta=40.0, mass2=1.0, isDynamic=false)
