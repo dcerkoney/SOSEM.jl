@@ -80,7 +80,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 5e10
+    neval = 5e9
 
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
     min_order = 2
@@ -123,11 +123,36 @@ function main()
 
     # Convert results to a Dict of measurements at each order with interaction counterterms merged
     data = UEG_MC.restodict(res, partitions)
+
+    # TODO: Rerun with minus sign fixed
+    for (k, v) in data
+        data[k] = -v
+    end
+
     merged_data = CounterTerm.mergeInteraction(data)
     println([k for (k, _) in merged_data])
     # println(merged_data)
 
     if min_order_plot == 1
+        if 1 in orders
+            # The nondimensionalized Fock self-energy is the negative Lindhard function
+            exact = -UEG_MC.lindhard.(kgrid / param.kF)
+            # Check the MC result at k = 0 against the exact (non-dimensionalized)
+            # Fock (exhange) self-energy: Σx(0) / E_{TF} = -F(0) = -1
+            meas = merged_data[(1, 0)]
+            scores = stdscore.(meas, exact)
+            score_k0 = scores[1]
+            worst_score = argmax(abs, scores)
+            println(meas)
+            # Summarize results
+            println("""
+                  Σₓ(k) ($solver):
+                   • Exact value    (k = 0): $(exact[1])
+                   • Measured value (k = 0): $(meas[1])
+                   • Standard score (k = 0): $score_k0
+                   • Worst standard score: $worst_score
+                  """)
+        end
         # Set bare result manually using exact Fock self-energy / eTF
         sigma_fock_over_eTF_exact = -UEG_MC.lindhard.(k_kf_grid)
         merged_data[(1, 0)] = measurement.(sigma_fock_over_eTF_exact, 0.0)  # treat quadrature data as numerically exact
@@ -299,92 +324,45 @@ function main()
     E_fock_over_eTF_quad = E_fock_quad / eTF
 
     # No fixed point (zpe is a free parameter)
-    @. model(k, p) = p[1] + k^2 / (2.0 * p[2])
-    # Fixed point at Eqp(0) = -1 (exact Fock zpe)
-    @. model_fix_E0(k, p) = -eTF + k^2 / (2.0 * p[1])
-    # Fixed point at Eqp(kF) (exact Fock energy at k = kF)
-    @. model_fix_EF(k, p) = EF_fock + (k^2 - param.kF^2) / (2.0 * p[1])
-    # General quadratic fit
-    # @. model_quadratic(k, p) = p[1] + p[2] * k + p[3] * k^2
+    @. quasiparticle_model(k, p) = p[1] + k^2 / (2.0 * p[2])
 
     # Initial parameters for curve fitting procedure
-    p0          = [-1.0, 1.0]  # E₀=0 and m=mₑ
-    p0_fixed_pt = [1.0]        # m=mₑ
-    # p0_quadratic = [-1.0, 0.1, 1.0]
+    p0      = [-eTF, 1.0]  # E₀=0 and m=mₑ
+    p0_fock = [1.0]        # m=mₑ
 
     # Gridded data for k ≤ kF
-    k_data = kgrid_quad[kgrid_quad .≤ param.kF]
-    E_fock_data = E_fock_quad[kgrid_quad .≤ param.kF]
+    k_data = kgrid_quad[kgrid_quad .< param.kF]
+    E_fock_data = E_fock_quad[kgrid_quad .< param.kF]
 
-    # Least-squares fit of models to data
-    fit_fock = curve_fit(model, k_data, E_fock_data, p0)
-    fit_fock_fix_E0 = curve_fit(model_fix_E0, k_data, E_fock_data, p0_fixed_pt)
-    fit_fock_fix_EF = curve_fit(model_fix_EF, k_data, E_fock_data, p0_fixed_pt)
-    # fit_quadratic = curve_fit(model_quadratic, k_data, E_fock_data, p0_quadratic)
-
-    # QP params
-    zpe_fock         = fit_fock.param[1]
-    meff_fock        = fit_fock.param[2]
-    meff_fock_fix_E0 = fit_fock_fix_E0.param[1]
-    meff_fock_fix_EF = fit_fock_fix_EF.param[1]
-    # meff_quadratic   = 1 / (2 * fit_quadratic.param[3])
-    println(meff_fock, " ", meff_fock_fix_E0, " ", meff_fock_fix_EF)
-    # println(meff_fock, " ", meff_fock_fix_E0, " ", meff_fock_fix_EF, " ", meff_quadratic)
-
-    # Fits to Eqp(k)
-    qp_fit_fock(k)        = model(k, fit_fock.param)
-    qp_fit_fock_fix_E0(k) = model_fix_E0(k, fit_fock_fix_E0.param)
-    qp_fit_fock_fix_EF(k) = model_fix_EF(k, fit_fock_fix_EF.param)
-    # qp_fit_quadratic(k)   = model_quadratic(k, fit_quadratic.param)
-    @assert qp_fit_fock_fix_E0(0) ≈ -eTF
-    @assert qp_fit_fock_fix_EF(param.kF) ≈ param.EF - eTF / 2
-
-    # Coefficients of determination (r²)
-    r2        = rsquared(k_data, E_fock_data, qp_fit_fock(k_data), fit_fock)
-    r2_fix_E0 = rsquared(k_data, E_fock_data, qp_fit_fock_fix_E0(k_data), fit_fock_fix_E0)
-    r2_fix_EF = rsquared(k_data, E_fock_data, qp_fit_fock_fix_EF(k_data), fit_fock_fix_EF)
-    # r2_quadratic = rsquared(k_data, E_fock_data, qp_fit_quadratic(k_data), fit_quadratic)
-
-    # Low-energy effective mass ratios (mₑ/m⋆)(k≈0) from quasiparticle fits
-    low_en_mass_ratio_fock        = param.me / meff_fock
-    low_en_mass_ratio_fock_fix_E0 = param.me / meff_fock_fix_E0
-    low_en_mass_ratio_fock_fix_EF = param.me / meff_fock_fix_EF
-    # low_en_mass_ratio_quadratic   = param.me / meff_quadratic
-
-    # RESULT: Best fit is given by model 2, although this is not the fit with highest r².
-    #         We hence use model 2, as it is most physical relevant with highest r².
-    #         While the exact zero-point energy is not known beyond HF level, we will
-    #         simply constrain it to the data at k = 0.
-
-    # ZPEs
-    println(
-        "Fock effective zero-point energy over eTF from quadratic fit: E₀ = $(zpe_fock / eTF)",
+    # Least-squares fit to (exact) Fock data
+    fit_fock = curve_fit(
+        (k, p) -> quasiparticle_model(k, [-eTF, p[1]]),
+        k_data,
+        E_fock_data,
+        p0_fock,
     )
-    println("Exact Fock ZPE over eTF: Eqp(0) = $(E_fock_quad[1] / eTF)")
 
-    # Mass ratios
+    # Least-squares quasiparticle fit for the Fock dispersion
+    meff_fock = fit_fock.param[1]
+    println("meff_fock = $meff_fock")
+    qp_fit_fock(k) = quasiparticle_model(k, [-eTF, meff_fock])
+    @assert qp_fit_fock(0) ≈ -eTF
+
+    # Coefficient of determination (r²)
+    r2 = rsquared(k_data, E_fock_data, qp_fit_fock(k_data), fit_fock)
+
+    # Low-energy effective mass ratio (mₑ/m⋆)(k≈0) from quasiparticle fit
+    low_en_mass_ratio_fock = param.me / meff_fock
     println(
         "Fock low-energy effective mass ratio from quadratic fit: " *
-        "(mₑ/m⋆)(k=0) ≈ $low_en_mass_ratio_fock_fix_E0, r2=$r2",
+        "(mₑ/m⋆)(k=0) ≈ $low_en_mass_ratio_fock, r2=$r2",
     )
-    mass_ratio_fit   = 1 / low_en_mass_ratio_fock_fix_E0
+    mass_ratio_fit   = 1 / low_en_mass_ratio_fock
     mass_ratio_exact = 1 / fock_mass_ratio_k0(param)
     rel_error        = abs(mass_ratio_exact - mass_ratio_fit) / mass_ratio_exact
     println("Percent error vs exact low-energy limit: $(rel_error * 100)%")
-    # println(
-    #     "Fock low-energy effective mass ratio from quadratic fit (fixed Eqp(0)): " *
-    #     "(mₑ/m⋆)(k=0) ≈ $low_en_mass_ratio_fock_fix_E0, r2=$r2_fix_E0",
-    # )
-    # println(
-    #     "Fock low-energy effective mass ratio from quadratic fit (fixed Eqp(kF)): " *
-    #     "(mₑ/m⋆)(k=0) ≈ $low_en_mass_ratio_fock_fix_EF, r2=$r2_fix_EF",
-    # )
-    # println(
-    #     "Fock low-energy effective mass ratio from general quadratic fit: " *
-    #     "(mₑ/m⋆)(k=0) ≈ $low_en_mass_ratio_quadratic, r2=$r2_quadratic",
-    # )
 
-    ax2.axhline(0; color="k", linewidth=1)
+    ax2.axhline(0; linestyle="--", color="gray", linewidth=1)
     # ax2.plot(
     #     k_kf_grid_quad,
     #     Ek_quad / eTF,
@@ -396,14 +374,8 @@ function main()
         k_kf_grid_quad,
         -1 .+ (π / 4alpha + 1 / 3) * k_kf_grid_quad .^ 2;
         color="k",
+        # linestyle="--",
         label="\$\\epsilon_{\\mathrm{HF}}(k \\rightarrow 0) / \\epsilon_{\\mathrm{TF}} \\sim -1 + \\left(\\frac{\\pi}{4\\alpha} + \\frac{1}{3}\\right) \\left( \\frac{k}{k_F} \\right)^2\$",
-    )
-    ax2.plot(
-        kgrid_quad / param.kF,
-        qp_fit_fock_fix_E0(kgrid_quad) / eTF,
-        "k";
-        linestyle="--",
-        label="\$\\left(\\epsilon_0 + \\frac{k^2}{2 m^\\star_{\\mathrm{HF}}} \\right) \\Big/ \\epsilon_{\\mathrm{TF}}\$ (quasiparticle fit)",
     )
     ax2.plot(
         kgrid_quad / param.kF,
@@ -411,13 +383,42 @@ function main()
         "C0";
         label="\$N=1\$ (exact, \$T=0\$)",
     )
+    ax2.plot(
+        kgrid_quad / param.kF,
+        qp_fit_fock(kgrid_quad) / eTF,
+        "C0";
+        linestyle="--",
+        label="\$N=1\$ (quasiparticle fit)",
+        # label="\$\\left(\\epsilon_0 + \\frac{k^2}{2 m^\\star_{\\mathrm{HF}}} \\right) \\Big/ \\epsilon_{\\mathrm{TF}}\$ (quasiparticle fit)",
+    )
     for (i, N) in enumerate(min_order:max_order_plot)
         N == 1 && continue
+
         # Eqp = ϵ(k) + Σₓ(k)
-        Eqp = Ek_over_eTF .+ sigma_x_over_eTF_total[N]
+        Eqp_over_eTF = Ek_over_eTF .+ sigma_x_over_eTF_total[N]
+
         # Get means and error bars
-        means_qp = Measurements.value.(Eqp)
-        stdevs_qp = Measurements.uncertainty.(Eqp)
+        means_qp = Measurements.value.(Eqp_over_eTF)
+        stdevs_qp = Measurements.uncertainty.(Eqp_over_eTF)
+
+        # Gridded data for k < kF
+        k_data = kgrid[kgrid .< param.kF]
+        Eqp_data = means_qp[kgrid .< param.kF] * eTF
+
+        # Least-squares quasiparticle fit
+        fit_N = curve_fit(quasiparticle_model, k_data, Eqp_data, p0)
+        qp_fit_N(k) = quasiparticle_model(k, fit_N.param)
+
+        # Coefficients of determination (r²)
+        r2 = rsquared(k_data, Eqp_data, qp_fit_N(k_data), fit_N)
+
+        # Low-energy effective mass ratio (mₑ/m⋆)(k≈0) from quasiparticle fit
+        meff_N = fit_N.param[2]
+        low_en_mass_ratio_N = param.me / meff_N
+        println(
+            "(N=$N) Low-energy effective mass ratio from quadratic fit: " *
+            "(mₑ/m⋆)(k=0) ≈ $low_en_mass_ratio_N, r2=$r2",
+        )
 
         # Data gets noisy above 3rd loop order
         # marker = N > 2 ? "o-" : "-"
@@ -437,8 +438,15 @@ function main()
             color="C$i",
             alpha=0.4,
         )
+        ax2.plot(
+            kgrid_quad / param.kF,
+            qp_fit_fock(kgrid_quad) / eTF;
+            color="C$i",
+            linestyle="--",
+            label="\$N=$N\$ (quasiparticle fit)",
+        )
     end
-    ax2.legend(; loc="lower right")
+    ax2.legend(; loc="upper left")
     # ax2.set_xlim(minimum(k_kf_grid), 1)
     ax2.set_xlim(minimum(k_kf_grid), 1.5)
     ax2.set_ylim(-2.0, 3.0)
@@ -446,8 +454,8 @@ function main()
     ax2.set_ylabel(
         "\$\\epsilon_{\\mathrm{momt.}}(k) \\,/\\, \\epsilon_{\\mathrm{TF}} =  \\left(\\epsilon_{k} + \\Sigma_{x}(k)\\right) \\,/\\, \\epsilon_{\\mathrm{TF}} \$",
     )
-    xloc = 0.1
-    yloc = 2.5
+    xloc = 0.8
+    yloc = -0.5
     ydiv = -0.5
     ax2.text(
         xloc,

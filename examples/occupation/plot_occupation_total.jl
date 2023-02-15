@@ -31,7 +31,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals
-    neval = 5e10
+    neval = 1e7
 
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
     min_order = 1
@@ -181,12 +181,10 @@ function main()
         ax.set_xlabel("\$k / k_F\$")
         ax.set_ylabel("\$n_{k\\sigma}\$")
         xloc = 1.125
-        yloc = 0.4
-        ydiv = -0.1
-        # yloc = -2.5
-        # ydiv = -1.75
-        # yloc = 40
-        # ydiv = -10
+        # yloc = 0.4
+        # ydiv = -0.1
+        yloc = 0.75
+        ydiv = -0.2
         ax.text(
             xloc,
             yloc,
