@@ -340,7 +340,7 @@ function main()
             return f[key] = (orders, param, kgrid, partitions, res)
         end
         # Test the non-interacting result
-        if 0 in orders
+        if 0 in orders && isFock == false
             # fₖ
             ϵk = kgrid .^ 2 / (2 * param.me) .- param.μ
             exact = -Spectral.kernelFermiT.(-1e-8, ϵk, param.β)
