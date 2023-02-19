@@ -13,7 +13,7 @@ using ..UEG_MC: @todo
 
 """Evaluate a bare Green's function line."""
 function eval(id::BareGreenId, K, _, varT, p::ParaMC)
-    β, me, μ, massratio = p.β, p.me, p.μ, p.massratio
+    kF, β, me, μ, massratio = p.kF, p.β, p.me, p.μ, p.massratio
 
     # External time difference
     τin, τout = varT[id.extT[1]], varT[id.extT[2]]
@@ -26,44 +26,33 @@ function eval(id::BareGreenId, K, _, varT, p::ParaMC)
 
     # Get energy
     k = norm(K)
-    ϵ = k^2 / (2me * massratio) - μ
-    # ϵ = kF / me * (k - kF)
-
-    # Since τout = -δ for some SOSEM observables, it is possible to generate 
-    # out-of-bounds time differences => use anti-periodicity on [0, β)
-    s = 1.0
-    if τ < 0.0
-        τ += β
-        s = -s
-    elseif τ >= β
-        τ -= β
-        s = -s
+    if p.isFock
+        fock = SelfEnergy.Fock0_ZeroTemp(k, p.basic) - SelfEnergy.Fock0_ZeroTemp(kF, p.basic)
+        ϵ = k^2 / (2me * massratio) - μ + fock  # ϵ_HF = ϵ_0 + (Σ_F(k) - δμ₁)
+    else
+        ϵ = k^2 / (2me * massratio) - μ         # ϵ_0
     end
 
     # Check for counterterms; note that we have:
     # \partial^(n)_\mu g(Ek - \mu, \tau) = (-1)^n * Spectral.kernelFermiT_dωn
-    # NOTE: We have an overall sign difference relative to the Negle & Orland convention
-    #
-    # TODO: Benchmark this; should introduce a single overall sign. 
-    #       Better to add that sign globally.
-    green = s
+    # green = s
     order = id.order[1]
     if order == 0
         if τ ≈ 0.0
-            green *= Spectral.kernelFermiT(-1e-8, ϵ, β)
+            return Spectral.kernelFermiT(-1e-8, ϵ, β)
         else
-            green *= Spectral.kernelFermiT(τ, ϵ, β)
+            return Spectral.kernelFermiT(τ, ϵ, β)
         end
     elseif order == 1
-        green *= -Spectral.kernelFermiT_dω(τ, ϵ, β)
+        return -Spectral.kernelFermiT_dω(τ, ϵ, β)
     elseif order == 2
-        green *= Spectral.kernelFermiT_dω2(τ, ϵ, β)
+        return Spectral.kernelFermiT_dω2(τ, ϵ, β)
     elseif order == 3
-        green *= -Spectral.kernelFermiT_dω3(τ, ϵ, β)
+        return -Spectral.kernelFermiT_dω3(τ, ϵ, β)
     else
         @todo
     end
-    return green
+    # return green
 end
 
 # Unscreened Coulomb interaction (for outer V lines of non-local SOSEM)
