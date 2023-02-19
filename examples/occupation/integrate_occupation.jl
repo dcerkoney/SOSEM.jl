@@ -228,7 +228,7 @@ function main()
     end
 
     # Total loop order N
-    orders = [0, 2]
+    orders = [0, 2, 3]
     max_order = maximum(orders)
     sort!(orders)
 
@@ -238,7 +238,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 1e9
+    neval = 5e9
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
