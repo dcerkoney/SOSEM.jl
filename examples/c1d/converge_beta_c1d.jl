@@ -1,3 +1,4 @@
+using CodecZlib
 using ElectronGas
 using ElectronLiquid.UEG: ParaMC
 using JLD2

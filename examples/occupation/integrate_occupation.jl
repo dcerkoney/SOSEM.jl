@@ -1,4 +1,4 @@
-# using AbstractTrees
+using AbstractTrees
 using CodecZlib
 using CompositeGrids
 using ElectronGas
@@ -17,31 +17,35 @@ using SOSEM
 # For saving/loading numpy data
 @pyimport numpy as np
 
-function build_occupation_with_ct(orders=[1])
+function build_occupation_with_ct(orders; renorm_mu=true, renorm_lambda=true, isFock=false)
     DiagTree.uidreset()
     valid_partitions = Vector{PartitionType}()
     diagparams = Vector{DiagParaF64}()
     diagtrees = Vector{DiagramF64}()
     exprtrees = Vector{ExprTreeF64}()
     # Build all counterterm partitions at the given orders (lowest order (Fock) is N = 1)
-    n_min, n_max = minimum(orders), maximum(orders)
-    for p in DiagGen.counterterm_partitions(
-        n_min,
-        n_max;
+    partitions = DiagGen.counterterm_partitions(
+        orders;
         n_lowest=0,
-        renorm_mu=true,
-        renorm_lambda=true,
+        renorm_mu=renorm_mu,
+        renorm_lambda=renorm_lambda,
+        isFock=isFock,
     )
+    @debug "Partitions: $partitions"
+    for p in partitions
         # Build diagram tree for this partition
         @debug "Partition (n_loop, n_ct_mu, n_ct_lambda): $p"
-        diagparam, diagtree = build_diagtree(; n_loop=p[1])
+        diagparam, diagtree = build_diagtree(; n_loop=p[1], isFock=isFock)
 
         # Build tree with counterterms (∂λ(∂μ(DT))) via automatic differentiation
         dμ_diagtree = DiagTree.derivative([diagtree], BareGreenId, p[2]; index=1)
         dλ_dμ_diagtree = DiagTree.derivative(dμ_diagtree, BareInteractionId, p[3]; index=2)
         if isempty(dλ_dμ_diagtree)
             @warn("Ignoring partition $p with no diagrams")
-            continue
+        else
+            if isFock && (p != (1, 0, 0)) # the Fock diagram itself should not be removed
+                DiagTree.removeHartreeFock!(dλ_dμ_diagtree)
+            end
         end
         @debug "\nDiagTree:\n" * repr_tree(dλ_dμ_diagtree)
 
@@ -55,16 +59,19 @@ function build_occupation_with_ct(orders=[1])
     return valid_partitions, diagparams, diagtrees, exprtrees
 end
 
-function build_diagtree(; n_loop=0)
+function build_diagtree(; n_loop=0, isFock=false)
     DiagTree.uidreset()
 
     # Instantaneous Green's function (occupation number) diagram parameters
+    filter = isFock ? [NoHartree, NoFock] : [NoHartree]  # Using either G_0 or G_HF
     diagparam = DiagParaF64(;
         type=GreenDiag,
-        innerLoopNum=n_loop,
+        hasTau=true,
         firstTauIdx=2,
         totalTauNum=n_loop + 1,
-        hasTau=true,
+        innerLoopNum=n_loop,
+        interaction=[FeynmanDiagram.Interaction(ChargeCharge, Instant)],  # Yukawa interaction
+        filter=filter,
     )
 
     # Loop basis vector for external momentum
@@ -88,6 +95,8 @@ function integrate_occupation_with_ct(
     print=-1,
     solver=:vegasmc,
 )
+    @assert all(p.totalTauNum ≤ mcparam.order + 1 for p in diagparams)
+
     # We assume that each partition expression tree has a single root
     @assert all(length(et.root) == 1 for et in exprtrees)
 
@@ -110,6 +119,7 @@ function integrate_occupation_with_ct(
     # MC configuration degrees of freedom (DOF): shape(K), shape(T), shape(ExtKidx)
     # We do not integrate the incoming external time and nₖ is instantaneous, hence n_τ = totalTauNum - 1
     dof = [[p.innerLoopNum, p.totalTauNum - 1, 1] for p in diagparams]
+    println("Integration DOF: $dof")
 
     # UEG SOSEM diagram observables are a function of |k| only (equal-time)
     obs = repeat([zeros(n_kgrid)], length(dof))  # observable for each partition
@@ -186,7 +196,7 @@ function integrand(vars, config)
             varK[3, j + 1] = r * cos(θ)
             phifactor *= r^2 * sin(θ) / (1 - R[j])^2
         end
-        # @assert T.data[1] == 0
+        @assert T.data[1] == 0
 
         @debug "K = $(varK)" maxlog = 3
         @debug "ik = $ik" maxlog = 3
@@ -218,39 +228,9 @@ function main()
     end
 
     # Total loop order N
-    orders = [1, 2, 3]
+    orders = [0, 2]
     max_order = maximum(orders)
     sort!(orders)
-
-    # UEG parameters for MC integration
-    param = ParaMC(; order=max_order, rs=1.0, beta=40.0, mass2=1.0, isDynamic=false)
-    @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)"
-
-    # K-mesh for measurement
-    minK = 0.1 * param.kF
-    Nk, korder = 4, 7
-    kleft =
-        CompositeGrid.LogDensedGrid(
-            :uniform,
-            [0.0, param.kF - 1e-8],
-            [param.kF - 1e-8],
-            Nk,
-            minK,
-            korder,
-        ).grid
-    kright =
-        CompositeGrid.LogDensedGrid(
-            :uniform,
-            [param.kF + 1e-8, 2 * param.kF],
-            [param.kF + 1e-8],
-            Nk,
-            minK,
-            korder,
-        ).grid
-    kgrid = [kleft; kright]
-
-    # Dimensionless k-grid
-    k_kf_grid = kgrid / param.kF
 
     # Settings
     alpha = 3.0
@@ -258,11 +238,66 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 5e9
+    neval = 1e6
+
+    # Enable/disable interaction and chemical potential counterterms
+    renorm_mu = true
+    renorm_lambda = false
+
+    # Remove Fock insertions?
+    isFock = true
+
+    # UEG parameters for MC integration
+    param = ParaMC(;
+        order=max_order,
+        rs=1.0,
+        beta=40.0,
+        mass2=1.0,
+        isDynamic=false,
+        isFock=isFock,  # remove Fock insertions
+    )
+    @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)"
+
+    # Dimensionless k-mesh for measurement
+    k_kf_grid = CompositeGrid.LogDensedGrid(:cheb, [0.0, 3.0], [1.0], 5, 0.02, 5)
+
+    # Dimensionful k-grid
+    kgrid = k_kf_grid * param.kF
+
+    # # K-mesh for measurement
+    # minK = 0.1 * param.kF
+    # Nk, korder = 4, 7
+    # kleft =
+    #     CompositeGrid.LogDensedGrid(
+    #         :uniform,
+    #         [0.0, param.kF - 1e-8],
+    #         [param.kF - 1e-8],
+    #         Nk,
+    #         minK,
+    #         korder,
+    #     ).grid
+    # kright =
+    #     CompositeGrid.LogDensedGrid(
+    #         :uniform,
+    #         [param.kF + 1e-8, 2 * param.kF],
+    #         [param.kF + 1e-8],
+    #         Nk,
+    #         minK,
+    #         korder,
+    #     ).grid
+    # kgrid = [kleft; kright]
+
+    # # Dimensionless k-grid
+    # k_kf_grid = kgrid / param.kF
 
     # Build diagram/expression trees for the occupation number to order
     # ξᴺ in the renormalized perturbation theory (includes CTs in μ and λ)
-    partitions, diagparams, diagtrees, exprtrees = build_occupation_with_ct(orders)
+    partitions, diagparams, diagtrees, exprtrees = build_occupation_with_ct(
+        orders;
+        renorm_mu=renorm_mu,
+        renorm_lambda=renorm_lambda,
+        isFock=isFock,
+    )
 
     println("Integrating partitions: $partitions")
     println("diagtrees: $diagtrees")
@@ -279,11 +314,23 @@ function main()
         solver=solver,
     )
 
+    # Distinguish results with different counterterm schemes
+    ct_string = (renorm_mu || renorm_lambda) ? "with_ct" : ""
+    if renorm_mu
+        ct_string *= "_mu"
+    end
+    if renorm_lambda
+        ct_string *= "_lambda"
+    end
+    if isFock
+        ct_string *= "_noFock"
+    end
+
     # Save to JLD2 on main thread
     if !isnothing(res)
         savename =
-            "results/data/occupation_n=$(param.order)_rs=$(param.rs)_" *
-            "beta_ef=$(param.beta)_lambda=$(param.mass2)_neval=$(neval)_$(solver)"
+            "results/data/occupation_n=$(param.order)_rs=$(param.rs)_beta_ef=$(param.beta)_" *
+            "lambda=$(param.mass2)_neval=$(neval)_$(solver)_$(ct_string)"
         jldopen("$savename.jld2", "a+"; compress=true) do f
             key = "$(UEG.short(param))"
             if haskey(f, key)
@@ -293,12 +340,17 @@ function main()
             return f[key] = (orders, param, kgrid, partitions, res)
         end
         # Test the non-interacting result
-        if orders == [0]
+        if 0 in orders
             # fₖ
             ϵk = kgrid .^ 2 / (2 * param.me) .- param.μ
             exact = -Spectral.kernelFermiT.(-1e-8, ϵk, param.β)
+            @assert all(exact .≥ 0)
             # Check the N = 0 result against the bare occupation
-            means_bare, stdevs_bare = res.mean, res.stdev
+            if orders == [0]
+                means_bare, stdevs_bare = res.mean, res.stdev
+            else
+                means_bare, stdevs_bare = res.mean[1], res.stdev[1]
+            end
             meas = measurement.(means_bare, stdevs_bare)
             scores = stdscore.(meas, exact)
             score_k0 = scores[1]

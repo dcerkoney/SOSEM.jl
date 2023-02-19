@@ -1,3 +1,4 @@
+using CodecZlib
 using ElectronLiquid
 using ElectronGas
 using FeynmanDiagram
@@ -91,7 +92,7 @@ function main()
         "results/data/c1bL_n=$(max_order)_rs=$(rs)_" *
         "beta_ef=$(beta)_lambda=$(mass2)_" *
         "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)"
-    settings, param, kgrid, partitions, res = jldopen("$savename.jld2", "a+") do f
+    settings, param, kgrid, partitions, res = jldopen("$savename.jld2", "a+"; compress=true) do f
         key = "$(UEG.short(plotparams[end]))"
         return f[key]
     end

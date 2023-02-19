@@ -1,9 +1,9 @@
+using CodecZlib
 using ElectronLiquid
 using Measurements
 using Printf
 using JLD2
 using SOSEM
-using CodecZlib
 
 # Change to counterterm directory
 if haskey(ENV, "SOSEM_CEPH")
@@ -11,15 +11,17 @@ if haskey(ENV, "SOSEM_CEPH")
 elseif haskey(ENV, "SOSEM_HOME")
     cd("$(ENV["SOSEM_HOME"])/examples/counterterms")
 end
+
 # Physical params matching data for SOSEM observables
-order = [4]  # C^{(1)}_{N≤5} includes CTs up to 3rd order
+order = [3]  # C^{(1)}_{N≤5} includes CTs up to 3rd order
 
 # Grid-search 1: rs, mass2
 # rs = LinRange(0.1, 2.0, 5)
 rs = [1.0]
 #mass2 = LinRange(1.0, 5.0, 5)
 mass2 = [1.0]
-beta = [25.0, 40.0, 80.0]
+beta = [40.0]
+# beta = [25.0, 40.0, 80.0]
 
 # Grid-search 2: rs, beta
 #rs = LinRange(0.1, 2.0, 5)
@@ -30,6 +32,9 @@ beta = [25.0, 40.0, 80.0]
 #rs = LinRange(0.1, 3.0, 21)
 #mass2 = [<lambda_opt>]
 #beta = [<beta_opt>]
+
+# Remove Fock insertions?
+isFock = true
 
 const filename = "data_Z.jld2"
 const parafilename = "para.csv"
@@ -108,7 +113,14 @@ if abspath(PROGRAM_FILE) == @__FILE__
 
     f = jldopen(filename, "r")
     for (_rs, _mass2, _beta, _order) in Iterators.product(rs, mass2, beta, order)
-        para = UEG.ParaMC(; rs=_rs, beta=_beta, order=_order, mass2=_mass2, isDynamic=false)
+        para = UEG.ParaMC(;
+            rs=_rs,
+            beta=_beta,
+            order=_order,
+            mass2=_mass2,
+            isDynamic=false,
+            isFock=isFock,
+        )
 
         kF = para.kF
         for key in keys(f)

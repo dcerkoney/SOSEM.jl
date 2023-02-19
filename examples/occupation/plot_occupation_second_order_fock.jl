@@ -80,6 +80,10 @@ function main()
     data = UEG_MC.restodict(res_list, partitions_list)
     println(data)
 
+    # for P in keys(data)
+    #     data[P] *= (-1)^(maximum(P) - 1)
+    # end
+
     # Reexpand merged data in powers of μ
     z, μ = UEG_MC.load_z_mu(param)
     δz, δμ = CounterTerm.sigmaCT(2, μ, z; verbose=1)
@@ -123,7 +127,7 @@ function main()
     # δn^{(2)}_F(kσ) = f''(ϵₖ) (Σ^λ_F(k) - Σ^λ_F(k_F))^2 = f''(ϵₖ) (Σ^λ_F(k) + δμ₁)^2
     sigma_lambda_F_fine = sigma_lambda_fock_exact.(kgrid_fine, [param])
     dn1F_exact_fine = @. fpe_fine * (sigma_lambda_F_fine - δμ1)
-    dn2F_exact_fine = @. fppe_fine * (δμ1^2 / 2 + (sigma_lambda_F_fine - δμ1)^2 / 2)
+    dn2F_exact_fine = @. -fppe_fine * (δμ1^2 / 2 + (sigma_lambda_F_fine + δμ1)^2 / 2)
 
     @assert δμ1 ≈ sigma_lambda_fock_exact(param.kF, param)
 
@@ -138,15 +142,15 @@ function main()
     dn2F_stdevs_exact_mu = Measurements.uncertainty.(dn2F_calc_exact_mu)
 
     sigma_lambda_F = sigma_lambda_fock_exact.(kgrid, [param])
-    dn2F_exact = @. fppe * (δμ1^2 / 2 + (sigma_lambda_F - δμ1)^2 / 2)
+    dn2F_exact = @. -fppe * (δμ1^2 / 2 + (sigma_lambda_F + δμ1)^2 / 2)
     ratio = dn2F_exact ./ dn2F_means_exact_mu
     max_ratio = argmax(abs, ratio)
     println(ratio)
     println(max_ratio)
 
-    term1_exact_fine = @. fppe_fine * sigma_lambda_F_fine^2 / 2
+    term1_exact_fine = @. -fppe_fine * sigma_lambda_F_fine^2 / 2
     term2_exact_fine = @. -fppe_fine * sigma_lambda_F_fine
-    term3_exact_fine = fppe_fine
+    term3_exact_fine = -fppe_fine
     dn2F_exact_fine_v2 =
         term1_exact_fine + term2_exact_fine * δμ1 + term3_exact_fine * δμ1^2
 
@@ -177,7 +181,7 @@ function main()
         k_kf_grid_fine,
         term1_exact_fine,
         "-";
-        label="\$\\frac{1}{2} f^{\\prime\\prime}(\\xi_k) \\left(\\Sigma^\\lambda_F(k)\\right)^2\$ (exact)",
+        label="\$-\\frac{1}{2} f^{\\prime\\prime}(\\xi_k) \\left(\\Sigma^\\lambda_F(k)\\right)^2\$ (exact)",
     )
     ax.plot(
         k_kf_grid_fine,
@@ -189,7 +193,7 @@ function main()
         k_kf_grid_fine,
         term3_exact_fine,
         "-";
-        label="\$f^{\\prime\\prime}(\\xi_k)\$ (exact)",
+        label="\$-f^{\\prime\\prime}(\\xi_k)\$ (exact)",
     )
     ax.legend(; loc="best")
     ax.set_xlim(0.75, 1.25)
@@ -255,7 +259,7 @@ function main()
     # )
     ax.legend(; loc="best", framealpha=1)
     ax.set_xlim(0.75, 1.25)
-    ax.set_ylim(-3.5, 3.5)
+    # ax.set_ylim(-3.5, 3.5)
     ax.set_xlabel("\$k / k_F\$")
     ax.set_ylabel("\$\\delta n^{(2)}_F({k,\\sigma})\$")
     xloc = 1.025

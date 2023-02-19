@@ -1,4 +1,5 @@
 using AbstractTrees
+using CodecZlib
 using CompositeGrids
 using ElectronGas
 using ElectronLiquid

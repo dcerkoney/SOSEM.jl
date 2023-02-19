@@ -22,7 +22,7 @@ function partition(order::Int)
         (2, 1, 2), (2, 0, 3), (1, 4, 0), (1, 3, 1), (1, 2, 2), (1, 1, 3), (1, 0, 4), (0, 5, 0),
     ]
     #! format: on
-    return sort([p for p in par if p[1] + p[2] + p[3] <= order])
+    return sort([p for p in par if sum(p) <= order])
 end
 
 """
@@ -45,6 +45,7 @@ function counterterm_partitions(
     n_lowest::Int,
     renorm_mu=true,
     renorm_lambda=true,
+    isFock=false,
 )
     partitions = Vector{PartitionType}()
     if n_max < n_min
@@ -67,10 +68,33 @@ function counterterm_partitions(
         ]
         # Generate both μ and λ counterterms
     else
-        partitions =
-            [p for p in partition(n_max) if p[1] ≥ n_lowest && p[1] + p[2] + p[3] ≥ n_min]
+        partitions = [p for p in partition(n_max) if p[1] ≥ n_lowest && sum(p) ≥ n_min]
+    end
+    if isFock
+        # Filter out Fock partitions
+        return [p for p in partitions if p[1] != 1]
     end
     return partitions
+end
+
+function counterterm_partitions(
+    orders::Vector{Int};
+    n_lowest::Int,
+    renorm_mu=true,
+    renorm_lambda=true,
+    isFock=false,
+)
+    n_min, n_max = minimum(orders), maximum(orders)
+    return [
+        p for p in counterterm_partitions(
+            n_min,
+            n_max;
+            n_lowest,
+            renorm_mu=renorm_mu,
+            renorm_lambda=renorm_lambda,
+            isFock=isFock,
+        ) if sum(p) in orders
+    ]
 end
 
 """
@@ -78,13 +102,14 @@ Get all (μ and/or λ) counterterm partitions (n1, n2, n3) satisfying the constr
 s.min_order ≤ n1 + n2 + n3 ≤ s.max_order for the given SOSEM measurement settings. 
 If `renorm_mu` is false, then n_ct_mu = 0. 
 """
-function counterterm_partitions(s::Settings; renorm_mu=true, renorm_lambda=true)
+function counterterm_partitions(s::Settings; renorm_mu=true, renorm_lambda=true, isFock=false)
     return counterterm_partitions(
         s.min_order,
         s.max_order;
         n_lowest=_get_lowest_loop_order(s.observable),  # Lowest loop order depends on the observable
         renorm_mu=renorm_mu,
         renorm_lambda=renorm_lambda,
+        isFock=isFock,
     )
 end
 
