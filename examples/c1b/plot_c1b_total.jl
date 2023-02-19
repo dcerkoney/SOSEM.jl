@@ -1,3 +1,4 @@
+using CodecZlib
 using ElectronLiquid
 using ElectronGas
 using FeynmanDiagram
@@ -264,7 +265,7 @@ function main()
         savename =
             "results/data/rs=$(param.rs)_beta_ef=$(param.beta)_" *
             "lambda=$(param.mass2)_$(intn_str)$(solver)_$(ct_string)"
-        f = jldopen("$savename.jld2", "a+")
+        f = jldopen("$savename.jld2", "a+"; compress=true)
         # NOTE: no bare result for c1b observable (accounted for in c1b0)
         for N in min_order_plot:max_order
             # Add RPA & RPA+FL results to data group

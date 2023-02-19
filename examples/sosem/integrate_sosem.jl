@@ -1,3 +1,4 @@
+using CodecZlib
 using CompositeGrids
 using ElectronGas
 using ElectronLiquid.UEG: ParaMC, short
