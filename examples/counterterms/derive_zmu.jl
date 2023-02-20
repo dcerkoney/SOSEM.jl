@@ -67,7 +67,7 @@ function process(datatuple, isSave)
         _z[p] = zfactor(val, para.β)
     end
 
-    dzi, _, _ = CounterTerm.sigmaCT(para.order, _mu, _z)
+    dzi, _, _ = CounterTerm.sigmaCT(para.order, _mu, _z; isFock=isFock)
     println("zfactor: ", dzi)
 
     ############# save to csv  #################
