@@ -1,4 +1,6 @@
 using CodecZlib
+using DataFrames
+using DelimitedFiles
 using ElectronGas
 using ElectronLiquid
 using Interpolations
@@ -33,8 +35,8 @@ function main()
     neval = 1e6
 
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
-    min_order = 0
-    max_order = 2
+    min_order = 1
+    max_order = 3
     min_order_plot = 0
     max_order_plot = 2
 
@@ -85,9 +87,23 @@ function main()
         return f[key]
     end
 
+    # Read in benchmark data
+    benchmark_dfs = DataFrame[]
+    for order in 2:3
+        data, header = readdlm(
+            "results/occupation/benchmark/Nk_beta40.0_rs1.0_ms1.0_o$(order).txt",
+            ' ';
+            header=true,
+        )
+        push!(benchmark_dfs, DataFrame(data, vec(header)))
+    end
+    bm_kgrid, bm_occupation_2, bm_occupation_2_err = eachcol(benchmark_dfs[1])
+    bm_kgrid, bm_occupation_3, bm_occupation_3_err = eachcol(benchmark_dfs[2])
+    bm_k_kf_grid = bm_kgrid / param.kF
+
     # Get dimensionless k-grid (k / kF) and index corresponding to the Fermi energy
     k_kf_grid = kgrid / param.kF
-    println(k_kf_grid)
+    println(k_kf_grid - bm_k_kf_grid)
 
     # Convert results to a Dict of measurements at each order with interaction counterterms merged
     data = UEG_MC.restodict(res, partitions)
@@ -105,43 +121,64 @@ function main()
     #     end
     # end
 
+    # Zero out double-counted (Fock renormalized) partitions
+    if isFock && min_order ≤ 1
+        data[(1, 0, 0)] = zero(data[(max_order, 0, 0)])
+        # data[(0, 1, 0)] = zero(data[(max_order, 0, 0)])
+        # data[(0, 1, 0)] = zero(data[(max_order, 0, 0)])  # Combines with dMu2, nonzero!
+    end
+
     merged_data = CounterTerm.mergeInteraction(data)
     println([k for (k, _) in merged_data])
-    # println(merged_data)
+    println("data:\n$data")
+    println("merged_data:\n$merged_data")
 
     # # TODO: Fix factor of β by removing extra τ integration
-    # for k in keys(merged_data)
-    #     sum(k) == 0 && continue
-    #     # merged_data[k] *= 1
-    #     # merged_data[k] *= -1
-    #     # merged_data[k] *= 1 / param.β
-    #     # merged_data[k] *= -1 / param.β
-    #     # merged_data[k] *= 1 / param.β^2
-    #     # merged_data[k] *= -1 / param.β^2
-    #     # merged_data[k] *= 1 / param.β^sum(k)
-    # end
-
-    if isFock && min_order ≤ 1
-        merged_data[(1, 0)] = zero(merged_data[(max_order, 0)])
+    for k in keys(merged_data)
+        sum(k) == 0 && continue
+        # merged_data[k] *= 1
+        # merged_data[k] *= -1
+        # merged_data[k] *= 1 / param.β
+        # merged_data[k] *= -1 / param.β
+        # merged_data[k] *= 1 / param.β^2
+        # merged_data[k] *= -1 / param.β^2
+        # merged_data[k] *= 1 / param.β^sum(k)
     end
+
+    # Get exact bare/Fock occupation
+    if param.isFock
+        fock =
+            SelfEnergy.Fock0_ZeroTemp.(kgrid, [param.basic]) .-
+            SelfEnergy.Fock0_ZeroTemp(param.kF, param.basic)
+        ϵk = kgrid .^ 2 / (2 * param.me) .- param.μ + fock  # ϵ_HF = ϵ_0 + (Σ_F(k) - δμ₁)
+    else
+        ϵk = kgrid .^ 2 / (2 * param.me) .- param.μ         # ϵ_0
+    end
+    bare_occupation_exact = -Spectral.kernelFermiT.(-1e-8, ϵk, param.β)
+
+    # Set bare result manually using exact Fermi function
     if min_order_plot == 0 && min_order > 0
-        # Set bare result manually using exact Fermi function
-        ϵk = kgrid .^ 2 / (2 * param.me) .- param.μ
-        bare_occupation_exact = -Spectral.kernelFermiT.(-1e-8, ϵk, param.β)
-        merged_data[(0, 0)] = measurement.(bare_occupation_exact, 0.0)  # treat quadrature data as numerically exact
+        # treat quadrature data as numerically exact
+        merged_data[(0, 0)] = measurement.(bare_occupation_exact, 0.0)
+    elseif min_order_plot == 0 && min_order == 0
+        stdscores = stdscore.(merged_data[(0, 0)], bare_occupation_exact)
+        worst_score = argmax(abs, stdscores)
+        println("Worst standard score for Fock occupation: $worst_score")
+        @assert worst_score ≤ 10
     end
 
     # Reexpand merged data in powers of μ
     z, μ = UEG_MC.load_z_mu(param)
-    δz, δμ = CounterTerm.sigmaCT(max_order, μ, z; verbose=1)
+    δz, δμ = CounterTerm.sigmaCT(max_order, μ, z; isfock=isFock, verbose=1)
     println("Computed δμ: ", δμ)
+    δμ[2] = measurement("-0.08196(8)")  # Use benchmark dMu2 value
     occupation = UEG_MC.chemicalpotential_renormalization_green(
         merged_data,
         δμ;
-        min_order=min_order_plot,
+        min_order=0,
         max_order=max_order,
     )
-    if max_order ≥ 1 && renorm_mu == true
+    if max_order ≥ 1 && renorm_mu == true && isFock == false
         # Test manual renormalization with exact lowest-order chemical potential
         δμ1_exact = UEG_MC.delta_mu1(param)  # = ReΣ₁[λ](kF, 0)
         # nₖ⁽¹⁾ = nₖ_{1,0} + δμ₁ nₖ_{0,1}
@@ -191,11 +228,24 @@ function main()
     plt.rc("text"; usetex=true)
     plt.rc("font"; family="serif")
 
-    # Bare occupation fₖ on dense grid for plotting
+    # Bare/Fock occupation on dense grid for plotting
     kgrid_fine = param.kF * np.linspace(0.0, 3.0; num=600)
     k_kf_grid_fine = np.linspace(0.0, 3.0; num=600)
-    ϵk = kgrid_fine .^ 2 / (2 * param.me) .- param.μ
+    if param.isFock
+        fock =
+            SelfEnergy.Fock0_ZeroTemp.(kgrid_fine, [param.basic]) .-
+            SelfEnergy.Fock0_ZeroTemp(param.kF, param.basic)
+        ϵk = kgrid_fine .^ 2 / (2 * param.me) .- param.μ + fock  # ϵ_HF = ϵ_0 + (Σ_F(k) - δμ₁)
+    else
+        ϵk = kgrid_fine .^ 2 / (2 * param.me) .- param.μ         # ϵ_0
+    end
     bare_occupation_fine = -Spectral.kernelFermiT.(-1e-8, ϵk, param.β)
+
+    # Get standard scores vs benchmark
+    stdscores = stdscore.(occupation_total[2], bm_occupation_2)
+    worst_score = argmax(abs, stdscores)
+    println(stdscores)
+    println("Worst standard score for N=2 (measured vs benchmark mean): $worst_score")
 
     # Plot the occupation number for each aggregate order
     fig, ax = plt.subplots()
@@ -204,8 +254,43 @@ function main()
         # Include bare occupation fₖ in plot
         ax.plot(k_kf_grid_fine, bare_occupation_fine, "k"; label="\$N=0\$ (exact)")
     end
+    # Plot benchmark data
+    if max_order_plot ≥ 2
+        ax.plot(
+            bm_k_kf_grid,
+            bm_occupation_2,
+            "o-";
+            markersize=2,
+            color="orchid",
+            label="\$N=2\$ (benchmark)",
+        )
+        ax.fill_between(
+            bm_k_kf_grid,
+            bm_occupation_2 - bm_occupation_2_err,
+            bm_occupation_2 + bm_occupation_2_err;
+            color="orchid",
+            alpha=0.4,
+        )
+    end
+    if max_order_plot ≥ 3
+        ax.plot(
+            bm_k_kf_grid,
+            bm_occupation_3,
+            "o-";
+            markersize=2,
+            color="cyan",
+            label="\$N=3\$ (benchmark)",
+        )
+        ax.fill_between(
+            bm_k_kf_grid,
+            bm_occupation_3 - bm_occupation_3_err,
+            bm_occupation_3 + bm_occupation_3_err;
+            color="cyan",
+            alpha=0.4,
+        )
+    end
     for (i, N) in enumerate(min_order:max_order_plot)
-        # N == 0 && continue
+        N == 0 && continue
         isFock && N == 1 && continue
         # Get means and error bars from the result up to this order
         means = Measurements.value.(occupation_total[N])
@@ -218,6 +303,7 @@ function main()
             markersize=2,
             color="C$(i-1)",
             label="\$N=$N\$ ($solver)",
+            zorder=10 + i,
         )
         ax.fill_between(
             k_kf_grid,
@@ -225,18 +311,21 @@ function main()
             means + stdevs;
             color="C$(i-1)",
             alpha=0.4,
+            zorder=10 + i,
         )
     end
     ax.legend(; loc="upper right")
-    ax.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
+    # ax.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
+    ax.set_xlim(0.75, 1.25)
     # ax.set_ylim(nothing, 2)
     ax.set_xlabel("\$k / k_F\$")
     ax.set_ylabel("\$n_{k\\sigma}\$")
-    xloc = 1.125
+    xloc = 1.025
+    # xloc = 1.5
     # yloc = 0.4
     # ydiv = -0.1
-    yloc = 0.75
-    ydiv = -0.2
+    yloc = 0.6
+    ydiv = -0.15
     ax.text(
         xloc,
         yloc,

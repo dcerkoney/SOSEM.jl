@@ -126,13 +126,14 @@ reexpanded in μ.
 function aggregate_orders(data::RenormMeasType)
     return TotalMeasType(zip(keys(data), accumulate(+, values(data))))
 end
-function aggregate_orders(renorm_data::Vector{Vector{Measurement}}; nmax, nmin=2)
-    # TODO: deprecate this method (chemicalpotential_renormalization_sosem return type updated)
-    @todo
-    # merged data is an ordered vector of data at each order nmin ≤ n ≤ nmax
-    imin = nmin - 1
-    imax = nmax - 1
-    return TotalMeasType(
-        zip(nmin:nmax, accumulate(+, renorm_data[i] for i in collect(imin:imax))),
-    )
-end
+
+# function aggregate_orders(renorm_data::Vector{Vector{Measurement}}; nmax, nmin=2)
+#     # TODO: deprecate this method (chemicalpotential_renormalization_sosem return type updated)
+#     @todo
+#     # merged data is an ordered vector of data at each order nmin ≤ n ≤ nmax
+#     imin = nmin - 1
+#     imax = nmax - 1
+#     return TotalMeasType(
+#         zip(nmin:nmax, accumulate(+, renorm_data[i] for i in collect(imin:imax))),
+#     )
+# end
