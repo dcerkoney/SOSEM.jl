@@ -32,7 +32,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals
-    neval = 1e6
+    neval = 5e9
 
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
     min_order = 1
@@ -64,6 +64,7 @@ function main()
     if renorm_lambda
         ct_string *= "_lambda"
     end
+    ct_string_short = ct_string
     if isFock
         ct_string *= "_noFock"
     end
@@ -167,10 +168,11 @@ function main()
     end
 
     # Reexpand merged data in powers of μ
-    z, μ = UEG_MC.load_z_mu(param)
+    ct_filename = "examples/counterterms/data_Z_$(ct_string_short).jld2"
+    z, μ = UEG_MC.load_z_mu(param; ct_filename=ct_filename)
     δz, δμ = CounterTerm.sigmaCT(max_order, μ, z; isfock=isFock, verbose=1)
     println("Computed δμ: ", δμ)
-    δμ[2] = measurement("-0.08196(8)")  # Use benchmark dMu2 value
+    # δμ[2] = measurement("-0.08196(8)")  # Use benchmark dMu2 value
     occupation = UEG_MC.chemicalpotential_renormalization_green(
         merged_data,
         δμ;
