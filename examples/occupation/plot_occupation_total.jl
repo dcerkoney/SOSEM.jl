@@ -124,7 +124,6 @@ function main()
     # Zero out double-counted (Fock renormalized) partitions
     if isFock && min_order ≤ 1
         data[(1, 0, 0)] = zero(data[(max_order, 0, 0)])
-        # data[(0, 1, 0)] = zero(data[(max_order, 0, 0)])
         # data[(0, 1, 0)] = zero(data[(max_order, 0, 0)])  # Combines with dMu2, nonzero!
     end
 

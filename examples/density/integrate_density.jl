@@ -17,21 +17,21 @@ using SOSEM
 # For saving/loading numpy data
 @pyimport numpy as np
 
-function build_occupation_with_ct(orders=[1])
+function build_occupation_with_ct(orders; renorm_mu=true, renorm_lambda=true, isFock=false)
     DiagTree.uidreset()
     valid_partitions = Vector{PartitionType}()
     diagparams = Vector{DiagParaF64}()
     diagtrees = Vector{DiagramF64}()
     exprtrees = Vector{ExprTreeF64}()
     # Build all counterterm partitions at the given orders (lowest order (Fock) is N = 1)
-    n_min, n_max = minimum(orders), maximum(orders)
-    for p in DiagGen.counterterm_partitions(
-        n_min,
-        n_max;
+    partitions = DiagGen.counterterm_partitions(
+        orders;
         n_lowest=0,
-        renorm_mu=true,
-        renorm_lambda=true,
+        renorm_mu=renorm_mu,
+        renorm_lambda=renorm_lambda,
     )
+    @debug "Partitions: $partitions"
+    for p in partitions
         # Build diagram tree for this partition
         @debug "Partition (n_loop, n_ct_mu, n_ct_lambda): $p"
         diagparam, diagtree = build_diagtree(; n_loop=p[1])
@@ -41,30 +41,37 @@ function build_occupation_with_ct(orders=[1])
         dλ_dμ_diagtree = DiagTree.derivative(dμ_diagtree, BareInteractionId, p[3]; index=2)
         if isempty(dλ_dμ_diagtree)
             @warn("Ignoring partition $p with no diagrams")
-            continue
+        else
+            if isFock && (p != (1, 0, 0)) # the Fock diagram itself should not be removed
+                DiagTree.removeHartreeFock!(dλ_dμ_diagtree)
+            end
+            @debug "\nDiagTree:\n" * repr_tree(dλ_dμ_diagtree)
+            # Compile to expression tree and save results for this partition
+            exprtree = ExprTree.build(dλ_dμ_diagtree)
+            push!(valid_partitions, p)
+            push!(diagparams, diagparam)
+            push!(exprtrees, exprtree)
+            append!(diagtrees, dλ_dμ_diagtree)
         end
-        @debug "\nDiagTree:\n" * repr_tree(dλ_dμ_diagtree)
-
-        # Compile to expression tree and save results for this partition
-        exprtree = ExprTree.build(dλ_dμ_diagtree)
-        push!(valid_partitions, p)
-        push!(diagparams, diagparam)
-        push!(exprtrees, exprtree)
-        append!(diagtrees, dλ_dμ_diagtree)
     end
     return valid_partitions, diagparams, diagtrees, exprtrees
 end
 
 function build_diagtree(; n_loop=0)
-    DiagTree.uidreset()
-
     # Instantaneous Green's function (occupation number) diagram parameters
+    #
+    # NOTE: Differentiation and Fock filter do not commute, so we need to manually zero
+    #       out the Fock insertions after differentiation (via DiagTree.removeHartreeFock!)
+    DiagTree.uidreset()
     diagparam = DiagParaF64(;
         type=GreenDiag,
+        hasTau=true,
+        firstLoopIdx=2,
         innerLoopNum=n_loop,
         firstTauIdx=2,
         totalTauNum=n_loop + 1,
-        hasTau=true,
+        interaction=[FeynmanDiagram.Interaction(ChargeCharge, Instant)],  # Yukawa interaction
+        filter=[NoHartree],
     )
 
     # Loop basis vector for external momentum
@@ -87,6 +94,8 @@ function integrate_density_with_ct(
     print=-1,
     solver=:vegasmc,
 )
+    @assert all(p.totalTauNum ≤ mcparam.order + 1 for p in diagparams)
+
     # We assume that each partition expression tree has a single root
     @assert all(length(et.root) == 1 for et in exprtrees)
 
@@ -213,21 +222,40 @@ function main()
     max_order = maximum(orders)
     sort!(orders)
 
-    # UEG parameters for MC integration
-    param = ParaMC(; order=max_order, rs=1.0, beta=40.0, mass2=1.0, isDynamic=false)
-    @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)"
-
     # Settings
     alpha = 3.0
     print = 0
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 5e9
+    neval = 1e9
+
+    # Enable/disable interaction and chemical potential counterterms
+    renorm_mu = true
+    renorm_lambda = false
+
+    # Remove Fock insertions?
+    isFock = true
+
+    # UEG parameters for MC integration
+    param = ParaMC(;
+        order=max_order,
+        rs=1.0,
+        beta=40.0,
+        mass2=1.0,
+        isDynamic=false,
+        isFock=isFock,  # remove Fock insertions
+    )
+    @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)"
 
     # Build diagram/expression trees for the occupation number to order
     # ξᴺ in the renormalized perturbation theory (includes CTs in μ and λ)
-    partitions, diagparams, diagtrees, exprtrees = build_occupation_with_ct(orders)
+    partitions, diagparams, diagtrees, exprtrees = build_occupation_with_ct(
+        orders;
+        renorm_mu=renorm_mu,
+        renorm_lambda=renorm_lambda,
+        isFock=isFock,
+    )
 
     println("Integrating partitions: $partitions")
     println("diagtrees: $diagtrees")
@@ -243,11 +271,23 @@ function main()
         solver=solver,
     )
 
+    # Distinguish results with different counterterm schemes
+    ct_string = (renorm_mu || renorm_lambda) ? "with_ct" : ""
+    if renorm_mu
+        ct_string *= "_mu"
+    end
+    if renorm_lambda
+        ct_string *= "_lambda"
+    end
+    if isFock
+        ct_string *= "_noFock"
+    end
+
     # Save to JLD2 on main thread
     if !isnothing(res)
         savename =
-            "results/data/density_n=$(param.order)_rs=$(param.rs)_" *
-            "beta_ef=$(param.beta)_lambda=$(param.mass2)_neval=$(neval)_$(solver)"
+            "results/data/density_n=$(param.order)_rs=$(param.rs)_beta_ef=$(param.beta)_" *
+            "lambda=$(param.mass2)_neval=$(neval)_$(solver)_$(ct_string)"
         jldopen("$savename.jld2", "a+"; compress=true) do f
             key = "$(UEG.short(param))"
             if haskey(f, key)
