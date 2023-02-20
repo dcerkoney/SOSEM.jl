@@ -33,10 +33,23 @@ beta = [40.0]
 #mass2 = [<lambda_opt>]
 #beta = [<beta_opt>]
 
+# Enable/disable interaction and chemical potential counterterms
+renorm_mu = true
+renorm_lambda = false
+
 # Remove Fock insertions?
 isFock = true
 
-const filename = "data_Z.jld2"
+# Distinguish results with different counterterm schemes
+ct_string = (renorm_mu || renorm_lambda) ? "with_ct" : ""
+if renorm_mu
+    ct_string *= "_mu"
+end
+if renorm_lambda
+    ct_string *= "_lambda"
+end
+
+const filename = "data_Z_$(ct_string).jld2"
 const parafilename = "para.csv"
 
 function zfactor(data, β)
