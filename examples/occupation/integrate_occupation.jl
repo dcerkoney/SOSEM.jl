@@ -29,13 +29,12 @@ function build_occupation_with_ct(orders; renorm_mu=true, renorm_lambda=true, is
         n_lowest=0,
         renorm_mu=renorm_mu,
         renorm_lambda=renorm_lambda,
-        isFock=isFock,
     )
     @debug "Partitions: $partitions"
     for p in partitions
         # Build diagram tree for this partition
         @debug "Partition (n_loop, n_ct_mu, n_ct_lambda): $p"
-        diagparam, diagtree = build_diagtree(; n_loop=p[1], isFock=isFock)
+        diagparam, diagtree = build_diagtree(; n_loop=p[1])
 
         # Build tree with counterterms (∂λ(∂μ(DT))) via automatic differentiation
         dμ_diagtree = DiagTree.derivative([diagtree], BareGreenId, p[2]; index=1)
@@ -46,32 +45,33 @@ function build_occupation_with_ct(orders; renorm_mu=true, renorm_lambda=true, is
             if isFock && (p != (1, 0, 0)) # the Fock diagram itself should not be removed
                 DiagTree.removeHartreeFock!(dλ_dμ_diagtree)
             end
+            @debug "\nDiagTree:\n" * repr_tree(dλ_dμ_diagtree)
+            # Compile to expression tree and save results for this partition
+            exprtree = ExprTree.build(dλ_dμ_diagtree)
+            push!(valid_partitions, p)
+            push!(diagparams, diagparam)
+            push!(exprtrees, exprtree)
+            append!(diagtrees, dλ_dμ_diagtree)
         end
-        @debug "\nDiagTree:\n" * repr_tree(dλ_dμ_diagtree)
-
-        # Compile to expression tree and save results for this partition
-        exprtree = ExprTree.build(dλ_dμ_diagtree)
-        push!(valid_partitions, p)
-        push!(diagparams, diagparam)
-        push!(exprtrees, exprtree)
-        append!(diagtrees, dλ_dμ_diagtree)
     end
     return valid_partitions, diagparams, diagtrees, exprtrees
 end
 
-function build_diagtree(; n_loop=0, isFock=false)
-    DiagTree.uidreset()
-
+function build_diagtree(; n_loop=0)
     # Instantaneous Green's function (occupation number) diagram parameters
-    filter = isFock ? [NoHartree, NoFock] : [NoHartree]  # Using either G_0 or G_HF
+    #
+    # NOTE: Differentiation and Fock filter do not commute, so we need to manually zero
+    #       out the Fock insertions after differentiation (via DiagTree.removeHartreeFock!)
+    DiagTree.uidreset()
     diagparam = DiagParaF64(;
         type=GreenDiag,
         hasTau=true,
+        firstLoopIdx=2,
+        innerLoopNum=n_loop,
         firstTauIdx=2,
         totalTauNum=n_loop + 1,
-        innerLoopNum=n_loop,
         interaction=[FeynmanDiagram.Interaction(ChargeCharge, Instant)],  # Yukawa interaction
-        filter=filter,
+        filter=[NoHartree],
     )
 
     # Loop basis vector for external momentum
@@ -228,7 +228,7 @@ function main()
     end
 
     # Total loop order N
-    orders = [0, 2, 3]
+    orders = [1, 2, 3]
     max_order = maximum(orders)
     sort!(orders)
 
@@ -238,7 +238,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 5e9
+    neval = 1e6
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true

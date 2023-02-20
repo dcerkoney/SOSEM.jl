@@ -45,7 +45,6 @@ function counterterm_partitions(
     n_lowest::Int,
     renorm_mu=true,
     renorm_lambda=true,
-    isFock=false,
 )
     partitions = Vector{PartitionType}()
     if n_max < n_min
@@ -70,11 +69,7 @@ function counterterm_partitions(
     else
         partitions = [p for p in partition(n_max) if p[1] ≥ n_lowest && sum(p) ≥ n_min]
     end
-    if isFock
-        # Filter out Fock partitions
-        return [p for p in partitions if p[1] != 1]
-    end
-    return partitions
+    return partitions 
 end
 
 function counterterm_partitions(
@@ -82,7 +77,6 @@ function counterterm_partitions(
     n_lowest::Int,
     renorm_mu=true,
     renorm_lambda=true,
-    isFock=false,
 )
     n_min, n_max = minimum(orders), maximum(orders)
     return [
@@ -92,7 +86,6 @@ function counterterm_partitions(
             n_lowest,
             renorm_mu=renorm_mu,
             renorm_lambda=renorm_lambda,
-            isFock=isFock,
         ) if sum(p) in orders
     ]
 end
@@ -102,14 +95,13 @@ Get all (μ and/or λ) counterterm partitions (n1, n2, n3) satisfying the constr
 s.min_order ≤ n1 + n2 + n3 ≤ s.max_order for the given SOSEM measurement settings. 
 If `renorm_mu` is false, then n_ct_mu = 0. 
 """
-function counterterm_partitions(s::Settings; renorm_mu=true, renorm_lambda=true, isFock=false)
+function counterterm_partitions(s::Settings; renorm_mu=true, renorm_lambda=true)
     return counterterm_partitions(
         s.min_order,
         s.max_order;
         n_lowest=_get_lowest_loop_order(s.observable),  # Lowest loop order depends on the observable
         renorm_mu=renorm_mu,
         renorm_lambda=renorm_lambda,
-        isFock=isFock,
     )
 end
 
