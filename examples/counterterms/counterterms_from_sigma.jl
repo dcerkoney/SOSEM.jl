@@ -74,7 +74,7 @@ function main()
             para,
             diagram;
             neighbor=neighbor,
-            reweight_goal=reweight_goal[1:(length(partition) + 1)],
+        #    reweight_goal=reweight_goal[1:(length(partition) + 1)],
             kgrid=kgrid,
             ngrid=ngrid,
             neval=neval,
