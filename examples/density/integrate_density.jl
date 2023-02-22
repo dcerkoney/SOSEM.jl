@@ -73,7 +73,15 @@ function build_diagtree(; n_loop=0)
         interaction=[FeynmanDiagram.Interaction(ChargeCharge, Instant)],  # Yukawa interaction
         filter=[NoHartree],
     )
-
+    # # Instantaneous Green's function (occupation number) diagram parameters
+    # diagparam = DiagParaF64(;
+    #     type=GreenDiag,
+    #     innerLoopNum=n_loop,
+    #     firstTauIdx=2,
+    #     totalTauNum=n_loop + 1,
+    #     hasTau=true,
+    # )
+    
     # Loop basis vector for external momentum
     k = DiagTree.getK(diagparam.totalLoopNum, 1)
 
