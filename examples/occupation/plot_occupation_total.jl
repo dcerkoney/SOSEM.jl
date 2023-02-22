@@ -38,7 +38,7 @@ function main()
     min_order = 0
     max_order = 3
     min_order_plot = 0
-    max_order_plot = 2
+    max_order_plot = 3
 
     # Save total results
     save = true
@@ -98,8 +98,8 @@ function main()
         )
         push!(benchmark_dfs, DataFrame(data, vec(header)))
     end
-    bm_kgrid, bm_occupation_2, bm_occupation_2_err = eachcol(benchmark_dfs[1])
-    bm_kgrid, bm_occupation_3, bm_occupation_3_err = eachcol(benchmark_dfs[2])
+    bm_kgrid, bm_occupation_0, bm_occupation_0_err = eachcol(benchmark_dfs[1])
+    bm_kgrid, bm_occupation_2, bm_occupation_2_err = eachcol(benchmark_dfs[2])
     bm_k_kf_grid = bm_kgrid / param.kF
 
     # Get dimensionless k-grid (k / kF) and index corresponding to the Fermi energy
@@ -162,7 +162,7 @@ function main()
         println("Worst standard score for N=0 (measured): $worst_score")
         println("Scores:\n$stdscores")
         
-        bm_occupation_2_meas = measurement.(bm_occupation_2, bm_occupation_2_err)
+        bm_occupation_2_meas = measurement.(bm_occupation_0, bm_occupation_0_err)
         stdscores = stdscore.(bm_occupation_2_meas, bare_occupation_exact)
         worst_score = argmax(abs, stdscores)
         println("Worst standard score for N=0 (benchmark): $worst_score")
@@ -182,11 +182,10 @@ function main()
         min_order=0,
         max_order=max_order,
     )
-    occupation = UEG_MC.RenormMeasType()
-    occupation[0] = merged_data[(0, 0)]
-    occupation[2] = merged_data[(2, 0)] + δμ[2] * merged_data[(0, 1)]
-    occupation[3] = zero(occupation[2])
-
+    # occupation = UEG_MC.RenormMeasType()
+    # occupation[0] = merged_data[(0, 0)]
+    # occupation[2] = merged_data[(2, 0)] + δμ[2] * merged_data[(0, 1)]
+    # occupation[3] = zero(occupation[2])
     # occupation_2_manual = merged_data[(2, 0)] + δμ[2] * merged_data[(0, 1)]
     # scores = stdscore.(occupation[2] - occupation_2_manual, 0.0)
 
@@ -255,7 +254,7 @@ function main()
     bare_occupation_fine = -Spectral.kernelFermiT.(-1e-8, ϵk, param.β)
 
     # Get standard scores vs benchmark
-    stdscores = stdscore.(occupation_total[2], bm_occupation_3)
+    stdscores = stdscore.(occupation_total[2], bm_occupation_2)
     worst_score = argmax(abs, stdscores)
     println(stdscores)
     println("Worst standard score for N=2 (measured vs benchmark mean): $worst_score")
@@ -267,47 +266,48 @@ function main()
         # Include bare occupation fₖ in plot
         ax.plot(k_kf_grid_fine, bare_occupation_fine, "k"; label="\$N=0\$ (exact)")
     end
-    icolor = 0
+    ic = 1
+    colors = ["orchid", "cornflowerblue", "turquoise", "chartreuse"]
     for (i, N) in enumerate(min_order:max_order_plot)
         # N == 0 && continue
         isFock && N == 1 && continue
         # Plot benchmark data
-        if max_order_plot ≥ 0 && i == 1
-            ax.plot(
-                bm_k_kf_grid,
-                bm_occupation_2,
-                "o-";
-                markersize=2,
-                color="C$icolor",
-                label="\$N=0\$ (benchmark)",
-            )
-            ax.fill_between(
-                bm_k_kf_grid,
-                bm_occupation_2 - bm_occupation_2_err,
-                bm_occupation_2 + bm_occupation_2_err;
-                color="C$icolor",
-                alpha=0.4,
-            )
-            icolor += 1
-        end
-        if max_order_plot ≥ 2 && i == 3
-            ax.plot(
-                bm_k_kf_grid,
-                bm_occupation_3,
-                "o-";
-                markersize=2,
-                color="C$icolor",
-                label="\$N=2\$ (benchmark)",
-            )
-            ax.fill_between(
-                bm_k_kf_grid,
-                bm_occupation_3 - bm_occupation_3_err,
-                bm_occupation_3 + bm_occupation_3_err;
-                color="C$icolor",
-                alpha=0.4,
-            )
-            icolor += 1
-        end
+        # if max_order_plot ≥ 0 && i == 1
+        #     ax.plot(
+        #         bm_k_kf_grid,
+        #         bm_occupation_0,
+        #         "o-";
+        #         markersize=2,
+        #         color="C$ic",
+        #         label="\$N=0\$ (benchmark)",
+        #     )
+        #     ax.fill_between(
+        #         bm_k_kf_grid,
+        #         bm_occupation_0 - bm_occupation_0_err,
+        #         bm_occupation_0 + bm_occupation_0_err;
+        #         color="C$ic",
+        #         alpha=0.4,
+        #     )
+        #     ic += 1
+        # end
+        # if max_order_plot ≥ 2 && i == 3
+        #     ax.plot(
+        #         bm_k_kf_grid,
+        #         bm_occupation_2,
+        #         "o-";
+        #         markersize=2,
+        #         color="C$ic",
+        #         label="\$N=2\$ (benchmark)",
+        #     )
+        #     ax.fill_between(
+        #         bm_k_kf_grid,
+        #         bm_occupation_2 - bm_occupation_2_err,
+        #         bm_occupation_2 + bm_occupation_2_err;
+        #         color="C$ic",
+        #         alpha=0.4,
+        #     )
+        #     ic += 1
+        # end
         # Plot measured data
         means = Measurements.value.(occupation_total[N])
         stdevs = Measurements.uncertainty.(occupation_total[N])
@@ -317,30 +317,32 @@ function main()
             means,
             marker;
             markersize=2,
-            color="C$icolor",
+            # color="C$ic",
+            color="$(colors[ic])",
             label="\$N=$N\$ ($solver)",
         )
         ax.fill_between(
             k_kf_grid,
             means - stdevs,
             means + stdevs;
-            color="C$icolor",
+            # color="C$ic",
+            color="$(colors[ic])",
             alpha=0.4,
         )
-        icolor += 1
+        ic += 1
     end
     ax.legend(; loc="upper right")
     # ax.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
     ax.set_xlim(0.75, 1.25)
     # ax.set_ylim(nothing, 2)
     ax.set_xlabel("\$k / k_F\$")
-    ax.set_ylabel("\$n^{\\mathrm{F}}_{k\\sigma}\$")
-    xloc = 1.025
+    ax.set_ylabel("\$n^{\\mathrm{F}}_{k\\sigma}(\\lambda)\$")
+    xloc = 1.035
     # xloc = 1.5
     # yloc = 0.4
     # ydiv = -0.1
     yloc = 0.6
-    ydiv = -0.15
+    ydiv = -0.125
     ax.text(
         xloc,
         yloc,
