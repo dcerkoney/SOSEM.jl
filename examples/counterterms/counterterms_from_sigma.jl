@@ -43,7 +43,7 @@ function main()
     renorm_lambda = false
 
     # Remove Fock insertions?
-    isFock = true
+    isFock = false
 
     # Distinguish results with different counterterm schemes
     ct_string = (renorm_mu || renorm_lambda) ? "with_ct" : ""
