@@ -35,7 +35,7 @@ function main()
     neval = 5e9
 
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
-    min_order = 1
+    min_order = 0
     max_order = 3
     min_order_plot = 0
     max_order_plot = 2
@@ -104,7 +104,6 @@ function main()
 
     # Get dimensionless k-grid (k / kF) and index corresponding to the Fermi energy
     k_kf_grid = kgrid / param.kF
-    println(k_kf_grid - bm_k_kf_grid)
 
     # Convert results to a Dict of measurements at each order with interaction counterterms merged
     data = UEG_MC.restodict(res, partitions)
@@ -129,22 +128,19 @@ function main()
     end
 
     merged_data = CounterTerm.mergeInteraction(data)
-    println([k for (k, _) in merged_data])
-    println("data:\n$data")
-    println("merged_data:\n$merged_data")
 
     # # TODO: Fix factor of β by removing extra τ integration
     for k in keys(merged_data)
         sum(k) == 0 && continue
         # merged_data[k] *= 1
         # merged_data[k] *= -1
-        # merged_data[k] *= 1 / param.β
+        # merged_data[k] *= 1 / param.β^2
         # merged_data[k] *= -1 / param.β
         # merged_data[k] *= 1 / param.β^2
         # merged_data[k] *= -1 / param.β^2
         # merged_data[k] *= 1 / param.β^sum(k)
     end
-
+    
     # Get exact bare/Fock occupation
     if param.isFock
         fock =
@@ -163,7 +159,14 @@ function main()
     elseif min_order_plot == 0 && min_order == 0
         stdscores = stdscore.(merged_data[(0, 0)], bare_occupation_exact)
         worst_score = argmax(abs, stdscores)
-        println("Worst standard score for Fock occupation: $worst_score")
+        println("Worst standard score for N=0 (measured): $worst_score")
+        println("Scores:\n$stdscores")
+        
+        bm_occupation_2_meas = measurement.(bm_occupation_2, bm_occupation_2_err)
+        stdscores = stdscore.(bm_occupation_2_meas, bare_occupation_exact)
+        worst_score = argmax(abs, stdscores)
+        println("Worst standard score for N=0 (benchmark): $worst_score")
+        println("Scores:\n$stdscores")
         @assert worst_score ≤ 10
     end
 
@@ -179,6 +182,14 @@ function main()
         min_order=0,
         max_order=max_order,
     )
+    occupation = UEG_MC.RenormMeasType()
+    occupation[0] = merged_data[(0, 0)]
+    occupation[2] = merged_data[(2, 0)] + δμ[2] * merged_data[(0, 1)]
+    occupation[3] = zero(occupation[2])
+
+    # occupation_2_manual = merged_data[(2, 0)] + δμ[2] * merged_data[(0, 1)]
+    # scores = stdscore.(occupation[2] - occupation_2_manual, 0.0)
+
     if max_order ≥ 1 && renorm_mu == true && isFock == false
         # Test manual renormalization with exact lowest-order chemical potential
         δμ1_exact = UEG_MC.delta_mu1(param)  # = ReΣ₁[λ](kF, 0)
@@ -197,6 +208,7 @@ function main()
     # Aggregate the full results for Σₓ up to order N
     occupation_total = UEG_MC.aggregate_orders(occupation)
 
+    println(collect(keys(occupation_total)))
     println(UEG.paraid(param))
     println(partitions)
     println(res)
@@ -243,7 +255,7 @@ function main()
     bare_occupation_fine = -Spectral.kernelFermiT.(-1e-8, ϵk, param.β)
 
     # Get standard scores vs benchmark
-    stdscores = stdscore.(occupation_total[2], bm_occupation_2)
+    stdscores = stdscore.(occupation_total[2], bm_occupation_3)
     worst_score = argmax(abs, stdscores)
     println(stdscores)
     println("Worst standard score for N=2 (measured vs benchmark mean): $worst_score")
@@ -255,45 +267,48 @@ function main()
         # Include bare occupation fₖ in plot
         ax.plot(k_kf_grid_fine, bare_occupation_fine, "k"; label="\$N=0\$ (exact)")
     end
-    # Plot benchmark data
-    if max_order_plot ≥ 2
-        ax.plot(
-            bm_k_kf_grid,
-            bm_occupation_2,
-            "o-";
-            markersize=2,
-            color="orchid",
-            label="\$N=2\$ (benchmark)",
-        )
-        ax.fill_between(
-            bm_k_kf_grid,
-            bm_occupation_2 - bm_occupation_2_err,
-            bm_occupation_2 + bm_occupation_2_err;
-            color="orchid",
-            alpha=0.4,
-        )
-    end
-    if max_order_plot ≥ 3
-        ax.plot(
-            bm_k_kf_grid,
-            bm_occupation_3,
-            "o-";
-            markersize=2,
-            color="cyan",
-            label="\$N=3\$ (benchmark)",
-        )
-        ax.fill_between(
-            bm_k_kf_grid,
-            bm_occupation_3 - bm_occupation_3_err,
-            bm_occupation_3 + bm_occupation_3_err;
-            color="cyan",
-            alpha=0.4,
-        )
-    end
+    icolor = 0
     for (i, N) in enumerate(min_order:max_order_plot)
-        N == 0 && continue
+        # N == 0 && continue
         isFock && N == 1 && continue
-        # Get means and error bars from the result up to this order
+        # Plot benchmark data
+        if max_order_plot ≥ 0 && i == 1
+            ax.plot(
+                bm_k_kf_grid,
+                bm_occupation_2,
+                "o-";
+                markersize=2,
+                color="C$icolor",
+                label="\$N=0\$ (benchmark)",
+            )
+            ax.fill_between(
+                bm_k_kf_grid,
+                bm_occupation_2 - bm_occupation_2_err,
+                bm_occupation_2 + bm_occupation_2_err;
+                color="C$icolor",
+                alpha=0.4,
+            )
+            icolor += 1
+        end
+        if max_order_plot ≥ 2 && i == 3
+            ax.plot(
+                bm_k_kf_grid,
+                bm_occupation_3,
+                "o-";
+                markersize=2,
+                color="C$icolor",
+                label="\$N=2\$ (benchmark)",
+            )
+            ax.fill_between(
+                bm_k_kf_grid,
+                bm_occupation_3 - bm_occupation_3_err,
+                bm_occupation_3 + bm_occupation_3_err;
+                color="C$icolor",
+                alpha=0.4,
+            )
+            icolor += 1
+        end
+        # Plot measured data
         means = Measurements.value.(occupation_total[N])
         stdevs = Measurements.uncertainty.(occupation_total[N])
         marker = "o-"
@@ -302,25 +317,24 @@ function main()
             means,
             marker;
             markersize=2,
-            color="C$(i-1)",
+            color="C$icolor",
             label="\$N=$N\$ ($solver)",
-            zorder=10 + i,
         )
         ax.fill_between(
             k_kf_grid,
             means - stdevs,
             means + stdevs;
-            color="C$(i-1)",
+            color="C$icolor",
             alpha=0.4,
-            zorder=10 + i,
         )
+        icolor += 1
     end
     ax.legend(; loc="upper right")
     # ax.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
     ax.set_xlim(0.75, 1.25)
     # ax.set_ylim(nothing, 2)
     ax.set_xlabel("\$k / k_F\$")
-    ax.set_ylabel("\$n_{k\\sigma}\$")
+    ax.set_ylabel("\$n^{\\mathrm{F}}_{k\\sigma}\$")
     xloc = 1.025
     # xloc = 1.5
     # yloc = 0.4
