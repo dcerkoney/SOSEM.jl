@@ -44,6 +44,19 @@ function main()
     # Number of evals
     neval = 1e7
 
+    # Enable/disable interaction and chemical potential counterterms
+    renorm_mu = true
+    renorm_lambda = false
+
+    # Distinguish results with different counterterm schemes
+    ct_string = (renorm_mu || renorm_lambda) ? "with_ct" : ""
+    if renorm_mu
+        ct_string *= "_mu"
+    end
+    if renorm_lambda
+        ct_string *= "_lambda"
+    end
+
     # # UEG parameters
     # max_order = 3
     # loadparam = ParaMC(; order=max_order, rs=rs, beta=beta, mass2=mass2, isDynamic=false)
@@ -59,7 +72,8 @@ function main()
 
     res_list = Result[]
     local param, kgrid
-    loadparam = ParaMC(; order=2, rs=rs, beta=beta, mass2=mass2, isDynamic=false)
+    loadparam =
+        ParaMC(; order=2, rs=rs, beta=beta, mass2=mass2, isDynamic=false, isFock=false)
     for i in 1:3
         savename = "results/data/occupation_N=2_fock_term_$(i)_neval=$(neval)"
         param, kgrid, res = jldopen("$savename.jld2", "a+") do f
@@ -84,9 +98,10 @@ function main()
     #     data[P] *= (-1)^(maximum(P) - 1)
     # end
 
-    # Reexpand merged data in powers of μ
-    z, μ = UEG_MC.load_z_mu(param)
-    δz, δμ = CounterTerm.sigmaCT(2, μ, z; verbose=1)
+    # Reexpand merged data in powers of 
+    ct_filename = "examples/counterterms/data_Z_$(ct_string).jld2"
+    z, μ = UEG_MC.load_z_mu(param; ct_filename=ct_filename)
+    δz, δμ = CounterTerm.sigmaCT(2, μ, z; isfock=false, verbose=1)
     # Test manual renormalization with exact lowest-order chemical potential
     δμ1 = UEG_MC.delta_mu1(param)  # = ReΣ₁[λ](kF, 0)
 
@@ -127,7 +142,7 @@ function main()
     # δn^{(2)}_F(kσ) = f''(ϵₖ) (Σ^λ_F(k) - Σ^λ_F(k_F))^2 = f''(ϵₖ) (Σ^λ_F(k) + δμ₁)^2
     sigma_lambda_F_fine = sigma_lambda_fock_exact.(kgrid_fine, [param])
     dn1F_exact_fine = @. fpe_fine * (sigma_lambda_F_fine - δμ1)
-    dn2F_exact_fine = @. -fppe_fine * (δμ1^2 / 2 + (sigma_lambda_F_fine + δμ1)^2 / 2)
+    dn2F_exact_fine = @. fppe_fine * (δμ1^2 / 2 + (sigma_lambda_F_fine - δμ1)^2 / 2)
 
     @assert δμ1 ≈ sigma_lambda_fock_exact(param.kF, param)
 
@@ -148,40 +163,95 @@ function main()
     println(ratio)
     println(max_ratio)
 
-    term1_exact_fine = @. -fppe_fine * sigma_lambda_F_fine^2 / 2
+    term1_exact_fine = @. fppe_fine * sigma_lambda_F_fine^2 / 2
     term2_exact_fine = @. -fppe_fine * sigma_lambda_F_fine
-    term3_exact_fine = -fppe_fine
-    dn2F_exact_fine_v2 =
-        term1_exact_fine + term2_exact_fine * δμ1 + term3_exact_fine * δμ1^2
+    term3_exact_fine = fppe_fine
+    dn2F_exact_fine = term1_exact_fine + term2_exact_fine * δμ1 + term3_exact_fine * δμ1^2
 
     # Plot each term in the 2nd order Fock series benchmark
     fig, ax = plt.subplots()
+    # Compare to automatically calculated results
+    rs = 1.0
+    beta = 40.0
+    mass2 = 1.0
+    solver = :vegasmc
+    # Number of evals
+    neval = 1e9
+    # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
+    min_order = 0
+    max_order = 3
+    min_order_plot = 0
+    max_order_plot = 3
+    # Enable/disable interaction and chemical potential counterterms
+    renorm_mu = true
+    renorm_lambda = false
+    # Remove Fock insertions?
+    isFock = false
+    # Distinguish results with different counterterm schemes
+    ct_string = (renorm_mu || renorm_lambda) ? "with_ct" : ""
+    if renorm_mu
+        ct_string *= "_mu"
+    end
+    if renorm_lambda
+        ct_string *= "_lambda"
+    end
+    if isFock
+        ct_string *= "_noFock"
+    end
+    # UEG parameters for MC integration
+    loadparam = ParaMC(;
+        order=max_order,
+        rs=rs,
+        beta=beta,
+        mass2=mass2,
+        isDynamic=false,
+        isFock=isFock,
+    )
+    # Load the raw data
+    savename =
+        "results/data/occupation_n=$(max_order)_rs=$(rs)_beta_ef=$(beta)_" *
+        "lambda=$(mass2)_neval=$(neval)_$(solver)_$(ct_string)"
+    orders, param, kgrid, partitions, res = jldopen("$savename.jld2", "a+") do f
+        key = "$(UEG.short(loadparam))"
+        return f[key]
+    end
+    # Convert results to a Dict of measurements at each order with interaction counterterms merged
+    data_auto = UEG_MC.restodict(res, partitions)
+    # Mean and error bars for the computed results
+    dn2F_calc_auto =
+        data_auto[(2, 0, 0)] + δμ[1] * data_auto[(1, 1, 0)] + δμ[1]^2 * data_auto[(0, 2, 0)]
+    dn2F_calc_auto_exact_mu =
+        data_auto[(2, 0, 0)] + δμ1 * data_auto[(1, 1, 0)] + δμ1^2 * data_auto[(0, 2, 0)]
+    dn2F_means_auto = Measurements.value.(dn2F_calc_auto)
+    dn2F_stdevs_auto = Measurements.uncertainty.(dn2F_calc_auto)
+    dn2F_means_exact_mu_auto = Measurements.value.(dn2F_calc_auto_exact_mu)
+    dn2F_stdevs_exact_mu_auto = Measurements.uncertainty.(dn2F_calc_auto_exact_mu)
     for (i, (P,)) in enumerate(partitions_list)
         # Get means and error bars from the result up to this order
-        means = Measurements.value.(data[P])
-        stdevs = Measurements.uncertainty.(data[P])
-        marker = "o"
+        means = Measurements.value.(data_auto[P])
+        stdevs = Measurements.uncertainty.(data_auto[P])
+        marker = "o-"
         ax.plot(
             k_kf_grid,
             means,
             marker;
             markersize=3,
-            color="C$(i-1)",
-            label="\$i=$i \\in $P\$ ($solver)",
+            color="C$(i+2)",
+            label="\$\\mathcal{P} = $P\$ ($solver, auto)",
         )
-        # ax.fill_between(
-        #     k_kf_grid,
-        #     means - stdevs,
-        #     means + stdevs;
-        #     color="C$(i-1)",
-        #     alpha=0.4,
-        # )
+        ax.fill_between(
+            k_kf_grid,
+            means - stdevs,
+            means + stdevs;
+            color="C$(i+2)",
+            alpha=0.4,
+        )
     end
     ax.plot(
         k_kf_grid_fine,
         term1_exact_fine,
         "-";
-        label="\$-\\frac{1}{2} f^{\\prime\\prime}(\\xi_k) \\left(\\Sigma^\\lambda_F(k)\\right)^2\$ (exact)",
+        label="\$\\frac{1}{2} f^{\\prime\\prime}(\\xi_k) \\left(\\Sigma^\\lambda_F(k)\\right)^2\$ (exact)",
     )
     ax.plot(
         k_kf_grid_fine,
@@ -193,16 +263,40 @@ function main()
         k_kf_grid_fine,
         term3_exact_fine,
         "-";
-        label="\$-f^{\\prime\\prime}(\\xi_k)\$ (exact)",
+        label="\$f^{\\prime\\prime}(\\xi_k)\$ (exact)",
     )
-    ax.legend(; loc="best")
+    # Results with manual diagram generation
+    for (i, (P,)) in enumerate(partitions_list)
+        # Get means and error bars from the result up to this order
+        means = Measurements.value.(data[P])
+        stdevs = Measurements.uncertainty.(data[P])
+        marker = "o"
+        ax.plot(
+            k_kf_grid,
+            means,
+            marker;
+            markersize=3,
+            color="C$(i-1)",
+            label="\$i=$i \\in $P\$ ($solver, manual)",
+        )
+        # ax.fill_between(
+        #     k_kf_grid,
+        #     means - stdevs,
+        #     means + stdevs;
+        #     color="C$(i-1)",
+        #     alpha=0.4,
+        # )
+    end
+    ax.legend(; loc="upper left")
+    ax.set_ylim(nothing, 20)
     ax.set_xlim(0.75, 1.25)
+    # ax.set_xlim(0.25, 1.75)
     # ax.set_ylim(-27, 27)
     ax.set_xlabel("\$k / k_F\$")
-    ax.set_ylabel("\$\\delta n^{(2)i}_{F}({k,\\sigma})\$")
+    ax.set_ylabel("\$\\delta n^{(2)}_{i/\\mathcal{P}}({k\\sigma})\$")
     xloc = 1.025
     yloc = -5
-    ydiv = -2.5
+    ydiv = -4
     ax.text(
         xloc,
         yloc,
@@ -224,11 +318,32 @@ function main()
     # Plot the Fock series contribution to the second-order occupation shift
     fig, ax = plt.subplots()
     ax.axvline(1.0; linestyle="--", linewidth=1, color="gray")
+    # Full result from automatic diagram generation
+    ax.plot(
+        k_kf_grid,
+        # dn2F_means,
+        dn2F_means_exact_mu_auto,
+        "o-";
+        markersize=3,
+        color="C0",
+        label="\$\\delta n^{(2)}_{(2,0,0)} + \\delta n^{(2)}_{(1,1,0)} + \\delta n^{(2)}_{(0,2,0)}\$ ($solver, auto)",
+    )
+    # Result from manual diagram generation
+    marker = "o"
+    ax.plot(
+        k_kf_grid,
+        # dn2F_means,
+        dn2F_means_exact_mu,
+        marker;
+        markersize=3,
+        color="C1",
+        label="\$\\delta n^{(2)}_{i=1} + \\delta n^{(2)}_{i=2} + \\delta n^{(2)}_{i=3}\$ ($solver, manual)",
+    )
     # Exact result
     ax.plot(
         k_kf_grid_fine,
         dn2F_exact_fine,
-        "k";
+        "C1";
         label="\$f^{\\prime\\prime}(\\xi_k) \\left[\\frac{1}{2}\\left(\\Sigma^\\lambda_F(k_F)\\right)^2  + \\frac{1}{2}\\left(\\Sigma^\\lambda_F(k) - \\Sigma^\\lambda_F(k_F)\\right)^2\\right]\$ (exact)",
     )
     # ax.plot(
@@ -237,17 +352,7 @@ function main()
     #     "k";
     #     label="exact",
     # )
-    # Plot mean and error bar for the computed result
-    marker = "o"
-    ax.plot(
-        k_kf_grid,
-        # dn2F_means,
-        dn2F_means_exact_mu,
-        marker;
-        markersize=3,
-        color="k",
-        label="$solver",
-    )
+
     # ax.fill_between(
     #     k_kf_grid,
     #     # dn2F_means - dn2F_stdevs,
@@ -257,11 +362,11 @@ function main()
     #     color="r",
     #     alpha=0.4,
     # )
-    ax.legend(; loc="best", framealpha=1)
+    ax.legend(; loc="upper left", framealpha=1)
     ax.set_xlim(0.75, 1.25)
-    # ax.set_ylim(-3.5, 3.5)
+    ax.set_ylim(nothing, 4)
     ax.set_xlabel("\$k / k_F\$")
-    ax.set_ylabel("\$\\delta n^{(2)}_F({k,\\sigma})\$")
+    ax.set_ylabel("\$\\delta n^{(2)}({k\\sigma})\$")
     xloc = 1.025
     yloc = -1
     ydiv = -0.75

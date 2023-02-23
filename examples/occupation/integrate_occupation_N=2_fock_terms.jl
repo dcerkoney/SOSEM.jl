@@ -286,31 +286,37 @@ function main()
     param = ParaMC(; order=2, rs=1.0, beta=40.0, mass2=1.0, isDynamic=false)
     @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)"
 
-    # K-mesh for measurement
-    minK = 0.05 * param.kF
-    Nk, korder = 4, 5
-    kleft =
-        CompositeGrid.LogDensedGrid(
-            :uniform,
-            [0.75 * param.kF, param.kF - 1e-8],
-            [param.kF - 1e-8],
-            Nk,
-            minK,
-            korder,
-        ).grid
-    kright =
-        CompositeGrid.LogDensedGrid(
-            :uniform,
-            [param.kF + 1e-8, 1.25 * param.kF],
-            [param.kF + 1e-8],
-            Nk,
-            minK,
-            korder,
-        ).grid
-    kgrid = [kleft; kright]
+    # Dimensionless k-mesh for measurement
+    k_kf_grid = CompositeGrid.LogDensedGrid(:cheb, [0.0, 3.0], [1.0], 5, 0.02, 5)
+
+    # Dimensionful k-grid
+    kgrid = k_kf_grid * param.kF
+
+    # # K-mesh for measurement
+    # minK = 0.05 * param.kF
+    # Nk, korder = 4, 5
+    # kleft =
+    #     CompositeGrid.LogDensedGrid(
+    #         :uniform,
+    #         [0.75 * param.kF, param.kF - 1e-8],
+    #         [param.kF - 1e-8],
+    #         Nk,
+    #         minK,
+    #         korder,
+    #     ).grid
+    # kright =
+    #     CompositeGrid.LogDensedGrid(
+    #         :uniform,
+    #         [param.kF + 1e-8, 1.25 * param.kF],
+    #         [param.kF + 1e-8],
+    #         Nk,
+    #         minK,
+    #         korder,
+    #     ).grid
+    # kgrid = [kleft; kright]
 
     # Dimensionless k-grid
-    k_kf_grid = kgrid / param.kF
+    # k_kf_grid = kgrid / param.kF
 
     # Settings
     alpha = 3.0

@@ -56,6 +56,12 @@ function main()
     # Remove Fock insertions?
     isFock = true
 
+    # Plot benchmark results?
+    benchmark = false
+
+    fix_mu = false
+    mu_string = fix_mu ? "_fixed_mu" : ""
+
     # Distinguish results with different counterterm schemes
     ct_string = (renorm_mu || renorm_lambda) ? "with_ct" : ""
     if renorm_mu
@@ -108,17 +114,22 @@ function main()
     # Convert results to a Dict of measurements at each order with interaction counterterms merged
     data = UEG_MC.restodict(res, partitions)
 
+    # Zero out partitions with mu renorm if present (fix mu)
+    if fix_mu
+        for P in keys(data)
+            if P[2] > 0
+                println("Fixing mu, ignoring partition $P")
+                data[P] = zero(data[P])
+            end
+        end
+    end
+
+    # TODO: Fix minus sign bug in integration scripts, (-1) → (-1)^(n_g)
+    #       Here, we add back in the missing factor (-1)^(n_g - 1) in post-processing,
+    #       where n_g = 2 * n_loop + n_μ + 1 for a given partition P = (n_loop, n_μ, n_λ)
     # for P in keys(data)
-    #     maxP = maximum(P)
-    #     if maxP > 0
-    #         data[P] *= (-1)^(maxP - 1)
-    #     end
-    #     if renorm_mu == false && P[2] > 0
-    #         data[P] = zero(data[P])
-    #     end
-    #     if renorm_lambda == false && P[3] > 0
-    #         data[P] = zero(data[P])
-    #     end
+        # n_g = 2P[1] + P[2] + 1
+        # data[P] = (-1)^(n_g - 1) * data[P]
     # end
 
     # Zero out double-counted (Fock renormalized) partitions
@@ -129,18 +140,6 @@ function main()
 
     merged_data = CounterTerm.mergeInteraction(data)
 
-    # # TODO: Fix factor of β by removing extra τ integration
-    for k in keys(merged_data)
-        sum(k) == 0 && continue
-        # merged_data[k] *= 1
-        # merged_data[k] *= -1
-        # merged_data[k] *= 1 / param.β^2
-        # merged_data[k] *= -1 / param.β
-        # merged_data[k] *= 1 / param.β^2
-        # merged_data[k] *= -1 / param.β^2
-        # merged_data[k] *= 1 / param.β^sum(k)
-    end
-    
     # Get exact bare/Fock occupation
     if param.isFock
         fock =
@@ -160,14 +159,15 @@ function main()
         stdscores = stdscore.(merged_data[(0, 0)], bare_occupation_exact)
         worst_score = argmax(abs, stdscores)
         println("Worst standard score for N=0 (measured): $worst_score")
-        println("Scores:\n$stdscores")
-        
-        bm_occupation_2_meas = measurement.(bm_occupation_0, bm_occupation_0_err)
-        stdscores = stdscore.(bm_occupation_2_meas, bare_occupation_exact)
-        worst_score = argmax(abs, stdscores)
-        println("Worst standard score for N=0 (benchmark): $worst_score")
-        println("Scores:\n$stdscores")
-        @assert worst_score ≤ 10
+        # println("Scores:\n$stdscores")
+        if isFock
+            bm_occupation_2_meas = measurement.(bm_occupation_0, bm_occupation_0_err)
+            stdscores = stdscore.(bm_occupation_2_meas, bare_occupation_exact)
+            worst_score = argmax(abs, stdscores)
+            println("Worst standard score for N=0 (benchmark): $worst_score")
+            # println("Scores:\n$stdscores")
+            @assert worst_score ≤ 10
+        end
     end
 
     # Reexpand merged data in powers of μ
@@ -186,10 +186,17 @@ function main()
     # occupation[0] = merged_data[(0, 0)]
     # occupation[2] = merged_data[(2, 0)] + δμ[2] * merged_data[(0, 1)]
     # occupation[3] = zero(occupation[2])
-    # occupation_2_manual = merged_data[(2, 0)] + δμ[2] * merged_data[(0, 1)]
-    # scores = stdscore.(occupation[2] - occupation_2_manual, 0.0)
+    occupation_2_manual =
+        merged_data[(2, 0)] +
+        δμ[1] * merged_data[(1, 1)] +
+        δμ[1]^2 * merged_data[(0, 2)] +
+        δμ[2] * merged_data[(0, 1)]
+    scores_2 = stdscore.(occupation[2] - occupation_2_manual, 0.0)
+    println("Deviation: ", occupation[2] - occupation_2_manual)
+    worst_score_2 = argmax(abs, scores_2)
+    println("2nd order renorm vs manual worst score: $worst_score_2")
 
-    if max_order ≥ 1 && renorm_mu == true && isFock == false
+    if max_order ≥ 1 && renorm_mu == true && isFock == false && fix_mu == false
         # Test manual renormalization with exact lowest-order chemical potential
         δμ1_exact = UEG_MC.delta_mu1(param)  # = ReΣ₁[λ](kF, 0)
         # nₖ⁽¹⁾ = nₖ_{1,0} + δμ₁ nₖ_{0,1}
@@ -207,7 +214,24 @@ function main()
     # Aggregate the full results for Σₓ up to order N
     occupation_total = UEG_MC.aggregate_orders(occupation)
 
-    println(collect(keys(occupation_total)))
+    # occupation = Dict()
+    # for (k, v) in merged_data
+    #     if k[2] > 0
+    #         println("Skipping partition $k with mu CTs")
+    #         continue
+    #     end
+    #     println("md key: $k => $(sum(k))")
+    #     occupation[sum(k)] = v
+    # end
+    # println(collect(keys(occupation)))
+
+    # occupation_total = Dict()
+    # occupation_total[0] = occupation[0]
+    # occupation_total[1] = occupation_total[0] + occupation[1]
+    # occupation_total[2] = occupation_total[1] + occupation[2]
+    # occupation_total[3] = occupation_total[2] + occupation[3]
+    # println(collect(keys(occupation_total)))
+
     println(UEG.paraid(param))
     println(partitions)
     println(res)
@@ -240,6 +264,82 @@ function main()
     plt.rc("text"; usetex=true)
     plt.rc("font"; family="serif")
 
+    # Bare occupation fₖ on dense grid for plotting
+    kgrid_fine = param.kF * LinRange(0.75, 1.25, 500)
+    k_kf_grid_fine = LinRange(0.75, 1.25, 500)
+    ϵk_fine = @. kgrid_fine^2 / (2 * param.me) - param.μ
+    fe_fine = -Spectral.kernelFermiT.(-1e-8, ϵk_fine, param.β)
+    # First derivative of the Fermi function f'(ϵₖ)
+    fpe_fine = -Spectral.kernelFermiT_dω.(-1e-8, ϵk_fine, param.β)
+    fpe_fine_exact = @. param.β * fe_fine * (fe_fine - 1)
+    fppe_fine_exact =
+        @. (param.β^2 / 4) * sech(param.β * ϵk_fine / 2)^2 * tanh.(param.β * ϵk_fine / 2)
+
+    # Fermi function
+    fe_fine = -Spectral.kernelFermiT.(-1e-8, ϵk_fine, param.β)
+    # First derivative of the Fermi function f'(ϵₖ)
+    fpe_fine = -Spectral.kernelFermiT_dω.(-1e-8, ϵk_fine, param.β)
+    # Second derivative of the Fermi function f''(ϵₖ)
+    fppe_fine = -Spectral.kernelFermiT_dω2.(-1e-8, ϵk_fine, param.β)
+    # Third derivative of the Fermi function f'''(ϵₖ)
+    fpppe_fine = -Spectral.kernelFermiT_dω3.(-1e-8, ϵk_fine, param.β)
+
+    fig, ax = plt.subplots()
+    # ax.axhline(0.0; linewidth=1, color="k")
+    fpnes = [fpe_fine, fppe_fine, fpppe_fine]
+    colors = ["sienna", "darkgreen", "darkred"]
+    signs = [-1.0, 1.0, -1.0]
+    signstrs = ["(-1) \\times", "", "(-1) \\times"]
+    for N in 1:3
+        ax.plot(
+            k_kf_grid_fine,
+            fpnes[N],
+            "-";
+            color="$(colors[N])",
+            label="\$f$(repeat("'", N))(\\xi_k)\$",
+        )
+        # if N == 1
+        #     ax.plot(
+        #         k_kf_grid_fine,
+        #         fpe_fine_exact,
+        #         "--";
+        #         color="k",
+        #         label="\$f'(\\xi_k)\$ (exact)",
+        #     )
+        # elseif N == 2
+        #     ax.plot(
+        #         k_kf_grid_fine,
+        #         fppe_fine_exact,
+        #         "--";
+        #         color="gray",
+        #         label="\$f''(\\xi_k)\$ (exact)",
+        #     )
+        # end
+        means = Measurements.value.(data[(0, N, 0)])
+        stdevs = Measurements.uncertainty.(data[(0, N, 0)])
+        ax.plot(
+            k_kf_grid,
+            signs[N] * means,
+            "o-";
+            markersize=2,
+            color="C$N",
+            label="\$$(signstrs[N])(0, $N, 0)\$ ($solver)",
+        )
+        ax.fill_between(
+            k_kf_grid,
+            signs[N] * (means - stdevs),
+            signs[N] * (means + stdevs);
+            color="C$N",
+            alpha=0.4,
+        )
+    end
+    ax.set_xlabel("\$k / k_F\$")
+    ax.set_xlim(0.75, 1.25)
+    # ax.set_ylim(nothing, 4)
+    ax.legend(; loc="best")
+    fig.tight_layout()
+    fig.savefig("results/occupation/green_derivatives.pdf")
+
     # Bare/Fock occupation on dense grid for plotting
     kgrid_fine = param.kF * np.linspace(0.0, 3.0; num=600)
     k_kf_grid_fine = np.linspace(0.0, 3.0; num=600)
@@ -267,47 +367,48 @@ function main()
         ax.plot(k_kf_grid_fine, bare_occupation_fine, "k"; label="\$N=0\$ (exact)")
     end
     ic = 1
+    # colors = ["C0", "C1", "C2", "C3"]
     colors = ["orchid", "cornflowerblue", "turquoise", "chartreuse"]
     for (i, N) in enumerate(min_order:max_order_plot)
         # N == 0 && continue
         isFock && N == 1 && continue
         # Plot benchmark data
-        # if max_order_plot ≥ 0 && i == 1
-        #     ax.plot(
-        #         bm_k_kf_grid,
-        #         bm_occupation_0,
-        #         "o-";
-        #         markersize=2,
-        #         color="C$ic",
-        #         label="\$N=0\$ (benchmark)",
-        #     )
-        #     ax.fill_between(
-        #         bm_k_kf_grid,
-        #         bm_occupation_0 - bm_occupation_0_err,
-        #         bm_occupation_0 + bm_occupation_0_err;
-        #         color="C$ic",
-        #         alpha=0.4,
-        #     )
-        #     ic += 1
-        # end
-        # if max_order_plot ≥ 2 && i == 3
-        #     ax.plot(
-        #         bm_k_kf_grid,
-        #         bm_occupation_2,
-        #         "o-";
-        #         markersize=2,
-        #         color="C$ic",
-        #         label="\$N=2\$ (benchmark)",
-        #     )
-        #     ax.fill_between(
-        #         bm_k_kf_grid,
-        #         bm_occupation_2 - bm_occupation_2_err,
-        #         bm_occupation_2 + bm_occupation_2_err;
-        #         color="C$ic",
-        #         alpha=0.4,
-        #     )
-        #     ic += 1
-        # end
+        if benchmark && isFock && max_order_plot ≥ 0 && i == 1
+            ax.plot(
+                bm_k_kf_grid,
+                bm_occupation_0,
+                "--";
+                markersize=2,
+                color="C$ic",
+                label="\$N=0\$ (benchmark)",
+            )
+            ax.fill_between(
+                bm_k_kf_grid,
+                bm_occupation_0 - bm_occupation_0_err,
+                bm_occupation_0 + bm_occupation_0_err;
+                color="C$ic",
+                alpha=0.4,
+            )
+            ic += 1
+        end
+        if benchmark && isFock && max_order_plot ≥ 2 && i == 3
+            ax.plot(
+                bm_k_kf_grid,
+                bm_occupation_2,
+                "--";
+                markersize=2,
+                color="C$ic",
+                label="\$N=2\$ (benchmark)",
+            )
+            ax.fill_between(
+                bm_k_kf_grid,
+                bm_occupation_2 - bm_occupation_2_err,
+                bm_occupation_2 + bm_occupation_2_err;
+                color="C$ic",
+                alpha=0.4,
+            )
+            ic += 1
+        end
         # Plot measured data
         means = Measurements.value.(occupation_total[N])
         stdevs = Measurements.uncertainty.(occupation_total[N])
@@ -336,13 +437,30 @@ function main()
     ax.set_xlim(0.75, 1.25)
     # ax.set_ylim(nothing, 2)
     ax.set_xlabel("\$k / k_F\$")
-    ax.set_ylabel("\$n^{\\mathrm{F}}_{k\\sigma}(\\lambda)\$")
-    xloc = 1.035
-    # xloc = 1.5
-    # yloc = 0.4
-    # ydiv = -0.1
-    yloc = 0.6
-    ydiv = -0.125
+    if isFock
+        prefix = "n^{\\mathrm{F}}_{k\\sigma}"
+    else
+        prefix = "n_{k\\sigma}"
+    end
+    if renorm_lambda == false && fix_mu == true
+        suffix = "(\\lambda, \\mu=\\mu_0)"
+    elseif renorm_lambda == false && fix_mu == false
+        suffix = "(\\lambda)"
+    elseif renorm_lambda == true && fix_mu == true
+        suffix = "(\\mu)"
+    else
+        suffix = ""
+    end
+    ax.set_ylabel("\$$prefix$suffix\$")
+    if isFock
+        xloc = 1.035
+        yloc = 0.6
+        ydiv = -0.125
+    else
+        xloc = 0.79
+        yloc = 3.0
+        ydiv = -0.5
+    end
     ax.text(
         xloc,
         yloc,
@@ -358,16 +476,19 @@ function main()
     )
     fig.tight_layout()
     if inset
+        # Reset color index
+        ic = 1
         # Plot inset
         ax_inset =
-            il.inset_axes(ax; width="38%", height="28.5%", loc="lower left", borderpad=0)
+            il.inset_axes(ax; width="38%", height="28.5%", loc="upper left", borderpad=0)
         # Compare result to bare occupation fₖ
         ax_inset.plot(k_kf_grid_fine, bare_occupation_fine, "k"; label="\$N=0\$ (exact)")
         ax_inset.axvline(1.0; linestyle="--", linewidth=1, color="gray")
         # ax_inset.axhspan(0, 1; alpha=0.2, facecolor="k", edgecolor=nothing)
         ax_inset.axhline(0.0; linestyle="-", linewidth=0.5, color="k")
         ax_inset.axhline(1.0; linestyle="-", linewidth=0.5, color="k")
-        for (i, N) in enumerate(min_order:max_order_plot)
+        # for (i, N) in enumerate(min_order:max_order_plot)
+        for (i, N) in enumerate(min_order:1)
             # N == 0 && continue
             isFock && N == 1 && continue
             # Get means and error bars from the result up to this order
@@ -379,35 +500,37 @@ function main()
                 means,
                 marker;
                 markersize=2,
-                color="C$(i-1)",
+                color="$(colors[ic])",
                 label="\$N=$N\$ ($solver)",
             )
             ax_inset.fill_between(
                 k_kf_grid,
                 means - stdevs,
                 means + stdevs;
-                color="C$(i-1)",
+                color="$(colors[ic])",
                 alpha=0.4,
             )
+            ic += 1
         end
         xpad = 0.04
-        ypad = 0.4
-        ax_inset.set_xlim(0.8 - xpad, 1.2 + xpad)
+        ypad = 0.2
+        ax_inset.set_xlim(0.95 - xpad, 1.05 + xpad)
         ax_inset.set_ylim(-ypad, 1 + ypad)
         ax_inset.set_xlabel("\$k / k_F\$"; labelpad=7)
         ax_inset.set_ylabel("\$n_{k\\sigma}\$")
-        ax_inset.xaxis.set_label_position("top")
+        # ax_inset.xaxis.set_label_position("top")
         ax_inset.yaxis.set_label_position("right")
-        ax_inset.xaxis.tick_top()
+        # ax_inset.xaxis.tick_top()
         ax_inset.yaxis.tick_right()
     end
+    dirstring = isFock ? "results/occupation/benchmark/" : "results/occupation/"
     fig.savefig(
-        "results/occupation/benchmark/occupation_N=$(max_order_plot)_rs=$(param.rs)_" *
-        "beta_ef=$(param.beta)_lambda=$(param.mass2)_neval=$(neval)_$(solver)_$(ct_string).pdf",
+        dirstring *
+        "occupation_N=$(max_order_plot)_rs=$(param.rs)_" *
+        "beta_ef=$(param.beta)_lambda=$(param.mass2)_neval=$(neval)_$(solver)_$(ct_string)$(mu_string).pdf",
     )
 
     plt.close("all")
-
     return
 end
 
