@@ -131,7 +131,7 @@ function integrate_occupation_with_ct(
     phase_factors = [1.0 / (2π)^(mcparam.dim * nl) for nl in innerLoopNums]
 
     # Total prefactors
-    prefactors = -phase_factors
+    prefactors = phase_factors
 
     return integrate(
         integrand;

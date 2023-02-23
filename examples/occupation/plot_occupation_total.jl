@@ -32,13 +32,13 @@ function main()
     solver = :vegasmc
 
     # Number of evals
-    neval = 5e9
+    neval = 1e9
 
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
     min_order = 0
     max_order = 3
     min_order_plot = 0
-    max_order_plot = 3
+    max_order_plot = 1
 
     # Save total results
     save = true
@@ -54,7 +54,7 @@ function main()
     renorm_lambda = false
 
     # Remove Fock insertions?
-    isFock = true
+    isFock = false
 
     # Plot benchmark results?
     benchmark = false
@@ -118,7 +118,16 @@ function main()
     if fix_mu
         for P in keys(data)
             if P[2] > 0
-                println("Fixing mu, ignoring partition $P")
+                println("Fixing mu without lambda renorm, ignoring n_k partition $P")
+                data[P] = zero(data[P])
+            end
+        end
+    end
+    # Zero out partitions with lambda renorm if present (fix lambda)
+    if renorm_lambda == false
+        for P in keys(data)
+            if P[3] > 0
+                println("No lambda renorm, ignoring n_k partition $P")
                 data[P] = zero(data[P])
             end
         end
@@ -127,10 +136,18 @@ function main()
     # TODO: Fix minus sign bug in integration scripts, (-1) → (-1)^(n_g)
     #       Here, we add back in the missing factor (-1)^(n_g - 1) in post-processing,
     #       where n_g = 2 * n_loop + n_μ + 1 for a given partition P = (n_loop, n_μ, n_λ)
-    # for P in keys(data)
+    for P in keys(data)
+        # Undo extra minus sign factor
+        data[P] = -data[P]
         # n_g = 2P[1] + P[2] + 1
         # data[P] = (-1)^(n_g - 1) * data[P]
-    # end
+        # if sum(P) ≤ 1
+        #     println(P)
+        #     data[P] = -data[P]
+        # end
+    end
+    # data[(0, 1, 0)] = -data[(0, 1, 0)]
+    # data[(0, 1, 0)] = -data[(0, 1, 0)]
 
     # Zero out double-counted (Fock renormalized) partitions
     if isFock && min_order ≤ 1
@@ -154,7 +171,7 @@ function main()
     # Set bare result manually using exact Fermi function
     if min_order_plot == 0 && min_order > 0
         # treat quadrature data as numerically exact
-        merged_data[(0, 0)] = measurement.(bare_occupation_exact, 0.0)
+        merged_data[(0, 0)] = -measurement.(bare_occupation_exact, 0.0)
     elseif min_order_plot == 0 && min_order == 0
         stdscores = stdscore.(merged_data[(0, 0)], bare_occupation_exact)
         worst_score = argmax(abs, stdscores)
@@ -173,6 +190,24 @@ function main()
     # Reexpand merged data in powers of μ
     ct_filename = "examples/counterterms/data_Z_$(ct_string_short).jld2"
     z, μ = UEG_MC.load_z_mu(param; ct_filename=ct_filename)
+    # Zero out partitions with mu renorm if present (fix mu)
+    if fix_mu
+        for P in keys(μ)
+            if P[2] > 0
+                println("Fixing mu without lambda renorm, ignoring μ partition $P")
+                μ[P] = zero(μ[P])
+            end
+        end
+    end
+    # Zero out partitions with lambda renorm if present (fix lambda)
+    if renorm_lambda == false
+        for P in keys(μ)
+            if P[3] > 0
+                println("No lambda renorm, ignoring μ partition $P")
+                μ[P] = zero(μ[P])
+            end
+        end
+    end
     δz, δμ = CounterTerm.sigmaCT(max_order, μ, z; isfock=isFock, verbose=1)
     println("Computed δμ: ", δμ)
     # δμ[2] = measurement("-0.08196(8)")  # Use benchmark dMu2 value
@@ -212,7 +247,7 @@ function main()
         @assert worst_score ≤ 10
     end
     # Aggregate the full results for Σₓ up to order N
-    occupation_total = UEG_MC.aggregate_orders(occupation)
+    g_equal_time = UEG_MC.aggregate_orders(occupation)
 
     # occupation = Dict()
     # for (k, v) in merged_data
@@ -225,12 +260,12 @@ function main()
     # end
     # println(collect(keys(occupation)))
 
-    # occupation_total = Dict()
-    # occupation_total[0] = occupation[0]
-    # occupation_total[1] = occupation_total[0] + occupation[1]
-    # occupation_total[2] = occupation_total[1] + occupation[2]
-    # occupation_total[3] = occupation_total[2] + occupation[3]
-    # println(collect(keys(occupation_total)))
+    # g_equal_time = Dict()
+    # g_equal_time[0] = occupation[0]
+    # g_equal_time[1] = g_equal_time[0] + occupation[1]
+    # g_equal_time[2] = g_equal_time[1] + occupation[2]
+    # g_equal_time[3] = g_equal_time[2] + occupation[3]
+    # println(collect(keys(g_equal_time)))
 
     println(UEG.paraid(param))
     println(partitions)
@@ -254,7 +289,7 @@ function main()
                 @warn("replacing existing data for N=$N, neval=$(neval)")
                 delete!(f["occupation/N=$N"], "neval=$(neval)")
             end
-            f["occupation/N=$N/neval=$neval/meas"] = occupation_total[N]
+            f["occupation/N=$N/neval=$neval/meas"] = g_equal_time[N]
             f["occupation/N=$N/neval=$neval/param"] = param
             f["occupation/N=$N/neval=$neval/kgrid"] = kgrid
         end
@@ -284,61 +319,162 @@ function main()
     # Third derivative of the Fermi function f'''(ϵₖ)
     fpppe_fine = -Spectral.kernelFermiT_dω3.(-1e-8, ϵk_fine, param.β)
 
-    fig, ax = plt.subplots()
-    # ax.axhline(0.0; linewidth=1, color="k")
-    fpnes = [fpe_fine, fppe_fine, fpppe_fine]
-    colors = ["sienna", "darkgreen", "darkred"]
-    signs = [-1.0, 1.0, -1.0]
-    signstrs = ["(-1) \\times", "", "(-1) \\times"]
-    for N in 1:3
-        ax.plot(
-            k_kf_grid_fine,
-            fpnes[N],
-            "-";
-            color="$(colors[N])",
-            label="\$f$(repeat("'", N))(\\xi_k)\$",
-        )
-        # if N == 1
-        #     ax.plot(
-        #         k_kf_grid_fine,
-        #         fpe_fine_exact,
-        #         "--";
-        #         color="k",
-        #         label="\$f'(\\xi_k)\$ (exact)",
-        #     )
-        # elseif N == 2
-        #     ax.plot(
-        #         k_kf_grid_fine,
-        #         fppe_fine_exact,
-        #         "--";
-        #         color="gray",
-        #         label="\$f''(\\xi_k)\$ (exact)",
-        #     )
-        # end
-        means = Measurements.value.(data[(0, N, 0)])
-        stdevs = Measurements.uncertainty.(data[(0, N, 0)])
+    # g₁(k, 0⁻) (= -δn₁(kσ)) = f'(ξₖ) (Σ^λ_F(k_F) - Σ^λ_F(k))
+    first_order_exact = @. fpe_fine * (
+        SelfEnergy.Fock0_ZeroTemp(param.kF, [param.basic]) -
+        SelfEnergy.Fock0_ZeroTemp(kgrid_fine, [param.basic])
+    )
+
+    # (1, 0, 0) = -f'(ξₖ) Σ^λ_F(k)
+    exact_gsigmag = @. -fpe_fine * SelfEnergy.Fock0_ZeroTemp(kgrid_fine, [param.basic])
+
+    if max_order_plot == 1
+        # Test gg diagram (0, 1, 0)
+        fig, ax = plt.subplots()
+        # ax.axhline(0.0; linewidth=1, color="k")
+        ax.plot(k_kf_grid_fine, fpe_fine, "-"; color="k", label="\$f'(\\xi_k)\$")
+        means = Measurements.value.(data[(0, 1, 0)])
+        stdevs = Measurements.uncertainty.(data[(0, 1, 0)])
         ax.plot(
             k_kf_grid,
-            signs[N] * means,
+            means,
             "o-";
             markersize=2,
-            color="C$N",
-            label="\$$(signstrs[N])(0, $N, 0)\$ ($solver)",
+            color="C0",
+            label="\$(0, 1, 0)\$ ($solver)",
         )
         ax.fill_between(
             k_kf_grid,
-            signs[N] * (means - stdevs),
-            signs[N] * (means + stdevs);
-            color="C$N",
+            (means - stdevs),
+            (means + stdevs);
+            color="C0",
             alpha=0.4,
         )
+        ax.set_xlabel("\$k / k_F\$")
+        ax.set_xlim(0.75, 1.25)
+        # ax.set_ylim(nothing, 4)
+        ax.legend(; loc="best")
+        fig.tight_layout()
+        fig.savefig("results/occupation/minus_nk_gg.pdf")
+
+        # Test g(-Σ)g diagram (1, 0, 0)
+        fig, ax = plt.subplots()
+        # ax.axhline(0.0; linewidth=1, color="k")
+        fpnes = [fpe_fine, fppe_fine, fpppe_fine]
+        ax.plot(
+            k_kf_grid_fine,
+            exact_gsigmag,
+            "-";
+            color="k",
+            label="\$-f'(\\xi_k) \\Sigma^\\lambda_F(k)\$",
+        )
+        means = Measurements.value.(data[(1, 0, 0)])
+        stdevs = Measurements.uncertainty.(data[(1, 0, 0)])
+        ax.plot(
+            k_kf_grid,
+            means,
+            "o-";
+            markersize=2,
+            color="C0",
+            label="\$(1, 0, 0)\$ ($solver)",
+        )
+        ax.fill_between(
+            k_kf_grid,
+            (means - stdevs),
+            (means + stdevs);
+            color="C0",
+            alpha=0.4,
+        )
+        ax.set_xlabel("\$k / k_F\$")
+        ax.set_xlim(0.75, 1.25)
+        # ax.set_ylim(nothing, 4)
+        ax.legend(; loc="best")
+        fig.tight_layout()
+        fig.savefig("results/occupation/minus_nk_gsigmag.pdf")
+
+        # Test first order result
+        fig, ax = plt.subplots()
+        ax.plot(
+            k_kf_grid_fine,
+            first_order_exact,
+            "-";
+            color="C0",
+            label="\$f'(\\xi_k) (\\Sigma^\\lambda_F(k_F) - \\Sigma^\\lambda_F(k))\$",
+        )
+        means = Measurements.value.(occupation[1])
+        stdevs = Measurements.uncertainty.(occupation[1])
+        ax.plot(k_kf_grid, means, "o-"; markersize=2, color="C1", label="\$N=1\$ ($solver)")
+        ax.fill_between(
+            k_kf_grid,
+            (means - stdevs),
+            (means + stdevs);
+            color="C1",
+            alpha=0.4,
+        )
+        ax.set_ylabel("\$g_1(k, \\tau=0^-) = -\\delta n^1_{k\\sigma}\$")
+        ax.set_xlabel("\$k / k_F\$")
+        ax.set_xlim(0.75, 1.25)
+        # ax.set_ylim(nothing, 4)
+        ax.legend(; loc="best")
+        fig.tight_layout()
+        fig.savefig("results/occupation/minus_delta_nk1.pdf")
     end
-    ax.set_xlabel("\$k / k_F\$")
-    ax.set_xlim(0.75, 1.25)
-    # ax.set_ylim(nothing, 4)
-    ax.legend(; loc="best")
-    fig.tight_layout()
-    fig.savefig("results/occupation/green_derivatives.pdf")
+
+    # fig, ax = plt.subplots()
+    # # ax.axhline(0.0; linewidth=1, color="k")
+    # fpnes = [fpe_fine, fppe_fine, fpppe_fine]
+    # colors = ["sienna", "darkgreen", "darkred"]
+    # signs = [-1.0, 1.0, -1.0]
+    # signstrs = ["(-1) \\times", "", "(-1) \\times"]
+    # for N in 1:3
+    #     ax.plot(
+    #         k_kf_grid_fine,
+    #         fpnes[N],
+    #         "-";
+    #         color="$(colors[N])",
+    #         label="\$f$(repeat("'", N))(\\xi_k)\$",
+    #     )
+    #     # if N == 1
+    #     #     ax.plot(
+    #     #         k_kf_grid_fine,
+    #     #         fpe_fine_exact,
+    #     #         "--";
+    #     #         color="k",
+    #     #         label="\$f'(\\xi_k)\$ (exact)",
+    #     #     )
+    #     # elseif N == 2
+    #     #     ax.plot(
+    #     #         k_kf_grid_fine,
+    #     #         fppe_fine_exact,
+    #     #         "--";
+    #     #         color="gray",
+    #     #         label="\$f''(\\xi_k)\$ (exact)",
+    #     #     )
+    #     # end
+    #     means = Measurements.value.(data[(0, N, 0)])
+    #     stdevs = Measurements.uncertainty.(data[(0, N, 0)])
+    #     ax.plot(
+    #         k_kf_grid,
+    #         signs[N] * means,
+    #         "o-";
+    #         markersize=2,
+    #         color="C$N",
+    #         label="\$$(signstrs[N])(0, $N, 0)\$ ($solver)",
+    #     )
+    #     ax.fill_between(
+    #         k_kf_grid,
+    #         signs[N] * (means - stdevs),
+    #         signs[N] * (means + stdevs);
+    #         color="C$N",
+    #         alpha=0.4,
+    #     )
+    # end
+    # ax.set_xlabel("\$k / k_F\$")
+    # ax.set_xlim(0.75, 1.25)
+    # # ax.set_ylim(nothing, 4)
+    # ax.legend(; loc="best")
+    # fig.tight_layout()
+    # fig.savefig("results/occupation/green_derivatives.pdf")
 
     # Bare/Fock occupation on dense grid for plotting
     kgrid_fine = param.kF * np.linspace(0.0, 3.0; num=600)
@@ -354,7 +490,7 @@ function main()
     bare_occupation_fine = -Spectral.kernelFermiT.(-1e-8, ϵk, param.β)
 
     # Get standard scores vs benchmark
-    stdscores = stdscore.(occupation_total[2], bm_occupation_2)
+    stdscores = stdscore.(g_equal_time[2], bm_occupation_2)
     worst_score = argmax(abs, stdscores)
     println(stdscores)
     println("Worst standard score for N=2 (measured vs benchmark mean): $worst_score")
@@ -410,8 +546,9 @@ function main()
             ic += 1
         end
         # Plot measured data
-        means = Measurements.value.(occupation_total[N])
-        stdevs = Measurements.uncertainty.(occupation_total[N])
+        # NOTE: We plot nₖ = -gₙ(k, 0⁻), hence the extra minus
+        means = Measurements.value.(-g_equal_time[N])
+        stdevs = Measurements.uncertainty.(-g_equal_time[N])
         marker = "o-"
         ax.plot(
             k_kf_grid,
@@ -458,8 +595,8 @@ function main()
         ydiv = -0.125
     else
         xloc = 0.79
-        yloc = 3.0
-        ydiv = -0.5
+        yloc = 0.5
+        ydiv = -0.3
     end
     ax.text(
         xloc,
@@ -492,8 +629,8 @@ function main()
             # N == 0 && continue
             isFock && N == 1 && continue
             # Get means and error bars from the result up to this order
-            means = Measurements.value.(occupation_total[N])
-            stdevs = Measurements.uncertainty.(occupation_total[N])
+            means = Measurements.value.(g_equal_time[N])
+            stdevs = Measurements.uncertainty.(g_equal_time[N])
             marker = "o-"
             ax_inset.plot(
                 k_kf_grid,

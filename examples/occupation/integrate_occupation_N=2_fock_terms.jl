@@ -59,7 +59,7 @@ function integrate_occupation(
     phase_factor = 1.0 / (2π)^(mcparam.dim * innerLoopNum)
 
     # Total prefactor; extra minus sign relative to N&O convention for G₀
-    prefactor = -phase_factor
+    prefactor = phase_factor
 
     return integrate(
         integrand;
@@ -230,7 +230,7 @@ function build_term2(print=false, plot=false)
     # Build term 2
     extT = (1, 1)
     id = DiagTree.GreenId(diagparam, Instant, [1, 0, 0, 0]; k=k, t=extT)
-    diagtree = DiagramF64(id, Prod(), [g1, sigmaF, dμ_g2]; factor=2.0)
+    diagtree = DiagramF64(id, Prod(), [g1, sigmaF, dμ_g2]; factor=-2.0)
 
     print && print_tree(diagtree)
     plot && plot_tree(diagtree)
@@ -324,7 +324,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 1e7
+    neval = 1e8
 
     # Integrate each term in the N=2 Fock series benchmark
     second_order_fock_terms = [build_term1(), build_term2(), build_term3()]
