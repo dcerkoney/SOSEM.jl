@@ -240,16 +240,16 @@ function main()
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
-    renorm_lambda = false
+    renorm_lambda = true
 
     # Remove Fock insertions?
-    isFock = true
+    isFock = false
 
     # UEG parameters for MC integration
     param = ParaMC(;
         order=max_order,
         rs=1.0,
-        beta=40.0,
+        beta=100.0,
         mass2=1.0,
         isDynamic=false,
         isFock=isFock,  # remove Fock insertions
