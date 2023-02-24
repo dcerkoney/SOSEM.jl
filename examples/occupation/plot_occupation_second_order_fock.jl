@@ -1,4 +1,5 @@
 using CodecZlib
+using ElectronGas
 using ElectronLiquid
 using Interpolations
 using JLD2
@@ -94,16 +95,19 @@ function main()
     data = UEG_MC.restodict(res_list, partitions_list)
     println(data)
 
-    # for P in keys(data)
-    #     data[P] *= (-1)^(maximum(P) - 1)
-    # end
+    # TODO: Rerun with missing sign on (1, 1, 0) data fixed
+    for P in keys(data)
+        data[P] *= -1          # Remove extra overall -1
+        data[(1, 1, 0)] *= -1  # Add missing (-1)^(n_intn)
+    end
 
     # Reexpand merged data in powers of 
     ct_filename = "examples/counterterms/data_Z_$(ct_string).jld2"
     z, μ = UEG_MC.load_z_mu(param; ct_filename=ct_filename)
     δz, δμ = CounterTerm.sigmaCT(2, μ, z; isfock=false, verbose=1)
     # Test manual renormalization with exact lowest-order chemical potential
-    δμ1 = UEG_MC.delta_mu1(param)  # = ReΣ₁[λ](kF, 0)
+    # δμ1 = UEG_MC.delta_mu1(param)  # = ReΣ₁[λ](kF, 0)
+    δμ1 = SelfEnergy.Fock0_ZeroTemp(param.kF, param.basic)  # = ReΣ₁[λ](kF, 0)
 
     println(UEG.paraid(param))
 
@@ -140,9 +144,11 @@ function main()
 
     # δn^{(1)}_F(kσ) = f'(ϵₖ) (Σ^λ_F(k) - Σ^λ_F(k_F)) = f'(ϵₖ) (Σ^λ_F(k) + δμ₁)
     # δn^{(2)}_F(kσ) = f''(ϵₖ) (Σ^λ_F(k) - Σ^λ_F(k_F))^2 = f''(ϵₖ) (Σ^λ_F(k) + δμ₁)^2
-    sigma_lambda_F_fine = sigma_lambda_fock_exact.(kgrid_fine, [param])
-    dn1F_exact_fine = @. fpe_fine * (sigma_lambda_F_fine - δμ1)
-    dn2F_exact_fine = @. fppe_fine * (δμ1^2 / 2 + (sigma_lambda_F_fine - δμ1)^2 / 2)
+    # sigma_lambda_F_fine = sigma_lambda_fock_exact.(kgrid_fine, [param])
+    sigma_lambda_F_fine = SelfEnergy.Fock0_ZeroTemp.(kgrid_fine, [param.basic])
+    # sigma_lambda_F_fine = sigma_lambda_fock_exact.(kgrid_fine, [param])
+    dn1F_exact_fine = @. -fpe_fine * (sigma_lambda_F_fine - δμ1)
+    dn2F_exact_fine = @. -fppe_fine * (δμ1^2 / 2 + (sigma_lambda_F_fine - δμ1)^2 / 2)
 
     @assert δμ1 ≈ sigma_lambda_fock_exact(param.kF, param)
 
@@ -156,16 +162,17 @@ function main()
     dn2F_means_exact_mu = Measurements.value.(dn2F_calc_exact_mu)
     dn2F_stdevs_exact_mu = Measurements.uncertainty.(dn2F_calc_exact_mu)
 
-    sigma_lambda_F = sigma_lambda_fock_exact.(kgrid, [param])
-    dn2F_exact = @. -fppe * (δμ1^2 / 2 + (sigma_lambda_F + δμ1)^2 / 2)
+    sigma_lambda_F = SelfEnergy.Fock0_ZeroTemp.(kgrid, [param.basic])
+    # sigma_lambda_F = sigma_lambda_fock_exact.(kgrid, [param])
+    dn2F_exact = @. -fppe * (δμ1^2 / 2 + (sigma_lambda_F - δμ1)^2 / 2)
     ratio = dn2F_exact ./ dn2F_means_exact_mu
     max_ratio = argmax(abs, ratio)
     println(ratio)
     println(max_ratio)
 
-    term1_exact_fine = @. fppe_fine * sigma_lambda_F_fine^2 / 2
-    term2_exact_fine = @. -fppe_fine * sigma_lambda_F_fine
-    term3_exact_fine = fppe_fine
+    term1_exact_fine = @. -fppe_fine * sigma_lambda_F_fine^2 / 2
+    term2_exact_fine = @. fppe_fine * sigma_lambda_F_fine
+    term3_exact_fine = -fppe_fine
     dn2F_exact_fine = term1_exact_fine + term2_exact_fine * δμ1 + term3_exact_fine * δμ1^2
 
     # Plot each term in the 2nd order Fock series benchmark
@@ -178,10 +185,7 @@ function main()
     # Number of evals
     neval = 1e9
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
-    min_order = 0
     max_order = 3
-    min_order_plot = 0
-    max_order_plot = 3
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
     renorm_lambda = false
@@ -217,15 +221,18 @@ function main()
     end
     # Convert results to a Dict of measurements at each order with interaction counterterms merged
     data_auto = UEG_MC.restodict(res, partitions)
+    for P in keys(data_auto)
+        data_auto[P] *= -1  # Remove extra overall -1
+    end
     # Mean and error bars for the computed results
-    dn2F_calc_auto =
-        data_auto[(2, 0, 0)] + δμ[1] * data_auto[(1, 1, 0)] + δμ[1]^2 * data_auto[(0, 2, 0)]
+    # dn2F_calc_auto =
+    #     data_auto[(2, 0, 0)] + δμ[1] * data_auto[(1, 1, 0)] + δμ[1]^2 * data_auto[(0, 2, 0)]
     dn2F_calc_auto_exact_mu =
         data_auto[(2, 0, 0)] + δμ1 * data_auto[(1, 1, 0)] + δμ1^2 * data_auto[(0, 2, 0)]
-    dn2F_means_auto = Measurements.value.(dn2F_calc_auto)
-    dn2F_stdevs_auto = Measurements.uncertainty.(dn2F_calc_auto)
+    # dn2F_means_auto = Measurements.value.(dn2F_calc_auto)
+    # dn2F_stdevs_auto = Measurements.uncertainty.(dn2F_calc_auto)
     dn2F_means_exact_mu_auto = Measurements.value.(dn2F_calc_auto_exact_mu)
-    dn2F_stdevs_exact_mu_auto = Measurements.uncertainty.(dn2F_calc_auto_exact_mu)
+    # dn2F_stdevs_exact_mu_auto = Measurements.uncertainty.(dn2F_calc_auto_exact_mu)
     for (i, (P,)) in enumerate(partitions_list)
         # Get means and error bars from the result up to this order
         means = Measurements.value.(data_auto[P])
@@ -251,25 +258,25 @@ function main()
         k_kf_grid_fine,
         term1_exact_fine,
         "-";
-        label="\$\\frac{1}{2} f^{\\prime\\prime}(\\xi_k) \\left(\\Sigma^\\lambda_F(k)\\right)^2\$ (exact)",
+        label="\$-\\frac{1}{2} f^{\\prime\\prime}(\\xi_k) \\left(\\Sigma^\\lambda_F(k)\\right)^2\$ (exact)",
     )
     ax.plot(
         k_kf_grid_fine,
         term2_exact_fine,
         "-";
-        label="\$-f^{\\prime\\prime}(\\xi_k) \\Sigma^\\lambda_F(k)\$ (exact)",
+        label="\$f^{\\prime\\prime}(\\xi_k) \\Sigma^\\lambda_F(k)\$ (exact)",
     )
     ax.plot(
         k_kf_grid_fine,
         term3_exact_fine,
         "-";
-        label="\$f^{\\prime\\prime}(\\xi_k)\$ (exact)",
+        label="\$-f^{\\prime\\prime}(\\xi_k)\$ (exact)",
     )
     # Results with manual diagram generation
     for (i, (P,)) in enumerate(partitions_list)
         # Get means and error bars from the result up to this order
         means = Measurements.value.(data[P])
-        stdevs = Measurements.uncertainty.(data[P])
+        # stdevs = Measurements.uncertainty.(data[P])
         marker = "o"
         ax.plot(
             k_kf_grid,
@@ -293,7 +300,7 @@ function main()
     # ax.set_xlim(0.25, 1.75)
     # ax.set_ylim(-27, 27)
     ax.set_xlabel("\$k / k_F\$")
-    ax.set_ylabel("\$\\delta n^{(2)}_{i/\\mathcal{P}}({k\\sigma})\$")
+    ax.set_ylabel("\$-\\delta n^{(2)}_{i/\\mathcal{P}}({k\\sigma})\$")
     xloc = 1.025
     yloc = -5
     ydiv = -4
@@ -326,7 +333,7 @@ function main()
         "o-";
         markersize=3,
         color="C0",
-        label="\$\\delta n^{(2)}_{(2,0,0)} + \\delta n^{(2)}_{(1,1,0)} + \\delta n^{(2)}_{(0,2,0)}\$ ($solver, auto)",
+        label="\$-\\delta n^{(2)}_{(2,0,0)} - \\delta n^{(2)}_{(1,1,0)} - \\delta n^{(2)}_{(0,2,0)}\$ ($solver, auto)",
     )
     # Result from manual diagram generation
     marker = "o"
@@ -337,14 +344,14 @@ function main()
         marker;
         markersize=3,
         color="C1",
-        label="\$\\delta n^{(2)}_{i=1} + \\delta n^{(2)}_{i=2} + \\delta n^{(2)}_{i=3}\$ ($solver, manual)",
+        label="\$-\\delta n^{(2)}_{i=1} - \\delta n^{(2)}_{i=2} - \\delta n^{(2)}_{i=3}\$ ($solver, manual)",
     )
     # Exact result
     ax.plot(
         k_kf_grid_fine,
         dn2F_exact_fine,
         "C1";
-        label="\$f^{\\prime\\prime}(\\xi_k) \\left[\\frac{1}{2}\\left(\\Sigma^\\lambda_F(k_F)\\right)^2  + \\frac{1}{2}\\left(\\Sigma^\\lambda_F(k) - \\Sigma^\\lambda_F(k_F)\\right)^2\\right]\$ (exact)",
+        label="\$-f^{\\prime\\prime}(\\xi_k) \\left[\\frac{1}{2}\\left(\\Sigma^\\lambda_F(k_F)\\right)^2  + \\frac{1}{2}\\left(\\Sigma^\\lambda_F(k) - \\Sigma^\\lambda_F(k_F)\\right)^2\\right]\$ (exact)",
     )
     # ax.plot(
     #     k_kf_grid_fine,
@@ -366,7 +373,7 @@ function main()
     ax.set_xlim(0.75, 1.25)
     ax.set_ylim(nothing, 4)
     ax.set_xlabel("\$k / k_F\$")
-    ax.set_ylabel("\$\\delta n^{(2)}({k\\sigma})\$")
+    ax.set_ylabel("\$-\\delta n^{(2)}({k\\sigma})\$")
     xloc = 1.025
     yloc = -1
     ydiv = -0.75

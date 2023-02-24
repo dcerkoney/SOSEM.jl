@@ -38,7 +38,7 @@ function main()
     min_order = 0
     max_order = 3
     min_order_plot = 0
-    max_order_plot = 1
+    max_order_plot = 2
 
     # Save total results
     save = true

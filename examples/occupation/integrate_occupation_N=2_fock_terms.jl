@@ -230,7 +230,7 @@ function build_term2(print=false, plot=false)
     # Build term 2
     extT = (1, 1)
     id = DiagTree.GreenId(diagparam, Instant, [1, 0, 0, 0]; k=k, t=extT)
-    diagtree = DiagramF64(id, Prod(), [g1, sigmaF, dμ_g2]; factor=-2.0)
+    diagtree = DiagramF64(id, Prod(), [g1, sigmaF, dμ_g2]; factor=2.0)
 
     print && print_tree(diagtree)
     plot && plot_tree(diagtree)
