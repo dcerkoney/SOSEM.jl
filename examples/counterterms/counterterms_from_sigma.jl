@@ -22,7 +22,7 @@ function main()
     rs = [1.0]
     #mass2 = LinRange(1.0, 5.0, 5)
     mass2 = [1.0]
-    beta = [40.0]
+    beta = [100.0]
     # beta = [25.0, 40.0, 80.0]
 
     # Grid-search 2: rs, beta
@@ -40,7 +40,7 @@ function main()
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
-    renorm_lambda = false
+    renorm_lambda = true
 
     # Remove Fock insertions?
     isFock = false
