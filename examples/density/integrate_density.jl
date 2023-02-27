@@ -81,7 +81,7 @@ function build_diagtree(; n_loop=0)
     #     totalTauNum=n_loop + 1,
     #     hasTau=true,
     # )
-    
+
     # Loop basis vector for external momentum
     k = DiagTree.getK(diagparam.totalLoopNum, 1)
 
@@ -236,7 +236,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 1e10
+    neval = 1e8
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -280,7 +280,7 @@ function main()
     )
 
     # Distinguish results with different counterterm schemes
-    ct_string = (renorm_mu || renorm_lambda) ? "with_ct" : ""
+    ct_string = (renorm_mu || renorm_lambda) ? "_with_ct" : ""
     if renorm_mu
         ct_string *= "_mu"
     end
@@ -295,7 +295,7 @@ function main()
     if !isnothing(res)
         savename =
             "results/data/density_n=$(param.order)_rs=$(param.rs)_beta_ef=$(param.beta)_" *
-            "lambda=$(param.mass2)_neval=$(neval)_$(solver)_$(ct_string)"
+            "lambda=$(param.mass2)_neval=$(neval)_$(solver)$(ct_string)"
         jldopen("$savename.jld2", "a+"; compress=true) do f
             key = "$(UEG.short(param))"
             if haskey(f, key)
