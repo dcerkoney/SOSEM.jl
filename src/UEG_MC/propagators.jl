@@ -48,7 +48,8 @@ function eval(id::BareGreenId, K, _, varT, p::ParaMC)
     elseif order == 2
         return Spectral.kernelFermiT_dω2(τ, ϵ, β) / 2.0
     elseif order == 3
-        return -Spectral.kernelFermiT_dω3(τ, ϵ, β) / 6.0
+        # return -Spectral.kernelFermiT_dω3(τ, ϵ, β) / 6.0
+        return 0.0
     else
         @todo
     end
