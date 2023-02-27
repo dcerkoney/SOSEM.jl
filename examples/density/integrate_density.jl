@@ -236,7 +236,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 1e9
+    neval = 1e10
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -295,7 +295,7 @@ function main()
     if !isnothing(res)
         savename =
             "results/data/density_n=$(param.order)_rs=$(param.rs)_beta_ef=$(param.beta)_" *
-            "lambda=$(param.mass2)_neval=$(neval)_$(solver)$(ct_string)_no_green3"
+            "lambda=$(param.mass2)_neval=$(neval)_$(solver)$(ct_string)_no_green4"
         jldopen("$savename.jld2", "a+"; compress=true) do f
             key = "$(UEG.short(param))"
             if haskey(f, key)
