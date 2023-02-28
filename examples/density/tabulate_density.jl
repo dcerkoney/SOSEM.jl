@@ -50,6 +50,10 @@ beta = 40.0
 # Compare with results from EFT_UEG?
 compare_eft = true
 
+# Set green4 to zero for benchmarking?
+no_green4 = true
+no_green4_str = no_green4 ? "no_green4" : ""
+
 # UEG parameters for MC integration
 loadparam = ParaMC(;
     order=max_order,
@@ -77,7 +81,7 @@ end
 # Load the raw data
 savename =
     "results/data/density_n=$(loadparam.order)_rs=$(loadparam.rs)_beta_ef=$(loadparam.beta)_" *
-    "lambda=$(loadparam.mass2)_neval=$(neval)_$(solver)$(ct_string)"
+    "lambda=$(loadparam.mass2)_neval=$(neval)_$(solver)$(ct_string)_$(no_green4_str)"
 orders, param, partitions, res = jldopen("$savename.jld2", "a+") do f
     key = "$(UEG.short(loadparam))"
     return f[key]
@@ -85,7 +89,7 @@ end
 
 if compare_eft
     # Load the EFT_UEG data (NOTE: EFT data is already in Dict format!)
-    savename = "../EFT_UEG/data_n"
+    savename = "results/data/data_n_$(no_green4_str)"
     param_eft, data_eft = jldopen("$savename.jld2", "a+") do f
         key = "$(UEG.short(loadparam))"
         return f[key]
@@ -95,19 +99,33 @@ if compare_eft
 end
 
 # Convert results to a Dict of measurements at each order with interaction counterterms merged
-data = UEG_MC.restodict(res, partitions)
+data = sort(UEG_MC.restodict(res, partitions))
+data_eft = sort(data_eft)
 
 # Add overall spin summation (factor of 2)
+n0 = param.kF^3 / (3 * pi^2)
 for (k, v) in data
-    data[k] = [2 * v]
+    data[k] = [2 * v / n0]
 end
 if compare_eft
     for (k, v) in data_eft
-        data_eft[k] = [2 * v]
+        data_eft[k] = [2 * v / n0]
     end
 end
-println(data)
-compare_eft && println(data_eft)
+
+println("\nPartitions SOSEM (n_loop, n_μ, n_λ):\n")
+for Pm in keys(data)
+    # fix_mu && Pm[2] > 0 && continue
+    # Pm[3] > 0 && continue  # No lambda counterterms
+    println("$((Pm[1]+1, Pm[3], Pm[2])):\t$(data[Pm][1])")
+end
+println("\nPartitions EFT (n_loop, n_μ, n_λ):\n")
+for Pm in keys(data_eft)
+    # fix_mu && Pm[2] > 0 && continue
+    # Pm[3] > 0 && continue  # No lambda counterterms
+    println("$((Pm[1]+1, Pm[3], Pm[2])):\t$(data_eft[Pm][1])")
+end
+return
 
 # Zero out partitions with mu renorm if present (fix mu)
 if renorm_mu == false || fix_mu

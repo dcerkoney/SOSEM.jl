@@ -203,7 +203,7 @@ function integrand(vars, config)
         @debug "ExtK = $(kgrid[ik])" maxlog = 3
 
         # Evaluate the expression tree (additional = mcparam)
-        ExprTree.evalKT!(exprtrees[i], varK, T.data, mcparam; eval=UEG_MC.Propagators.eval)
+        ExprTree.evalKT!(exprtrees[i], varK, T.data, mcparam)
 
         # Evaluate the occupation number integrand nₖ for this partition
         root = exprtrees[i].root[1]  # there is only one root per partition
@@ -228,7 +228,7 @@ function main()
     end
 
     # Total loop order N
-    orders = [0, 1, 2, 3]
+    orders = [0, 1, 2]
     max_order = maximum(orders)
     sort!(orders)
 
@@ -238,11 +238,11 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 1e9
+    neval = 1e8
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
-    renorm_lambda = false
+    renorm_lambda = true
 
     # Remove Fock insertions?
     isFock = false

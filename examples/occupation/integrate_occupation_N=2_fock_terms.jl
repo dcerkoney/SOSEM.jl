@@ -125,7 +125,7 @@ function integrand(vars, config)
     @debug "ExtK = $(kgrid[ik])" maxlog = 3
 
     # Evaluate the expression tree (additional = mcparam)
-    ExprTree.evalKT!(exprtree, varK, T.data, mcparam; eval=UEG_MC.Propagators.eval)
+    ExprTree.evalKT!(exprtree, varK, T.data, mcparam)
 
     # Evaluate the occupation number integrand nₖ
     root = exprtree.root[1]

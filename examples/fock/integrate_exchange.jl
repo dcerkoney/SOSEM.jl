@@ -243,6 +243,7 @@ function integrand(vars, config)
         @debug "ExtK = $(kgrid[ik])" maxlog = 3
 
         # Evaluate the expression tree (additional = mcparam)
+        # NOTE: We use UEG_MC propagators to mark the outer interaction as bare
         ExprTree.evalKT!(exprtrees[i], varK, T.data, mcparam; eval=UEG_MC.Propagators.eval)
 
         # Evaluate the exchange integrand Σx(k) for this partition

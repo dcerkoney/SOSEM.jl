@@ -32,11 +32,11 @@ function main()
     solver = :vegasmc
 
     # Number of evals
-    neval = 1e9
+    neval = 1e7
 
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
     min_order = 0
-    max_order = 3
+    max_order = 2
     min_order_plot = 0
     max_order_plot = 2
 
@@ -51,7 +51,7 @@ function main()
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
-    renorm_lambda = false
+    renorm_lambda = true
 
     # Remove Fock insertions?
     isFock = false
@@ -133,6 +133,7 @@ function main()
         end
     end
 
+    println(data)
     # TODO: Fix minus sign bug in integration scripts, (-1) → (-1)^(n_g)
     #       Here, we add back in the missing factor (-1)^(n_g - 1) in post-processing,
     #       where n_g = 2 * n_loop + n_μ + 1 for a given partition P = (n_loop, n_μ, n_λ)
@@ -171,7 +172,7 @@ function main()
     # Set bare result manually using exact Fermi function
     if min_order_plot == 0 && min_order > 0
         # treat quadrature data as numerically exact
-        merged_data[(0, 0)] = -measurement.(bare_occupation_exact, 0.0)
+        merged_data[(0, 0)] = measurement.(bare_occupation_exact, 0.0)
     elseif min_order_plot == 0 && min_order == 0
         stdscores = stdscore.(merged_data[(0, 0)], bare_occupation_exact)
         worst_score = argmax(abs, stdscores)
@@ -247,7 +248,7 @@ function main()
         @assert worst_score ≤ 10
     end
     # Aggregate the full results for Σₓ up to order N
-    g_equal_time = UEG_MC.aggregate_orders(occupation)
+    occupation_total = UEG_MC.aggregate_orders(occupation)
 
     # occupation = Dict()
     # for (k, v) in merged_data
@@ -260,12 +261,12 @@ function main()
     # end
     # println(collect(keys(occupation)))
 
-    # g_equal_time = Dict()
-    # g_equal_time[0] = occupation[0]
-    # g_equal_time[1] = g_equal_time[0] + occupation[1]
-    # g_equal_time[2] = g_equal_time[1] + occupation[2]
-    # g_equal_time[3] = g_equal_time[2] + occupation[3]
-    # println(collect(keys(g_equal_time)))
+    # occupation_total = Dict()
+    # occupation_total[0] = occupation[0]
+    # occupation_total[1] = occupation_total[0] + occupation[1]
+    # occupation_total[2] = occupation_total[1] + occupation[2]
+    # occupation_total[3] = occupation_total[2] + occupation[3]
+    # println(collect(keys(occupation_total)))
 
     println(UEG.paraid(param))
     println(partitions)
@@ -289,7 +290,7 @@ function main()
                 @warn("replacing existing data for N=$N, neval=$(neval)")
                 delete!(f["occupation/N=$N"], "neval=$(neval)")
             end
-            f["occupation/N=$N/neval=$neval/meas"] = g_equal_time[N]
+            f["occupation/N=$N/neval=$neval/meas"] = occupation_total[N]
             f["occupation/N=$N/neval=$neval/param"] = param
             f["occupation/N=$N/neval=$neval/kgrid"] = kgrid
         end
@@ -490,7 +491,7 @@ function main()
     bare_occupation_fine = -Spectral.kernelFermiT.(-1e-8, ϵk, param.β)
 
     # Get standard scores vs benchmark
-    stdscores = stdscore.(g_equal_time[2], bm_occupation_2)
+    stdscores = stdscore.(occupation_total[2], bm_occupation_2)
     worst_score = argmax(abs, stdscores)
     println(stdscores)
     println("Worst standard score for N=2 (measured vs benchmark mean): $worst_score")
@@ -547,8 +548,8 @@ function main()
         end
         # Plot measured data
         # NOTE: We plot nₖ = -gₙ(k, 0⁻), hence the extra minus
-        means = Measurements.value.(-g_equal_time[N])
-        stdevs = Measurements.uncertainty.(-g_equal_time[N])
+        means = Measurements.value.(occupation_total[N])
+        stdevs = Measurements.uncertainty.(occupation_total[N])
         marker = "o-"
         ax.plot(
             k_kf_grid,
@@ -571,7 +572,8 @@ function main()
     end
     ax.legend(; loc="upper right")
     # ax.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
-    ax.set_xlim(0.75, 1.25)
+    # ax.set_xlim(0.75, 1.25)
+    ax.set_xlim(0, 3)
     # ax.set_ylim(nothing, 2)
     ax.set_xlabel("\$k / k_F\$")
     if isFock
@@ -629,8 +631,8 @@ function main()
             # N == 0 && continue
             isFock && N == 1 && continue
             # Get means and error bars from the result up to this order
-            means = Measurements.value.(g_equal_time[N])
-            stdevs = Measurements.uncertainty.(g_equal_time[N])
+            means = Measurements.value.(occupation_total[N])
+            stdevs = Measurements.uncertainty.(occupation_total[N])
             marker = "o-"
             ax_inset.plot(
                 k_kf_grid,
