@@ -32,7 +32,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals
-    neval = 1e7
+    neval = 1e10
 
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
     min_order = 0
@@ -59,8 +59,23 @@ function main()
     # Plot benchmark results?
     benchmark = false
 
+    # Compare with results from EFT_UEG?
+    compare_eft = true
+
+    # Set green4 to zero for benchmarking?
+    no_green4 = true
+    no_green4_str = no_green4 ? "_no_green4" : ""
+
+    # Ignore measured mu/lambda partitions?
     fix_mu = false
-    mu_string = fix_mu ? "_fixed_mu" : ""
+    fix_lambda = false
+    fix_string = fix_mu || fix_lambda ? "_fix" : ""
+    if fix_mu
+        fix_string *= "_mu"
+    end
+    if fix_lambda
+        fix_string *= "_lambda"
+    end
 
     # Distinguish results with different counterterm schemes
     ct_string = (renorm_mu || renorm_lambda) ? "with_ct" : ""
@@ -94,6 +109,17 @@ function main()
         return f[key]
     end
 
+    if compare_eft
+        # Load the EFT_UEG data (NOTE: EFT data is already in Dict format!)
+        savename = "results/occupation/data_K$(no_green4_str)"
+        param_eft, tgrid_eft, kgrid_eft, data_eft = jldopen("$savename.jld2", "a+") do f
+            key = "$(UEG.short(loadparam))"
+            return f[key]
+        end
+        println(param_eft)
+        println(data_eft)
+    end
+
     # Read in benchmark data
     benchmark_dfs = DataFrame[]
     for order in 2:3
@@ -113,22 +139,39 @@ function main()
 
     # Convert results to a Dict of measurements at each order with interaction counterterms merged
     data = UEG_MC.restodict(res, partitions)
+    # data_eft = sort(data_eft)
 
     # Zero out partitions with mu renorm if present (fix mu)
-    if fix_mu
+    if renorm_mu == false || fix_mu
         for P in keys(data)
             if P[2] > 0
                 println("Fixing mu without lambda renorm, ignoring n_k partition $P")
                 data[P] = zero(data[P])
             end
         end
+        if compare_eft
+            for P in keys(data_eft)
+                if P[2] > 0
+                    println("Fixing mu without lambda renorm, ignoring n_k partition $P")
+                    data_eft[P] = zero(data_eft[P])
+                end
+            end
+        end
     end
     # Zero out partitions with lambda renorm if present (fix lambda)
-    if renorm_lambda == false
+    if renorm_lambda == false || fix_lambda
         for P in keys(data)
             if P[3] > 0
                 println("No lambda renorm, ignoring n_k partition $P")
                 data[P] = zero(data[P])
+            end
+        end
+        if compare_eft
+            for P in keys(data_eft)
+                if P[3] > 0
+                    println("No lambda renorm, ignoring n_k partition $P")
+                    data_eft[P] = zero(data_eft[P])
+                end
             end
         end
     end
@@ -157,6 +200,9 @@ function main()
     end
 
     merged_data = CounterTerm.mergeInteraction(data)
+    if compare_eft
+        merged_data_eft = CounterTerm.mergeInteraction(data_eft)
+    end
 
     # Get exact bare/Fock occupation
     if param.isFock
@@ -170,10 +216,15 @@ function main()
     bare_occupation_exact = -Spectral.kernelFermiT.(-1e-8, ϵk, param.β)
 
     # Set bare result manually using exact Fermi function
-    if min_order_plot == 0 && min_order > 0
+    if haskey(merged_data, (0, 0)) == false
         # treat quadrature data as numerically exact
-        merged_data[(0, 0)] = measurement.(bare_occupation_exact, 0.0)
-    elseif min_order_plot == 0 && min_order == 0
+        merged_data[(0, 0)] = [measurement(bare_occupation_exact, 0.0)]
+    end
+    if haskey(merged_data_eft, (0, 0)) == false
+        # treat quadrature data as numerically exact
+        merged_data_eft[(0, 0)] = [measurement(bare_occupation_exact, 0.0)]
+    end
+    if min_order == 0
         stdscores = stdscore.(merged_data[(0, 0)], bare_occupation_exact)
         worst_score = argmax(abs, stdscores)
         println("Worst standard score for N=0 (measured): $worst_score")
@@ -192,7 +243,7 @@ function main()
     ct_filename = "examples/counterterms/data_Z_$(ct_string_short).jld2"
     z, μ = UEG_MC.load_z_mu(param; ct_filename=ct_filename)
     # Zero out partitions with mu renorm if present (fix mu)
-    if fix_mu
+    if renorm_mu == false || fix_mu
         for P in keys(μ)
             if P[2] > 0
                 println("Fixing mu without lambda renorm, ignoring μ partition $P")
@@ -201,7 +252,7 @@ function main()
         end
     end
     # Zero out partitions with lambda renorm if present (fix lambda)
-    if renorm_lambda == false
+    if renorm_lambda == false || fix_lambda
         for P in keys(μ)
             if P[3] > 0
                 println("No lambda renorm, ignoring μ partition $P")
@@ -209,7 +260,13 @@ function main()
             end
         end
     end
-    δz, δμ = CounterTerm.sigmaCT(max_order, μ, z; isfock=isFock, verbose=1)
+    δz, δμ = CounterTerm.sigmaCT(3, μ, z; isfock=isFock, verbose=1)
+
+    for (k, v) in merged_data_eft
+        println(v)
+        merged_data_eft[k] = vec(v)
+    end
+
     println("Computed δμ: ", δμ)
     # δμ[2] = measurement("-0.08196(8)")  # Use benchmark dMu2 value
     occupation = UEG_MC.chemicalpotential_renormalization_green(
@@ -218,6 +275,14 @@ function main()
         min_order=0,
         max_order=max_order,
     )
+    if compare_eft
+        occupation_eft = UEG_MC.chemicalpotential_renormalization_green(
+            merged_data_eft,
+            δμ;
+            min_order=0,
+            max_order=max_order,
+        )
+    end
     # occupation = UEG_MC.RenormMeasType()
     # occupation[0] = merged_data[(0, 0)]
     # occupation[2] = merged_data[(2, 0)] + δμ[2] * merged_data[(0, 1)]
@@ -249,6 +314,9 @@ function main()
     end
     # Aggregate the full results for Σₓ up to order N
     occupation_total = UEG_MC.aggregate_orders(occupation)
+    if compare_eft
+        occupation_total_eft = UEG_MC.aggregate_orders(occupation_eft)
+    end
 
     # occupation = Dict()
     # for (k, v) in merged_data
@@ -506,6 +574,7 @@ function main()
     ic = 1
     # colors = ["C0", "C1", "C2", "C3"]
     colors = ["orchid", "cornflowerblue", "turquoise", "chartreuse"]
+    colors2 = ["purple", "blue", "green", "yellow"]
     for (i, N) in enumerate(min_order:max_order_plot)
         # N == 0 && continue
         isFock && N == 1 && continue
@@ -558,7 +627,7 @@ function main()
             markersize=2,
             # color="C$ic",
             color="$(colors[ic])",
-            label="\$N=$N\$ ($solver)",
+            label="\$N=$N\$ ($solver, SOSEM)",
         )
         ax.fill_between(
             k_kf_grid,
@@ -566,6 +635,26 @@ function main()
             means + stdevs;
             # color="C$ic",
             color="$(colors[ic])",
+            alpha=0.4,
+        )
+        means = Measurements.value.(occupation_total_eft[N])
+        stdevs = Measurements.uncertainty.(occupation_total_eft[N])
+        marker = "o-"
+        ax.plot(
+            kgrid_eft / param.kF,
+            means,
+            marker;
+            markersize=2,
+            # color="C$ic",
+            color="$(colors2[ic])",
+            label="\$N=$N\$ ($solver, ElectronLiquid)",
+        )
+        ax.fill_between(
+            kgrid_eft / param.kF,
+            means - stdevs,
+            means + stdevs;
+            # color="C$ic",
+            color="$(colors2[ic])",
             alpha=0.4,
         )
         ic += 1
@@ -581,11 +670,13 @@ function main()
     else
         prefix = "n_{k\\sigma}"
     end
-    if renorm_lambda == false && fix_mu == true
+    lcond = renorm_lambda == false || fix_lambda
+    mcond = renorm_mu == false || fix_mu
+    if lcond && mcond
         suffix = "(\\lambda, \\mu=\\mu_0)"
-    elseif renorm_lambda == false && fix_mu == false
+    elseif lcond && mcond == false
         suffix = "(\\lambda)"
-    elseif renorm_lambda == true && fix_mu == true
+    elseif lcond == false && mcond
         suffix = "(\\mu)"
     else
         suffix = ""
@@ -596,9 +687,9 @@ function main()
         yloc = 0.6
         ydiv = -0.125
     else
-        xloc = 0.79
+        xloc = 1.5
         yloc = 0.5
-        ydiv = -0.3
+        ydiv = -0.15
     end
     ax.text(
         xloc,
@@ -666,7 +757,7 @@ function main()
     fig.savefig(
         dirstring *
         "occupation_N=$(max_order_plot)_rs=$(param.rs)_" *
-        "beta_ef=$(param.beta)_lambda=$(param.mass2)_neval=$(neval)_$(solver)_$(ct_string)$(mu_string).pdf",
+        "beta_ef=$(param.beta)_lambda=$(param.mass2)_neval=$(neval)_$(solver)_$(ct_string)$(fix_string).pdf",
     )
 
     plt.close("all")

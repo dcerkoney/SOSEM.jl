@@ -17,7 +17,12 @@ using SOSEM
 # For saving/loading numpy data
 @pyimport numpy as np
 
-function build_occupation_with_ct(orders; renorm_mu=true, renorm_lambda=true, isFock=false)
+function build_occupation_with_ct(
+    orders::Vector{Int};
+    renorm_mu=true,
+    renorm_lambda=true,
+    isFock=false,
+)
     DiagTree.uidreset()
     valid_partitions = Vector{PartitionType}()
     diagparams = Vector{DiagParaF64}()
@@ -30,6 +35,50 @@ function build_occupation_with_ct(orders; renorm_mu=true, renorm_lambda=true, is
         renorm_mu=renorm_mu,
         renorm_lambda=renorm_lambda,
     )
+    @debug "Partitions: $partitions"
+    for p in partitions
+        # Build diagram tree for this partition
+        @debug "Partition (n_loop, n_ct_mu, n_ct_lambda): $p"
+        diagparam, diagtree = build_diagtree(; n_loop=p[1])
+
+        # Build tree with counterterms (∂λ(∂μ(DT))) via automatic differentiation
+        dμ_diagtree = DiagTree.derivative([diagtree], BareGreenId, p[2]; index=1)
+        dλ_dμ_diagtree = DiagTree.derivative(dμ_diagtree, BareInteractionId, p[3]; index=2)
+        if isempty(dλ_dμ_diagtree)
+            @warn("Ignoring partition $p with no diagrams")
+        else
+            if isFock && (p != (1, 0, 0)) # the Fock diagram itself should not be removed
+                DiagTree.removeHartreeFock!(dλ_dμ_diagtree)
+            end
+            @debug "\nDiagTree:\n" * repr_tree(dλ_dμ_diagtree)
+            # Compile to expression tree and save results for this partition
+            exprtree = ExprTree.build(dλ_dμ_diagtree)
+            push!(valid_partitions, p)
+            push!(diagparams, diagparam)
+            push!(exprtrees, exprtree)
+            append!(diagtrees, dλ_dμ_diagtree)
+        end
+    end
+    return valid_partitions, diagparams, diagtrees, exprtrees
+end
+
+function build_occupation_with_ct(
+    partitions::Vector{PartitionType};
+    renorm_mu=true,
+    renorm_lambda=true,
+    isFock=false,
+)
+    if renorm_mu == false
+        @assert all(P[2] == 0 for P in partitions)
+    end
+    if renorm_lambda == false
+        @assert all(P[3] == 0 for P in partitions)
+    end
+    DiagTree.uidreset()
+    valid_partitions = Vector{PartitionType}()
+    diagparams = Vector{DiagParaF64}()
+    diagtrees = Vector{DiagramF64}()
+    exprtrees = Vector{ExprTreeF64}()
     @debug "Partitions: $partitions"
     for p in partitions
         # Build diagram tree for this partition
@@ -226,7 +275,8 @@ function main()
     end
 
     # Total loop order N
-    orders = [0, 1, 2, 3]
+    # orders = [0, 1, 2, 3]
+    orders = [3, 4]
     max_order = maximum(orders)
     sort!(orders)
 
@@ -245,6 +295,20 @@ function main()
     # Remove Fock insertions?
     isFock = false
 
+    # Do we set green4 to zero for benchmarking?
+    no_green4 = true
+    no_green4_str = no_green4 ? "_no_green4" : ""
+
+    # Optionally give specific partition(s) to build
+    build_partitions = [(1, 0, 2), (2, 0, 2)]
+    # build_partitions = nothing
+    partn_string = ""
+    if isnothing(build_partitions) == false
+        for P in build_partitions
+            partn_string *= "_" * join(P)
+        end
+    end
+
     # UEG parameters for MC integration
     param = ParaMC(;
         order=max_order,
@@ -256,14 +320,24 @@ function main()
     )
     @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)"
 
-    # Build diagram/expression trees for the occupation number to order
-    # ξᴺ in the renormalized perturbation theory (includes CTs in μ and λ)
-    partitions, diagparams, diagtrees, exprtrees = build_occupation_with_ct(
-        orders;
-        renorm_mu=renorm_mu,
-        renorm_lambda=renorm_lambda,
-        isFock=isFock,
-    )
+    if isnothing(build_partitions)
+        # Build diagram/expression trees for the occupation number to order
+        # ξᴺ in the renormalized perturbation theory (includes CTs in μ and λ)
+        partitions, diagparams, diagtrees, exprtrees = build_occupation_with_ct(
+            orders;
+            renorm_mu=renorm_mu,
+            renorm_lambda=renorm_lambda,
+            isFock=isFock,
+        )
+    else
+        # Build diagram/expression tress for specific partition(s)
+        partitions, diagparams, diagtrees, exprtrees = build_occupation_with_ct(
+            build_partitions;
+            renorm_mu=renorm_mu,
+            renorm_lambda=renorm_lambda,
+            isFock=isFock,
+        )
+    end
 
     println("Integrating partitions: $partitions")
     println("diagtrees: $diagtrees")
@@ -295,7 +369,8 @@ function main()
     if !isnothing(res)
         savename =
             "results/data/density_n=$(param.order)_rs=$(param.rs)_beta_ef=$(param.beta)_" *
-            "lambda=$(param.mass2)_neval=$(neval)_$(solver)$(ct_string)_no_green4"
+            "lambda=$(param.mass2)_neval=$(neval)_$(solver)$(ct_string)" *
+            "$(no_green4_str)$(partn_string)"
         jldopen("$savename.jld2", "a+"; compress=true) do f
             key = "$(UEG.short(param))"
             if haskey(f, key)
