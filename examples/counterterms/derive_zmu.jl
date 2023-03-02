@@ -20,7 +20,7 @@ order = [3]  # C^{(1)}_{N≤5} includes CTs up to 3rd order
 rs = [1.0]
 #mass2 = LinRange(1.0, 5.0, 5)
 mass2 = [1.0]
-beta = [40.0]
+beta = [100.0]
 # beta = [25.0, 40.0, 80.0]
 
 # Grid-search 2: rs, beta
@@ -33,10 +33,23 @@ beta = [40.0]
 #mass2 = [<lambda_opt>]
 #beta = [<beta_opt>]
 
-# Remove Fock insertions?
-isFock = true
+# Enable/disable interaction and chemical potential counterterms
+renorm_mu = true
+renorm_lambda = true
 
-const filename = "data_Z.jld2"
+# Remove Fock insertions?
+isFock = false
+
+# Distinguish results with different counterterm schemes
+ct_string = (renorm_mu || renorm_lambda) ? "with_ct" : ""
+if renorm_mu
+    ct_string *= "_mu"
+end
+if renorm_lambda
+    ct_string *= "_lambda"
+end
+
+const filename = "data_Z_$(ct_string).jld2"
 const parafilename = "para.csv"
 
 function zfactor(data, β)
@@ -67,7 +80,7 @@ function process(datatuple, isSave)
         _z[p] = zfactor(val, para.β)
     end
 
-    dzi, _, _ = CounterTerm.sigmaCT(para.order, _mu, _z; isFock=isFock)
+    dzi, _, _ = CounterTerm.sigmaCT(para.order, _mu, _z; isfock=isFock, verbose=1)
     println("zfactor: ", dzi)
 
     ############# save to csv  #################

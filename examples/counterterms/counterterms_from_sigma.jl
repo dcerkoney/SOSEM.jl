@@ -38,8 +38,21 @@ function main()
     # Total number of MCMC evaluations
     neval = 1e10
 
+    # Enable/disable interaction and chemical potential counterterms
+    renorm_mu = true
+    renorm_lambda = true
+
     # Remove Fock insertions?
-    isFock = true
+    isFock = false
+
+    # Distinguish results with different counterterm schemes
+    ct_string = (renorm_mu || renorm_lambda) ? "with_ct" : ""
+    if renorm_mu
+        ct_string *= "_mu"
+    end
+    if renorm_lambda
+        ct_string *= "_lambda"
+    end
 
     # Get self-energy data needed for the chemical potential and Z-factor measurements
     for (_rs, _mass2, _beta, _order) in Iterators.product(rs, mass2, beta, order)
@@ -59,7 +72,14 @@ function main()
         # ngrid = [-1, 0]
 
         # Build diagrams
-        partition = UEG.partition(_order)
+        n_min, n_max = 1, _order
+        partition = UEG_MC.counterterm_partitions(
+            n_min,
+            n_max;
+            n_lowest=1,
+            renorm_mu=renorm_mu,
+            renorm_lambda=renorm_lambda,
+        )
         neighbor = UEG.neighbor(partition)
         @time diagram = Sigma.diagram(para, partition)
 
@@ -84,7 +104,7 @@ function main()
         if isnothing(sigma) == false
             println("Current working directory: $(pwd())")
             println("Saving data to JLD2...")
-            jldopen("data_Z.jld2", "a+"; compress=true) do f
+            jldopen("data_Z_$(ct_string).jld2", "a+"; compress=true) do f
                 # jldopen("data_Z.jld2", "a+") do f
                 key = "$(UEG.short(para))"
                 if haskey(f, key)

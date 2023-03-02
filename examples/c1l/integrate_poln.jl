@@ -219,7 +219,7 @@ function integrand(vars, config)
         @debug "τout = $(Tgrid[iT])" maxlog = 3
 
         # Evaluate the expression tree (additional = mcparam)
-        ExprTree.evalKT!(exprtrees[i], varK, T.data, mcparam; eval=UEG_MC.Propagators.eval)
+        ExprTree.evalKT!(exprtrees[i], varK, T.data, mcparam)
 
         # Evaluate the exchange integrand Σx(k) for this partition
         root = exprtrees[i].root[1]  # there is only one root per partition

@@ -131,7 +131,7 @@ function integrate_occupation_with_ct(
     phase_factors = [1.0 / (2π)^(mcparam.dim * nl) for nl in innerLoopNums]
 
     # Total prefactors
-    prefactors = -phase_factors
+    prefactors = phase_factors
 
     return integrate(
         integrand;
@@ -203,7 +203,7 @@ function integrand(vars, config)
         @debug "ExtK = $(kgrid[ik])" maxlog = 3
 
         # Evaluate the expression tree (additional = mcparam)
-        ExprTree.evalKT!(exprtrees[i], varK, T.data, mcparam; eval=UEG_MC.Propagators.eval)
+        ExprTree.evalKT!(exprtrees[i], varK, T.data, mcparam)
 
         # Evaluate the occupation number integrand nₖ for this partition
         root = exprtrees[i].root[1]  # there is only one root per partition
@@ -228,7 +228,7 @@ function main()
     end
 
     # Total loop order N
-    orders = [1, 2, 3]
+    orders = [0, 1, 2]
     max_order = maximum(orders)
     sort!(orders)
 
@@ -238,14 +238,14 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 1e6
+    neval = 1e10
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
-    renorm_lambda = false
+    renorm_lambda = true
 
     # Remove Fock insertions?
-    isFock = true
+    isFock = false
 
     # UEG parameters for MC integration
     param = ParaMC(;

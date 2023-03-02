@@ -59,7 +59,7 @@ function integrate_occupation(
     phase_factor = 1.0 / (2π)^(mcparam.dim * innerLoopNum)
 
     # Total prefactor; extra minus sign relative to N&O convention for G₀
-    prefactor = -phase_factor
+    prefactor = phase_factor
 
     return integrate(
         integrand;
@@ -125,7 +125,7 @@ function integrand(vars, config)
     @debug "ExtK = $(kgrid[ik])" maxlog = 3
 
     # Evaluate the expression tree (additional = mcparam)
-    ExprTree.evalKT!(exprtree, varK, T.data, mcparam; eval=UEG_MC.Propagators.eval)
+    ExprTree.evalKT!(exprtree, varK, T.data, mcparam)
 
     # Evaluate the occupation number integrand nₖ
     root = exprtree.root[1]
@@ -286,31 +286,37 @@ function main()
     param = ParaMC(; order=2, rs=1.0, beta=40.0, mass2=1.0, isDynamic=false)
     @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)"
 
-    # K-mesh for measurement
-    minK = 0.05 * param.kF
-    Nk, korder = 4, 5
-    kleft =
-        CompositeGrid.LogDensedGrid(
-            :uniform,
-            [0.75 * param.kF, param.kF - 1e-8],
-            [param.kF - 1e-8],
-            Nk,
-            minK,
-            korder,
-        ).grid
-    kright =
-        CompositeGrid.LogDensedGrid(
-            :uniform,
-            [param.kF + 1e-8, 1.25 * param.kF],
-            [param.kF + 1e-8],
-            Nk,
-            minK,
-            korder,
-        ).grid
-    kgrid = [kleft; kright]
+    # Dimensionless k-mesh for measurement
+    k_kf_grid = CompositeGrid.LogDensedGrid(:cheb, [0.0, 3.0], [1.0], 5, 0.02, 5)
+
+    # Dimensionful k-grid
+    kgrid = k_kf_grid * param.kF
+
+    # # K-mesh for measurement
+    # minK = 0.05 * param.kF
+    # Nk, korder = 4, 5
+    # kleft =
+    #     CompositeGrid.LogDensedGrid(
+    #         :uniform,
+    #         [0.75 * param.kF, param.kF - 1e-8],
+    #         [param.kF - 1e-8],
+    #         Nk,
+    #         minK,
+    #         korder,
+    #     ).grid
+    # kright =
+    #     CompositeGrid.LogDensedGrid(
+    #         :uniform,
+    #         [param.kF + 1e-8, 1.25 * param.kF],
+    #         [param.kF + 1e-8],
+    #         Nk,
+    #         minK,
+    #         korder,
+    #     ).grid
+    # kgrid = [kleft; kright]
 
     # Dimensionless k-grid
-    k_kf_grid = kgrid / param.kF
+    # k_kf_grid = kgrid / param.kF
 
     # Settings
     alpha = 3.0
@@ -318,7 +324,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 1e7
+    neval = 1e8
 
     # Integrate each term in the N=2 Fock series benchmark
     second_order_fock_terms = [build_term1(), build_term2(), build_term3()]
