@@ -22,7 +22,8 @@ function main()
 
     # Total loop order N
     # orders = [0, 1, 2, 3]
-    orders = [1, 2, 3]
+    # orders = [1, 2, 3]
+    orders = [3, 4]
     min_order = minimum(orders)
     max_order = maximum(orders)
     sort!(orders)
@@ -33,18 +34,18 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 1e9
+    neval = 1e10
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
-    renorm_lambda = false
+    renorm_lambda = true
 
     # Remove Fock insertions?
-    isFock = true
+    isFock = false
 
     # Ignore measured mu/lambda partitions?
     fix_mu = false
-    fix_lambda = true
+    fix_lambda = false
 
     # Inverse temperature in units of EF
     beta = 40.0
@@ -53,8 +54,18 @@ function main()
     compare_eft = false
 
     # Set green4 to zero for benchmarking?
-    no_green4 = false
+    no_green4 = true
     no_green4_str = no_green4 ? "_no_green4" : ""
+
+    # Optionally give specific partition(s) to build
+    build_partitions = [(1, 0, 2), (2, 0, 2)]
+    # build_partitions = nothing
+    partn_string = ""
+    if isnothing(build_partitions) == false
+        for P in build_partitions
+            partn_string *= "_" * join(P)
+        end
+    end
 
     # UEG parameters for MC integration
     loadparam = ParaMC(;
@@ -83,7 +94,8 @@ function main()
     # Load the raw data
     savename =
         "results/data/density_n=$(loadparam.order)_rs=$(loadparam.rs)_beta_ef=$(loadparam.beta)_" *
-        "lambda=$(loadparam.mass2)_neval=$(neval)_$(solver)$(ct_string)$(no_green4_str)"
+        "lambda=$(loadparam.mass2)_neval=$(neval)_$(solver)$(ct_string)" *
+        "$(no_green4_str)$(partn_string)"
     println(savename)
     orders, param, partitions, res = jldopen("$savename.jld2", "a+") do f
         key = "$(UEG.short(loadparam))"
@@ -119,13 +131,13 @@ function main()
     end
 
     println(n0)
-    println("\nPartitions SOSEM (n_loop, n_μ, n_λ):\n")
+    println("\nPartitions SOSEM (n_loop, n_λ, n_μ):\n")
     for Pm in keys(data)
         # fix_mu && Pm[2] > 0 && continue
         # Pm[3] > 0 && continue  # No lambda counterterms
         println("$((Pm[1]+1, Pm[3], Pm[2])):\t$(data[Pm][1])")
     end
-    println("\nPartitions EFT (n_loop, n_μ, n_λ):\n")
+    println("\nPartitions EFT (n_loop, n_λ, n_μ):\n")
     if compare_eft
         for Pm in keys(data_eft)
             # fix_mu && Pm[2] > 0 && continue

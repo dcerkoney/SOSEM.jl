@@ -51,6 +51,8 @@ function build_occupation_with_ct(
                 DiagTree.removeHartreeFock!(dλ_dμ_diagtree)
             end
             @debug "\nDiagTree:\n" * repr_tree(dλ_dμ_diagtree)
+            # Optimize the tree
+            # DiagTree.optimize!(dλ_dμ_diagtree)
             # Compile to expression tree and save results for this partition
             exprtree = ExprTree.build(dλ_dμ_diagtree)
             push!(valid_partitions, p)
@@ -95,6 +97,8 @@ function build_occupation_with_ct(
                 DiagTree.removeHartreeFock!(dλ_dμ_diagtree)
             end
             @debug "\nDiagTree:\n" * repr_tree(dλ_dμ_diagtree)
+            # Optimize the tree
+            # DiagTree.optimize!(dλ_dμ_diagtree)
             # Compile to expression tree and save results for this partition
             exprtree = ExprTree.build(dλ_dμ_diagtree)
             push!(valid_partitions, p)
@@ -300,7 +304,7 @@ function main()
     no_green4_str = no_green4 ? "_no_green4" : ""
 
     # Optionally give specific partition(s) to build
-    build_partitions = [(1, 0, 2), (2, 0, 2)]
+    build_partitions = [(2, 0, 1)]
     # build_partitions = nothing
     partn_string = ""
     if isnothing(build_partitions) == false
