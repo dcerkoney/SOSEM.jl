@@ -280,7 +280,7 @@ function main()
 
     # Total loop order N
     # orders = [0, 1, 2, 3]
-    orders = [4]
+    orders = [2, 3, 4]
     max_order = maximum(orders)
     sort!(orders)
 
@@ -290,7 +290,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 1e10
+    neval = 1e9
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -304,8 +304,7 @@ function main()
     no_green4_str = no_green4 ? "_no_green4" : ""
 
     # Optionally give specific partition(s) to build
-    build_partitions = [(2, 0, 2)]
-    # build_partitions = nothing
+    build_partitions = nothing
     partn_string = ""
     if isnothing(build_partitions) == false
         for P in build_partitions
@@ -318,7 +317,7 @@ function main()
         order=max_order,
         rs=1.0,
         beta=40.0,
-        mass2=1.0,
+        mass2=0.6,
         isDynamic=false,
         isFock=isFock,  # remove Fock insertions
     )
@@ -374,7 +373,7 @@ function main()
         savename =
             "results/data/density_n=$(param.order)_rs=$(param.rs)_beta_ef=$(param.beta)_" *
             "lambda=$(param.mass2)_neval=$(neval)_$(solver)$(ct_string)" *
-            "$(no_green4_str)$(partn_string)_test_intn_fix"
+            "$(no_green4_str)$(partn_string)_ct_fixes"
         jldopen("$savename.jld2", "a+"; compress=true) do f
             key = "$(UEG.short(param))"
             if haskey(f, key)
