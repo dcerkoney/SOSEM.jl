@@ -280,7 +280,7 @@ function main()
 
     # Total loop order N
     # orders = [0, 1, 2, 3]
-    orders = [3, 4]
+    orders = [4]
     max_order = maximum(orders)
     sort!(orders)
 
@@ -290,7 +290,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 1e10
+    neval = 1e5
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -304,8 +304,8 @@ function main()
     no_green4_str = no_green4 ? "_no_green4" : ""
 
     # Optionally give specific partition(s) to build
-    build_partitions = [(2, 0, 1), (2, 0, 2)]
-    # build_partitions = nothing
+    # build_partitions = [(2, 0, 1)]
+    build_partitions = nothing
     partn_string = ""
     if isnothing(build_partitions) == false
         for P in build_partitions

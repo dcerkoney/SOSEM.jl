@@ -23,7 +23,7 @@ function main()
     # Total loop order N
     # orders = [0, 1, 2, 3]
     # orders = [1, 2, 3]
-    orders = [3, 4]
+    orders = [4]
     min_order = minimum(orders)
     max_order = maximum(orders)
     sort!(orders)
@@ -131,14 +131,14 @@ function main()
     end
 
     println(n0)
-    println("\nPartitions SOSEM (n_loop, n_λ, n_μ):\n")
+    println("\nPartitions SOSEM in units of n0 (n_loop, n_λ, n_μ):\n")
     for Pm in keys(data)
         # fix_mu && Pm[2] > 0 && continue
         # Pm[3] > 0 && continue  # No lambda counterterms
         println("$((Pm[1]+1, Pm[3], Pm[2])):\t$(data[Pm][1])")
     end
-    println("\nPartitions EFT (n_loop, n_λ, n_μ):\n")
     if compare_eft
+        println("\nPartitions EFT in units of n0 (n_loop, n_λ, n_μ):\n")
         for Pm in keys(data_eft)
             # fix_mu && Pm[2] > 0 && continue
             # Pm[3] > 0 && continue  # No lambda counterterms
