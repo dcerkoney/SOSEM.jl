@@ -290,7 +290,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 1e5
+    neval = 1e10
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -304,8 +304,8 @@ function main()
     no_green4_str = no_green4 ? "_no_green4" : ""
 
     # Optionally give specific partition(s) to build
-    # build_partitions = [(2, 0, 1)]
-    build_partitions = nothing
+    build_partitions = [(2, 0, 2)]
+    # build_partitions = nothing
     partn_string = ""
     if isnothing(build_partitions) == false
         for P in build_partitions
@@ -374,7 +374,7 @@ function main()
         savename =
             "results/data/density_n=$(param.order)_rs=$(param.rs)_beta_ef=$(param.beta)_" *
             "lambda=$(param.mass2)_neval=$(neval)_$(solver)$(ct_string)" *
-            "$(no_green4_str)$(partn_string)"
+            "$(no_green4_str)$(partn_string)_test_intn_fix"
         jldopen("$savename.jld2", "a+"; compress=true) do f
             key = "$(UEG.short(param))"
             if haskey(f, key)
