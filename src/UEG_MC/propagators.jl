@@ -46,13 +46,11 @@ function eval(id::BareGreenId, K, _, varT, p::ParaMC)
     elseif order == 1
         return -Spectral.kernelFermiT_dω(τ, ϵ, β)
     elseif order == 2
-        return Spectral.kernelFermiT_dω2(τ, ϵ, β) / 2.0
+        return Spectral.kernelFermiT_dω2(τ, ϵ, β)
     elseif order == 3
-        # return -Spectral.kernelFermiT_dω3(τ, ϵ, β) / 6.0
-        return 0.0
+        return -Spectral.kernelFermiT_dω3(τ, ϵ, β)
     else
-        return 0.0
-        # @todo
+        @todo
     end
     # return green
 end
@@ -77,7 +75,7 @@ function eval(id::BareInteractionId, K, _, varT, p::ParaMC)
     else
         # Counterterms for screened interaction
         invK = 1.0 / (qd^2 + mass2)
-        return e0^2 / ϵ0 * invK * (mass2 * invK)^id.order[2]
+        return factorial(id.order[2]) * e0^2 / ϵ0 * invK * (mass2 * invK)^id.order[2]
     end
 end
 
