@@ -25,7 +25,7 @@ function main()
     settings = Settings{CompositeObservable}(
         c1nl_ueg;
         min_order=3,  # TODO: special-purpose integrator for (2,0,0) partition
-        max_order=5,
+        max_order=4,
         verbosity=quiet,
         expand_bare_interactions=false,
         filter=[NoHartree],
@@ -40,6 +40,7 @@ function main()
         beta=40.0,
         mass2=1.0,
         isDynamic=false,
+	isFock=false,
     )
     @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)"
 
@@ -64,7 +65,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 1e7
+    neval = 1e10
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
