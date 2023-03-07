@@ -280,7 +280,7 @@ function main()
 
     # Total loop order N
     # orders = [0, 1, 2, 3]
-    orders = [2, 3, 4]
+    orders = [0, 1, 2, 3, 4]
     max_order = maximum(orders)
     sort!(orders)
 
@@ -300,7 +300,7 @@ function main()
     isFock = false
 
     # Do we set green4 to zero for benchmarking?
-    no_green4 = true
+    no_green4 = false
     no_green4_str = no_green4 ? "_no_green4" : ""
 
     # Optionally give specific partition(s) to build
@@ -317,7 +317,7 @@ function main()
         order=max_order,
         rs=1.0,
         beta=40.0,
-        mass2=0.6,
+        mass2=1.0,
         isDynamic=false,
         isFock=isFock,  # remove Fock insertions
     )
@@ -373,7 +373,7 @@ function main()
         savename =
             "results/data/density_n=$(param.order)_rs=$(param.rs)_beta_ef=$(param.beta)_" *
             "lambda=$(param.mass2)_neval=$(neval)_$(solver)$(ct_string)" *
-            "$(no_green4_str)$(partn_string)_ct_fixes"
+            "$(no_green4_str)$(partn_string)"
         jldopen("$savename.jld2", "a+"; compress=true) do f
             key = "$(UEG.short(param))"
             if haskey(f, key)

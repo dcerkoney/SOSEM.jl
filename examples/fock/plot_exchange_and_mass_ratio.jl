@@ -80,13 +80,13 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 5e9
+    neval = 1e8
 
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
-    min_order = 2
-    max_order = 4
+    min_order = 1
+    max_order = 3
     min_order_plot = 1
-    max_order_plot = 4
+    max_order_plot = 3
 
     # Save total results
     save = true
@@ -94,23 +94,30 @@ function main()
     # Distinguish results with fixed vs re-expanded bare interactions
     intn_str = ""
 
-    # Full renormalization
-    ct_string = "with_ct_mu_lambda"
+    # Enable/disable interaction and chemical potential counterterms
+    renorm_mu = true
+    renorm_lambda = true
+
+    # Distinguish results with different counterterm schemes used in the original run
+    ct_string = (renorm_mu || renorm_lambda) ? "_with_ct" : ""
+    if renorm_mu
+        ct_string *= "_mu"
+    end
+    if renorm_lambda
+        ct_string *= "_lambda"
+    end
 
     # UEG parameters for MC integration
-    # loadparam = ParaMC(; order=max_order, rs=rs, beta=beta, mass2=mass2, isDynamic=false)
-
-    # NOTE: Taking N=3 data from N=4 run, renorm for N=4 not yet implemented!
-    loadparam = ParaMC(; order=4, rs=rs, beta=beta, mass2=mass2, isDynamic=false)
-
-    # savename =
-    #     "results/data/sigma_x_n=$(max_order)_rs=$(rs)_" *
-    #     "beta_ef=$(beta)_lambda=$(mass2)_neval=$(neval)_$(solver)"
-
-    # NOTE: Taking N=3 data from N=4 run, renorm for N=4 not yet implemented!
+    loadparam = ParaMC(; order=max_order, rs=rs, beta=beta, mass2=mass2, isDynamic=false)
     savename =
-        "results/data/sigma_x_n=4_rs=$(rs)_" *
-        "beta_ef=$(beta)_lambda=$(mass2)_neval=$(neval)_$(solver)"
+        "results/data/sigma_x_n=$(max_order)_rs=$(rs)_" *
+        "beta_ef=$(beta)_lambda=$(mass2)_neval=$(neval)_$(solver)$(ct_string)"
+
+    # NOTE: Taking N=3 data from N=4 run, renorm for N=4 not yet implemented!
+    # loadparam = ParaMC(; order=4, rs=rs, beta=beta, mass2=mass2, isDynamic=false)
+    # savename =
+    #     "results/data/sigma_x_n=4_rs=$(rs)_" *
+    #     "beta_ef=$(beta)_lambda=$(mass2)_neval=$(neval)_$(solver)"
 
     orders, param, kgrid, partitions, res = jldopen("$savename.jld2", "a+") do f
         key = "$(UEG.short(loadparam))"
@@ -124,10 +131,14 @@ function main()
     # Convert results to a Dict of measurements at each order with interaction counterterms merged
     data = UEG_MC.restodict(res, partitions)
 
-    # TODO: Rerun with minus sign fixed
     for (k, v) in data
-        data[k] = -v / param.β
+        data[k] = v / (factorial(k[2]) * factorial(k[3]))
     end
+
+    # # TODO: Rerun with minus sign fixed
+    # for (k, v) in data
+    #     data[k] = -v / param.β
+    # end
 
     merged_data = CounterTerm.mergeInteraction(data)
     println([k for (k, _) in merged_data])
@@ -159,8 +170,10 @@ function main()
     end
 
     # Reexpand merged data in powers of μ
-    z, μ = UEG_MC.load_z_mu(param)
-    δz, δμ = CounterTerm.sigmaCT(max_order, μ, z; verbose=1)
+    ct_filename = "examples/counterterms/data_Z$(ct_string).jld2"
+    z, μ = UEG_MC.load_z_mu(param; ct_filename=ct_filename)
+    δz, δμ = CounterTerm.sigmaCT(2, μ, z; verbose=1)  # TODO: Fix order 3
+    # δz, δμ = CounterTerm.sigmaCT(max_order, μ, z; verbose=1)
     println("Computed δμ: ", δμ)
     sigma_x =
         UEG_MC.chemicalpotential_renormalization_sigma(merged_data, δμ; max_order=max_order)
@@ -186,7 +199,7 @@ function main()
     if save
         savename =
             "results/data/rs=$(param.rs)_beta_ef=$(param.beta)_" *
-            "lambda=$(param.mass2)_$(intn_str)$(solver)_$(ct_string)"
+            "lambda=$(param.mass2)_$(intn_str)$(solver)$(ct_string)"
         f = jldopen("$savename.jld2", "a+"; compress=true)
         # NOTE: no bare result for c1b observable (accounted for in c1b0)
         for N in min_order_plot:max_order
@@ -215,7 +228,7 @@ function main()
     # Compare result to exact non-dimensionalized Fock self-energy (-F(k / kF))
     ax1.plot(k_kf_grid, -UEG_MC.lindhard.(k_kf_grid), "k"; label="\$N=1\$ (exact, \$T=0\$)")
     for (i, N) in enumerate(min_order:max_order_plot)
-        N == 1 && continue
+        # N == 1 && continue
         # Get means and error bars from the result up to this order
         means = Measurements.value.(sigma_x_over_eTF_total[N])
         stdevs = Measurements.uncertainty.(sigma_x_over_eTF_total[N])
@@ -277,8 +290,8 @@ function main()
     EF_fock = qp_fock_exact(param.kF, param)
     println("ΣF(k = 0) (pred, exact):", sigma_fock_exact[1], " ", -eTF)
     println("EqpF(k = kF) (pred, exact):", EF_fock, " ", param.EF - eTF / 2)
-    @assert sigma_fock_exact[1] ≈ -eTF
-    @assert EF_fock ≈ param.EF - eTF / 2
+    # @assert sigma_fock_exact[1] ≈ -eTF
+    # @assert EF_fock ≈ param.EF - eTF / 2
 
     # Exact results on dense (quadrature) grids
     kgrid_quad = param.kF * np.linspace(0.0, 3.0; num=600)
@@ -377,22 +390,23 @@ function main()
         # linestyle="--",
         label="\$\\epsilon_{\\mathrm{HF}}(k \\rightarrow 0) / \\epsilon_{\\mathrm{TF}} \\sim -1 + \\left(\\frac{\\pi}{4\\alpha} + \\frac{1}{3}\\right) \\left( \\frac{k}{k_F} \\right)^2\$",
     )
-    ax2.plot(
-        kgrid_quad / param.kF,
-        E_fock_quad / eTF,
-        "C0";
-        label="\$N=1\$ (exact, \$T=0\$)",
-    )
-    ax2.plot(
-        kgrid_quad / param.kF,
-        qp_fit_fock(kgrid_quad) / eTF,
-        "C0";
-        linestyle="--",
-        label="\$N=1\$ (quasiparticle fit)",
-        # label="\$\\left(\\epsilon_0 + \\frac{k^2}{2 m^\\star_{\\mathrm{HF}}} \\right) \\Big/ \\epsilon_{\\mathrm{TF}}\$ (quasiparticle fit)",
-    )
+    # ax2.plot(
+    #     kgrid_quad / param.kF,
+    #     E_fock_quad / eTF,
+    #     "k";
+    #     label="\$N=1\$ (exact, \$T=0\$)",
+    # )
+    # ax2.plot(
+    #     kgrid_quad / param.kF,
+    #     qp_fit_fock(kgrid_quad) / eTF,
+    #     "C0";
+    #     linestyle="--",
+    #     label="\$N=1\$ (quasiparticle fit)",
+    #     # label="\$\\left(\\epsilon_0 + \\frac{k^2}{2 m^\\star_{\\mathrm{HF}}} \\right) \\Big/ \\epsilon_{\\mathrm{TF}}\$ (quasiparticle fit)",
+    # )
+    ic = 0
     for (i, N) in enumerate(min_order:max_order_plot)
-        N == 1 && continue
+        # N == 1 && continue
 
         # Eqp = ϵ(k) + Σₓ(k)
         Eqp_over_eTF = Ek_over_eTF .+ sigma_x_over_eTF_total[N]
@@ -428,23 +442,24 @@ function main()
             means_qp,
             marker;
             markersize=2,
-            color="C$i",
+            color="C$ic",
             label="\$N=$N\$ ($solver)",
         )
         ax2.fill_between(
             k_kf_grid,
             means_qp - stdevs_qp,
             means_qp + stdevs_qp;
-            color="C$i",
+            color="C$ic",
             alpha=0.4,
         )
         ax2.plot(
             kgrid_quad / param.kF,
             qp_fit_fock(kgrid_quad) / eTF;
-            color="C$i",
+            color="C$ic",
             linestyle="--",
             label="\$N=$N\$ (quasiparticle fit)",
         )
+        ic += 1
     end
     ax2.legend(; loc="upper left")
     # ax2.set_xlim(minimum(k_kf_grid), 1)

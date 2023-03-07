@@ -60,7 +60,7 @@ function main()
     benchmark = false
 
     # Compare with results from EFT_UEG?
-    compare_eft = true
+    compare_eft = false
 
     # Set green4 to zero for benchmarking?
     no_green4 = true
@@ -220,9 +220,11 @@ function main()
         # treat quadrature data as numerically exact
         merged_data[(0, 0)] = [measurement(bare_occupation_exact, 0.0)]
     end
-    if haskey(merged_data_eft, (0, 0)) == false
-        # treat quadrature data as numerically exact
-        merged_data_eft[(0, 0)] = [measurement(bare_occupation_exact, 0.0)]
+    if compare_eft
+        if haskey(merged_data_eft, (0, 0)) == false
+            # treat quadrature data as numerically exact
+            merged_data_eft[(0, 0)] = [measurement(bare_occupation_exact, 0.0)]
+        end
     end
     if min_order == 0
         stdscores = stdscore.(merged_data[(0, 0)], bare_occupation_exact)
@@ -262,9 +264,11 @@ function main()
     end
     δz, δμ = CounterTerm.sigmaCT(3, μ, z; isfock=isFock, verbose=1)
 
-    for (k, v) in merged_data_eft
-        println(v)
-        merged_data_eft[k] = vec(v)
+    if compare_eft
+        for (k, v) in merged_data_eft
+            println(v)
+            merged_data_eft[k] = vec(v)
+        end
     end
 
     println("Computed δμ: ", δμ)
@@ -558,11 +562,16 @@ function main()
     end
     bare_occupation_fine = -Spectral.kernelFermiT.(-1e-8, ϵk, param.β)
 
-    # Get standard scores vs benchmark
-    stdscores = stdscore.(occupation_total[2], bm_occupation_2)
-    worst_score = argmax(abs, stdscores)
-    println(stdscores)
-    println("Worst standard score for N=2 (measured vs benchmark mean): $worst_score")
+    if benchmark && isFock
+        # Get standard scores vs benchmark
+        stdscores = stdscore.(occupation_total[2], bm_occupation_2)
+        worst_score = argmax(abs, stdscores)
+        println(stdscores)
+        println(
+            "Worst standard score for N=2 with Fock renorm " *
+            "(measured vs benchmark mean): $worst_score",
+        )
+    end
 
     # Plot the occupation number for each aggregate order
     fig, ax = plt.subplots()
@@ -572,8 +581,8 @@ function main()
         ax.plot(k_kf_grid_fine, bare_occupation_fine, "k"; label="\$N=0\$ (exact)")
     end
     ic = 1
-    # colors = ["C0", "C1", "C2", "C3"]
-    colors = ["orchid", "cornflowerblue", "turquoise", "chartreuse"]
+    colors = ["C0", "C1", "C2", "C3"]
+    # colors = ["orchid", "cornflowerblue", "turquoise", "chartreuse"]
     colors2 = ["purple", "blue", "green", "yellow"]
     for (i, N) in enumerate(min_order:max_order_plot)
         # N == 0 && continue
@@ -616,7 +625,6 @@ function main()
             ic += 1
         end
         # Plot measured data
-        # NOTE: We plot nₖ = -gₙ(k, 0⁻), hence the extra minus
         means = Measurements.value.(occupation_total[N])
         stdevs = Measurements.uncertainty.(occupation_total[N])
         marker = "o-"
@@ -627,7 +635,8 @@ function main()
             markersize=2,
             # color="C$ic",
             color="$(colors[ic])",
-            label="\$N=$N\$ ($solver, SOSEM)",
+            label="\$N=$N\$ ($solver)",
+            # label="\$N=$N\$ ($solver, SOSEM)",
         )
         ax.fill_between(
             k_kf_grid,
@@ -637,32 +646,34 @@ function main()
             color="$(colors[ic])",
             alpha=0.4,
         )
-        means = Measurements.value.(occupation_total_eft[N])
-        stdevs = Measurements.uncertainty.(occupation_total_eft[N])
-        marker = "o-"
-        ax.plot(
-            kgrid_eft / param.kF,
-            means,
-            marker;
-            markersize=2,
-            # color="C$ic",
-            color="$(colors2[ic])",
-            label="\$N=$N\$ ($solver, ElectronLiquid)",
-        )
-        ax.fill_between(
-            kgrid_eft / param.kF,
-            means - stdevs,
-            means + stdevs;
-            # color="C$ic",
-            color="$(colors2[ic])",
-            alpha=0.4,
-        )
+        if compare_eft
+            means = Measurements.value.(occupation_total_eft[N])
+            stdevs = Measurements.uncertainty.(occupation_total_eft[N])
+            marker = "o-"
+            ax.plot(
+                kgrid_eft / param.kF,
+                means,
+                marker;
+                markersize=2,
+                # color="C$ic",
+                color="$(colors2[ic])",
+                label="\$N=$N\$ ($solver, ElectronLiquid)",
+            )
+            ax.fill_between(
+                kgrid_eft / param.kF,
+                means - stdevs,
+                means + stdevs;
+                # color="C$ic",
+                color="$(colors2[ic])",
+                alpha=0.4,
+            )
+        end
         ic += 1
     end
     ax.legend(; loc="upper right")
     # ax.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
     # ax.set_xlim(0.75, 1.25)
-    ax.set_xlim(0, 3)
+    ax.set_xlim(0, 2)
     # ax.set_ylim(nothing, 2)
     ax.set_xlabel("\$k / k_F\$")
     if isFock
@@ -687,7 +698,8 @@ function main()
         yloc = 0.6
         ydiv = -0.125
     else
-        xloc = 1.5
+        # xloc = 1.5
+        xloc = 1.125
         yloc = 0.5
         ydiv = -0.15
     end
@@ -710,15 +722,15 @@ function main()
         ic = 1
         # Plot inset
         ax_inset =
-            il.inset_axes(ax; width="38%", height="28.5%", loc="upper left", borderpad=0)
+            il.inset_axes(ax; width="38%", height="28.5%", loc="lower left", borderpad=0)
         # Compare result to bare occupation fₖ
         ax_inset.plot(k_kf_grid_fine, bare_occupation_fine, "k"; label="\$N=0\$ (exact)")
         ax_inset.axvline(1.0; linestyle="--", linewidth=1, color="gray")
         # ax_inset.axhspan(0, 1; alpha=0.2, facecolor="k", edgecolor=nothing)
         ax_inset.axhline(0.0; linestyle="-", linewidth=0.5, color="k")
         ax_inset.axhline(1.0; linestyle="-", linewidth=0.5, color="k")
-        # for (i, N) in enumerate(min_order:max_order_plot)
-        for (i, N) in enumerate(min_order:1)
+        for (i, N) in enumerate(min_order:max_order_plot)
+        # for (i, N) in enumerate(min_order:1)
             # N == 0 && continue
             isFock && N == 1 && continue
             # Get means and error bars from the result up to this order
@@ -748,9 +760,9 @@ function main()
         ax_inset.set_ylim(-ypad, 1 + ypad)
         ax_inset.set_xlabel("\$k / k_F\$"; labelpad=7)
         ax_inset.set_ylabel("\$n_{k\\sigma}\$")
-        # ax_inset.xaxis.set_label_position("top")
+        ax_inset.xaxis.set_label_position("top")
         ax_inset.yaxis.set_label_position("right")
-        # ax_inset.xaxis.tick_top()
+        ax_inset.xaxis.tick_top()
         ax_inset.yaxis.tick_right()
     end
     dirstring = isFock ? "results/occupation/benchmark/" : "results/occupation/"
