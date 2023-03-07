@@ -22,7 +22,7 @@ function main()
 
     settings = DiagGen.Settings{DiagGen.Observable}(
         DiagGen.c1c;
-        min_order=3,
+        min_order=2,
         max_order=4,
         verbosity=DiagGen.quiet,
         expand_bare_interactions=false,
@@ -33,24 +33,24 @@ function main()
 
     # UEG parameters for MC integration
     param =
-        ParaMC(; order=settings.max_order, rs=1.0, beta=40.0, mass2=2.0, isDynamic=false)
+        ParaMC(; order=settings.max_order, rs=1.0, beta=40.0, mass2=1.0, isDynamic=false)
     @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)"
 
     println("lambda = $(param.mass2)")
 
     # K-mesh for measurement
-    kgrid = [0.0]
-    # minK = 0.2 * param.kF
-    # Nk, korder = 4, 7
-    # kgrid =
-    #     CompositeGrid.LogDensedGrid(
-    #         :uniform,
-    #         [0.0, 3 * param.kF],
-    #         [param.kF],
-    #         Nk,
-    #         minK,
-    #         korder,
-    #     ).grid
+    # kgrid = [0.0]
+    minK = 0.2 * param.kF
+    Nk, korder = 4, 7
+    kgrid =
+        CompositeGrid.LogDensedGrid(
+            :uniform,
+            [0.0, 3 * param.kF],
+            [param.kF],
+            Nk,
+            minK,
+            korder,
+        ).grid
 
     # K-mesh for measurement
     #minK = 0.15 * param.kF
@@ -113,7 +113,7 @@ function main()
     end
 
     # Distinguish results with different counterterm schemes
-    ct_string = (renorm_mu || renorm_lambda) ? "with_ct" : ""
+    ct_string = (renorm_mu || renorm_lambda) ? "_with_ct" : ""
     if renorm_mu
         ct_string *= "_mu"
     end
@@ -126,7 +126,7 @@ function main()
         savename =
             "results/data/c1c_n=$(param.order)_rs=$(param.rs)_" *
             "beta_ef=$(param.beta)_lambda=$(param.mass2)_" *
-            "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)"
+            "neval=$(neval)_$(intn_str)$(solver)$(ct_string)"
         jldopen("$savename.jld2", "a+"; compress=true) do f
             key = "$(short(param))"
             if haskey(f, key)
@@ -141,7 +141,7 @@ function main()
     if !isnothing(res)
         savename =
             "results/data/rs=$(param.rs)_beta_ef=$(param.beta)_" *
-            "lambda=$(param.mass2)_$(intn_str)$(solver)_$(ct_string)"
+            "lambda=$(param.mass2)_$(intn_str)$(solver)$(ct_string)"
         jldopen("$savename.jld2", "a+"; compress=true) do f
             key = "c1c_n_min=$(settings.min_order)_n_max=$(settings.max_order)_neval=$(neval)"
             if haskey(f, key)
