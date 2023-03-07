@@ -23,7 +23,7 @@ function main()
     # Total loop order N
     # orders = [0, 1, 2, 3]
     # orders = [1, 2, 3]
-    orders = [4]
+    orders = [5]
     min_order = minimum(orders)
     max_order = maximum(orders)
     sort!(orders)
@@ -34,7 +34,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 1e10
+    neval = 1e9
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -56,10 +56,9 @@ function main()
     # Set green4 to zero for benchmarking?
     no_green4 = true
     no_green4_str = no_green4 ? "_no_green4" : ""
-
+ 
     # Optionally give specific partition(s) to build
-    build_partitions = [(1, 0, 2), (2, 0, 2)]
-    # build_partitions = nothing
+    build_partitions = nothing
     partn_string = ""
     if isnothing(build_partitions) == false
         for P in build_partitions
@@ -72,7 +71,7 @@ function main()
         order=max_order,
         rs=1.0,
         beta=beta,
-        mass2=1.0,
+        mass2=0.6,
         isDynamic=false,
         isFock=isFock,  # remove Fock insertions
     )
@@ -95,12 +94,13 @@ function main()
     savename =
         "results/data/density_n=$(loadparam.order)_rs=$(loadparam.rs)_beta_ef=$(loadparam.beta)_" *
         "lambda=$(loadparam.mass2)_neval=$(neval)_$(solver)$(ct_string)" *
-        "$(no_green4_str)$(partn_string)"
+        "$(no_green4_str)$(partn_string)_ct_fixes"
     println(savename)
     orders, param, partitions, res = jldopen("$savename.jld2", "a+") do f
         key = "$(UEG.short(loadparam))"
         return f[key]
     end
+    println(partitions)
 
     if compare_eft
         # Load the EFT_UEG data (NOTE: EFT data is already in Dict format!)
@@ -119,34 +119,36 @@ function main()
         data_eft = sort(data_eft)
     end
 
-    # Add overall spin summation (factor of 2)
+    # Add overall spin summation (factor of 2) and factor of 1 / (n_μ! n_λ!)
     n0 = param.kF^3 / (3 * pi^2)
     for (k, v) in data
-        data[k] = [2 * v / n0]
+        data[k] = [2 * v / (factorial(k[2]) * factorial(k[3]))]
+        # data[k] = [2 * v / n0 / (factorial(k[2]) * factorial(k[3]))]
     end
     if compare_eft
         for (k, v) in data_eft
-            data_eft[k] = [2 * v / n0]
+            data_eft[k] = [2 * v / (factorial(k[2]) * factorial(k[3]))]
+            # data_eft[k] = [2 * v / n0]
         end
     end
 
-    println(n0)
-    println("\nPartitions SOSEM in units of n0 (n_loop, n_λ, n_μ):\n")
-    for Pm in keys(data)
-        # fix_mu && Pm[2] > 0 && continue
-        # Pm[3] > 0 && continue  # No lambda counterterms
-        println("$((Pm[1]+1, Pm[3], Pm[2])):\t$(data[Pm][1])")
-    end
-    if compare_eft
-        println("\nPartitions EFT in units of n0 (n_loop, n_λ, n_μ):\n")
-        for Pm in keys(data_eft)
-            # fix_mu && Pm[2] > 0 && continue
-            # Pm[3] > 0 && continue  # No lambda counterterms
-            println("$((Pm[1]+1, Pm[3], Pm[2])):\t$(data_eft[Pm][1])")
-        end
-    end
-    println("Done!")
-    return
+    # println(n0)
+    # println("\nPartitions SOSEM in units of n0 (n_loop, n_λ, n_μ):\n")
+    # for Pm in keys(data)
+    #     # fix_mu && Pm[2] > 0 && continue
+    #     # Pm[3] > 0 && continue  # No lambda counterterms
+    #     println("$((Pm[1]+1, Pm[3], Pm[2])):\t$(data[Pm][1])")
+    # end
+    # if compare_eft
+    #     println("\nPartitions EFT in units of n0 (n_loop, n_λ, n_μ):\n")
+    #     for Pm in keys(data_eft)
+    #         # fix_mu && Pm[2] > 0 && continue
+    #         # Pm[3] > 0 && continue  # No lambda counterterms
+    #         println("$((Pm[1]+1, Pm[3], Pm[2])):\t$(data_eft[Pm][1])")
+    #     end
+    # end
+    # println("Done!")
+    # return
 
     # Zero out partitions with mu renorm if present (fix mu)
     if renorm_mu == false || fix_mu
