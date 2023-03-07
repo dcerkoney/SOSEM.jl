@@ -130,7 +130,6 @@ function main()
 
     # Convert results to a Dict of measurements at each order with interaction counterterms merged
     data = UEG_MC.restodict(res, partitions)
-
     for (k, v) in data
         data[k] = v / (factorial(k[2]) * factorial(k[3]))
     end

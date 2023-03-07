@@ -23,13 +23,13 @@ function main()
 
     rs = 1.0
     beta = 40.0
-    mass2 = 2.0
+    mass2 = 1.0
     solver = :vegasmc
     expand_bare_interactions = false
 
-    neval3 = 1e8
-    neval4 = 1e8
-    neval5 = 1e8
+    neval3 = 1e10
+    neval4 = 1e10
+    # neval5 = 1e8
     nevals = [neval3, neval4]
     neval = maximum(nevals)
 
@@ -43,7 +43,14 @@ function main()
     save = true
 
     # UEG parameters for MC integration
-    loadparam = ParaMC(; order=max_order, rs=rs, beta=beta, mass2=mass2, isDynamic=false)
+    loadparam = ParaMC(;
+        order=max_order,
+        rs=rs,
+        beta=beta,
+        mass2=mass2,
+        isDynamic=false,
+        isFock=false,
+    )
 
     # Distinguish results with fixed vs re-expanded bare interactions
     intn_str = ""
@@ -52,16 +59,17 @@ function main()
     end
 
     # Full renormalization
-    ct_string = "with_ct_mu_lambda"
+    ct_string = "_with_ct_mu_lambda"
 
     savename =
         "results/data/c1nl_n=$(max_order)_rs=$(rs)_" *
         "beta_ef=$(beta)_lambda=$(mass2)_" *
-        "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)"
-    settings, param, kgrid, partitions, res = jldopen("$savename.jld2", "a+") do f
-        key = "$(UEG.short(loadparam))"
-        return f[key]
-    end
+        "neval=$(neval)_$(intn_str)$(solver)$(ct_string)"
+    settings, param, kgrid, partitions, res =
+        jldopen("$savename.jld2", "a+"; compress=true) do f
+            key = "$(UEG.short(loadparam))"
+            return f[key]
+        end
 
     # # Load the fixed-order results from JLD2 (and μ data from csv, if applicable)
     # kgrids = []
@@ -90,6 +98,10 @@ function main()
 
     # Convert results to a Dict of measurements at each order with interaction counterterms merged
     data = UEG_MC.restodict(res, partitions)
+    for (k, v) in data
+        data[k] = v / (factorial(k[2]) * factorial(k[3]))
+    end
+
     # local data
     # for i in eachindex(min_order:max_order)
     #     this_data = UEG_MC.restodict(res_list[i], partitions_list[i])
@@ -131,8 +143,10 @@ function main()
     end
 
     # Reexpand merged data in powers of μ
-    z, μ = UEG_MC.load_z_mu(param)
-    δz, δμ = CounterTerm.sigmaCT(max_order - 2, μ, z; verbose=1)
+    ct_filename = "examples/counterterms/data_Z$(ct_string).jld2"
+    z, μ = UEG_MC.load_z_mu(param; ct_filename=ct_filename)
+    δz, δμ = CounterTerm.sigmaCT(2, μ, z; verbose=1)  # TODO: Debug 3rd order CTs
+    # δz, δμ = CounterTerm.sigmaCT(max_order - 2, μ, z; verbose=1)
     println("Computed δμ: ", δμ)
     c1nl = UEG_MC.chemicalpotential_renormalization_sosem(
         merged_data,
@@ -168,7 +182,7 @@ function main()
     if save
         savename =
             "results/data/rs=$(param.rs)_beta_ef=$(param.beta)_" *
-            "lambda=$(param.mass2)_$(intn_str)$(solver)_$(ct_string)"
+            "lambda=$(param.mass2)_$(intn_str)$(solver)$(ct_string)"
         f = jldopen("$savename.jld2", "a+"; compress=true)
         # NOTE: no bare result for c1b observable (accounted for in c1b0)
         for (i, N) in enumerate(min_order_plot:max_order)
