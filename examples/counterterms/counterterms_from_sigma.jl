@@ -16,27 +16,12 @@ end
 function main()
     # Physical params matching data for SOSEM observables
     order = [3]  # C^{(1)}_{N≤5} includes CTs up to 3rd order
-
-    # Grid-search 1: rs, mass2
-    # rs = LinRange(0.1, 2.0, 5)
     rs = [1.0]
-    #mass2 = LinRange(1.0, 5.0, 5)
     mass2 = [1.0]
     beta = [40.0]
-    # beta = [25.0, 40.0, 80.0]
-
-    # Grid-search 2: rs, beta
-    #rs = LinRange(0.1, 2.0, 5)
-    #mass2 = [<lambda_opt>]
-    #beta = [20.0, 40.0, 100.0]
-
-    # Post-search: finer, wider rs mesh at chosen beta and mass2
-    #rs = LinRange(0.1, 3.0, 21)
-    #mass2 = [<lambda_opt>]
-    #beta = [<beta_opt>]
 
     # Total number of MCMC evaluations
-    neval = 1e10
+    neval = 5e10
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -46,7 +31,7 @@ function main()
     isFock = false
 
     # Distinguish results with different counterterm schemes
-    ct_string = (renorm_mu || renorm_lambda) ? "with_ct" : ""
+    ct_string = (renorm_mu || renorm_lambda) ? "_with_ct" : ""
     if renorm_mu
         ct_string *= "_mu"
     end
@@ -104,7 +89,7 @@ function main()
         if isnothing(sigma) == false
             println("Current working directory: $(pwd())")
             println("Saving data to JLD2...")
-            jldopen("data_Z_$(ct_string).jld2", "a+"; compress=true) do f
+            jldopen("data_Z$(ct_string).jld2", "a+"; compress=true) do f
                 # jldopen("data_Z.jld2", "a+") do f
                 key = "$(UEG.short(para))"
                 if haskey(f, key)
