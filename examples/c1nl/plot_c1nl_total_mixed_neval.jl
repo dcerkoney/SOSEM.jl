@@ -1,3 +1,4 @@
+using CodecZlib
 using ElectronLiquid
 using ElectronGas
 using Interpolations
@@ -22,11 +23,12 @@ function main()
 
     rs = 1.0
     beta = 40.0
-    mass2 = 2.0
+    mass2 = 1.0
     solver = :vegasmc
     expand_bare_interactions = false
 
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
+    n_min = 2  # True minimal loop order for this observable
     min_order_plot = 3
     # max_order_plot = 3
     max_order_plot = 5
@@ -68,13 +70,13 @@ function main()
         Measurements.value.(c1nl_rpa_fl), Measurements.uncertainty.(c1nl_rpa_fl)
 
     # N = 3, 4
-    neval34 = 5e10
+    neval34 = 1e10
 
     # N = 5
-    neval5_c1b0 = 2e10
-    neval5_c1b = 5e9
-    neval5_c1c = 1e9
-    neval5_c1d = 2e10
+    neval5_c1b0 = 5e10
+    neval5_c1b = 5e10
+    neval5_c1c = 5e10
+    neval5_c1d = 5e10
     neval5 = min(neval5_c1b0, neval5_c1b, neval5_c1c, neval5_c1d)
     max_neval5 = max(neval5_c1b0, neval5_c1b, neval5_c1c, neval5_c1d)
 
@@ -144,7 +146,7 @@ function main()
                 c1nl_lo,
                 "C0";
                 linestyle="-",
-                label="\$N=2, T = 0\$ (quad)",
+                label="\$N=0, T = 0\$ (quad)",
             )
         end
         # ax.plot(k_kf_grid, c1nl_N_means, "o-"; color="C$i", markersize=2, label="\$N=$N\$ ($solver)")
@@ -153,7 +155,7 @@ function main()
             c1nl_N_means,
             "C$i";
             linestyle="-",
-            label="\$N=$N\$ ($solver)",
+            label="\$N=$(N - n_min)\$ ($solver)",
         )
         ax.fill_between(
             k_kf_grid,
@@ -182,8 +184,8 @@ function main()
     ax.text(
         xloc,
         yloc + ydiv,
-        "\$\\lambda = $(mass2)\\epsilon_{\\mathrm{Ry}},\\, N_{\\mathrm{eval}} = \\mathrm{$(5e9)},\$";
-        # "\$\\lambda = \\frac{\\epsilon_{\\mathrm{Ry}}}{10},\\, N_{\\mathrm{eval}} = \\mathrm{$(5e9)},\$";
+        "\$\\lambda = $(mass2)\\epsilon_{\\mathrm{Ry}},\\, N_{\\mathrm{eval}} = \\mathrm{$(max_neval5)},\$";
+        # "\$\\lambda = \\frac{\\epsilon_{\\mathrm{Ry}}}{10},\\, N_{\\mathrm{eval}} = \\mathrm{$(max_neval5)},\$";
         fontsize=14,
     )
     ax.text(
@@ -201,8 +203,8 @@ function main()
         # "results/c1nl/c1nl_N=4_rs=$(rs)_" *
         "results/c1nl/c1nl_N=$(max_order_plot)_rs=$(rs)_" *
         "beta_ef=$(beta)_lambda=$(mass2)_" *
-        "neval=$(5e9)_$(intn_str)$(solver)_total.pdf",
-        # "neval=$(5e9)_$(intn_str)$(solver)_total_conjectured.pdf",
+        "neval=$(max_neval5)_$(intn_str)$(solver)_total.pdf",
+        # "neval=$(max_neval5)_$(intn_str)$(solver)_total_conjectured.pdf",
     )
     plt.close("all")
     return

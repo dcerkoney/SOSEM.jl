@@ -29,7 +29,7 @@ function main()
 
     neval34 = 1e10
     neval5 = 1e9
-    neval = min(neval34, neval5)
+    neval = max(neval34, neval5)
     min_order = 3
     max_order = 5
     min_order_plot = 2

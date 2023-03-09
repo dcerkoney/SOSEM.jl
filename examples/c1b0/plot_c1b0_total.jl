@@ -30,13 +30,16 @@ function main()
     expand_bare_interactions = false
 
     neval34 = 1e10
-    # neval5 = 2e10
-    # neval = min(neval34, neval5)
+    neval5 = 5e10
+    neval = max(neval34, neval5)
     neval = neval34
+
+    # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
+    n_min = 2  # True minimal loop order for this observable
     min_order = 3
-    max_order = 4
+    max_order = 5
     min_order_plot = 2
-    max_order_plot = 4
+    max_order_plot = 5
     @assert max_order ≥ 3
 
     # Load data from multiple fixed-order runs
@@ -147,7 +150,7 @@ function main()
     # Interpolate bare results and downsample to coarse k_kf_grid_vegas
     c1b_bare_interp  = linear_interpolation(k_kf_grid_quad, c1b_bare_quad; extrapolation_bc=Line())
     c1b2_exact_vegas = c1b_bare_interp(k_kf_grid_vegas)    # Bare result on vegas grid
-    c1b2_exact = c1b_bare_interp(k_kf_grid)                # Bare result on composite grid
+    c1b2_exact       = c1b_bare_interp(k_kf_grid)                # Bare result on composite grid
     # c1b2_exact = c1b2_exact_vegas                          # Bare result on vegas grid
     # c1b2_exact       = c1b_bare_interp(k_kf_grid)          # Bare result on composite grid
 
@@ -186,8 +189,15 @@ function main()
             # Reexpand merged data in powers of μ
             ct_filename = "examples/counterterms/data_Z$(ct_string).jld2"
             z, μ = UEG_MC.load_z_mu(param; ct_filename=ct_filename)
-            δz, δμ = CounterTerm.sigmaCT(2, μ, z; verbose=1)  # TODO: Debug 3rd order CTs
-            # δz, δμ = CounterTerm.sigmaCT(max_order - 2, μ, z; verbose=1)
+            # Add Taylor factors to CT data
+            for (p, v) in z
+                z[p] = v / (factorial(p[2]) * factorial(p[3]))
+            end
+            for (p, v) in μ
+                μ[p] = v / (factorial(p[2]) * factorial(p[3]))
+            end
+            # δz, δμ = CounterTerm.sigmaCT(2, μ, z; verbose=1)  # TODO: Debug 3rd order CTs
+            δz, δμ = CounterTerm.sigmaCT(max_order - 2, μ, z; verbose=1)
             println("Computed δμ: ", δμ)
             c1bL0 = UEG_MC.chemicalpotential_renormalization_sosem(
                 merged_data,
@@ -267,7 +277,7 @@ function main()
             c1b2_exact_vegas,
             "C0";
             linestyle="-",
-            label="\$N=2\$ (quad)",
+            label="\$N=0\$ (quad)",
         )
     end
 
@@ -278,8 +288,8 @@ function main()
         f = jldopen("$savename.jld2", "a+"; compress=true)
         # NOTE: no bare result for c1b observable (accounted for in c1b0)
         for N in min_order_plot:max_order
-            # num_eval = N == 5 ? neval5 : neval34
-            num_eval = neval34
+            num_eval = N == 5 ? neval5 : neval34
+            # num_eval = neval34
             if haskey(f, "c1b0") &&
                haskey(f["c1b0"], "N=$N") &&
                haskey(f["c1b0/N=$N"], "neval=$num_eval")
@@ -301,8 +311,8 @@ function main()
         #     continue
         # end
         # NOTE: Currently using a different kgrid at order 5
-        # k_over_kfs = N == 5 ? k_kf_grid5 : k_kf_grid
-        k_over_kfs = k_kf_grid
+        k_over_kfs = N == 5 ? k_kf_grid5 : k_kf_grid
+        # k_over_kfs = k_kf_grid
         # Get means and error bars from the result up to this order
         # NOTE: Since C⁽¹ᵇ⁾ᴸ = C⁽¹ᵇ⁾ᴿ for the UEG, the
         #       full class (b) moment is C⁽¹ᵇ⁾ = 2C⁽¹ᵇ⁾ᴸ.
@@ -318,16 +328,16 @@ function main()
             marker;
             markersize=2,
             color="C$i",
-            label="\$N=$N\$ ($solver)",
+            label="\$N=$(N - n_min)\$ ($solver)",
         )
-        ax.fill_between(k_over_kfs, means - stdevs, means + stdevs; color="C$i", alpha=0.4)
+        ax.fill_between(k_over_kfs, means - stdevs, means + stdevs; color="C$i", alpha=0.3)
         if !renorm_mu_lo_ex && max_order <= 3 && N == 3
             ax.plot(
                 k_over_kfs,
                 Measurements.value.(c1b03_manual);
                 color="r",
                 linestyle="--",
-                label="\$N=3\$ (manual, vegasmc)",
+                label="\$N=1\$ (manual, vegasmc)",
             )
         end
     end
@@ -342,7 +352,7 @@ function main()
     # xloc = 1.75
     # yloc = -0.5
     # ydiv = -0.095
-    xloc = 0.075
+    xloc = 0.06
     yloc = -1.05
     ydiv = -0.05
     ax.text(

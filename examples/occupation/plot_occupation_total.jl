@@ -32,13 +32,15 @@ function main()
     solver = :vegasmc
 
     # Number of evals
-    neval = 1e10
+    neval12 = 1e10
+    neval3 = 5e10
+    neval = max(neval12, neval3)
 
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
     min_order = 0
-    max_order = 2
+    max_order = 3
     min_order_plot = 0
-    max_order_plot = 2
+    max_order_plot = 3
 
     # Save total results
     save = true
@@ -101,12 +103,27 @@ function main()
     )
 
     # Load the raw data
+    if max_order == 3
+        max_together = 2
+    else
+        max_together = max_order
+    end
     savename =
-        "results/data/occupation_n=$(max_order)_rs=$(rs)_beta_ef=$(beta)_" *
-        "lambda=$(mass2)_neval=$(neval)_$(solver)_$(ct_string)"
+        "results/data/occupation_n=$(max_together)_rs=$(rs)_beta_ef=$(beta)_" *
+        "lambda=$(mass2)_neval=$(neval12)_$(solver)_$(ct_string)"
     orders, param, kgrid, partitions, res = jldopen("$savename.jld2", "a+") do f
         key = "$(UEG.short(loadparam))"
         return f[key]
+    end
+    if max_order == 3
+        # 5th order 
+        savename =
+            "results/data/occupation_n=$(max_order)_rs=$(rs)_beta_ef=$(beta)_" *
+            "lambda=$(mass2)_neval=$(neval3)_$(solver)_$(ct_string)"
+        orders5, param5, kgrid5, partitions5, res5 = jldopen("$savename.jld2", "a+") do f
+            key = "$(UEG.short(loadparam))"
+            return f[key]
+        end
     end
 
     if compare_eft
@@ -136,9 +153,24 @@ function main()
 
     # Get dimensionless k-grid (k / kF) and index corresponding to the Fermi energy
     k_kf_grid = kgrid / param.kF
+    if max_order == 3
+        k_kf_grid5 = kgrid5 / param.kF
+    end
 
     # Convert results to a Dict of measurements at each order with interaction counterterms merged
     data = UEG_MC.restodict(res, partitions)
+    # NOTE: using old data for orders 0, 1, and 2 => Taylor factors already present in eval!
+    # for (k, v) in data
+    #     data[k] = v / (factorial(k[2]) * factorial(k[3]))
+    # end
+    # Add 5th order results to data dict
+    if max_order == 3
+        data5 = UEG_MC.restodict(res5, partitions5)
+        for (k, v) in data5
+            data5[k] = v / (factorial(k[2]) * factorial(k[3]))
+        end
+        merge!(data, data5)
+    end
     # data_eft = sort(data_eft)
 
     # Zero out partitions with mu renorm if present (fix mu)
@@ -244,6 +276,13 @@ function main()
     # Reexpand merged data in powers of μ
     ct_filename = "examples/counterterms/data_Z_$(ct_string_short).jld2"
     z, μ = UEG_MC.load_z_mu(param; ct_filename=ct_filename)
+    # Add Taylor factors to CT data
+    for (p, v) in z
+        z[p] = v / (factorial(p[2]) * factorial(p[3]))
+    end
+    for (p, v) in μ
+        μ[p] = v / (factorial(p[2]) * factorial(p[3]))
+    end
     # Zero out partitions with mu renorm if present (fix mu)
     if renorm_mu == false || fix_mu
         for P in keys(μ)
@@ -262,7 +301,7 @@ function main()
             end
         end
     end
-    δz, δμ = CounterTerm.sigmaCT(3, μ, z; isfock=isFock, verbose=1)
+    δz, δμ = CounterTerm.sigmaCT(max_order, μ, z; isfock=isFock, verbose=1)
 
     if compare_eft
         for (k, v) in merged_data_eft
@@ -351,6 +390,7 @@ function main()
         f = jldopen("$savename.jld2", "a+"; compress=true)
         # NOTE: no bare result for c1b observable (accounted for in c1b0)
         for N in min_order_plot:max_order
+            num_eval = N == 3 ? neval3 : neval12
             # Skip exact (N = 0) result
             N == 0 && continue
             # Skip Fock result if HF renormalization was used
@@ -358,13 +398,13 @@ function main()
             # Update existing results if applicable
             if haskey(f, "occupation") &&
                haskey(f["occupation"], "N=$N") &&
-               haskey(f["occupation/N=$N"], "neval=$(neval)")
-                @warn("replacing existing data for N=$N, neval=$(neval)")
-                delete!(f["occupation/N=$N"], "neval=$(neval)")
+               haskey(f["occupation/N=$N"], "neval=$num_eval")
+                @warn("replacing existing data for N=$N, neval=$num_eval")
+                delete!(f["occupation/N=$N"], "neval=$num_eval")
             end
-            f["occupation/N=$N/neval=$neval/meas"] = occupation_total[N]
-            f["occupation/N=$N/neval=$neval/param"] = param
-            f["occupation/N=$N/neval=$neval/kgrid"] = kgrid
+            f["occupation/N=$N/neval=$num_eval/meas"] = occupation_total[N]
+            f["occupation/N=$N/neval=$num_eval/param"] = param
+            f["occupation/N=$N/neval=$num_eval/kgrid"] = kgrid
         end
     end
 
@@ -730,7 +770,7 @@ function main()
         ax_inset.axhline(0.0; linestyle="-", linewidth=0.5, color="k")
         ax_inset.axhline(1.0; linestyle="-", linewidth=0.5, color="k")
         for (i, N) in enumerate(min_order:max_order_plot)
-        # for (i, N) in enumerate(min_order:1)
+            # for (i, N) in enumerate(min_order:1)
             # N == 0 && continue
             isFock && N == 1 && continue
             # Get means and error bars from the result up to this order

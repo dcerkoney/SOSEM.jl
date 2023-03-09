@@ -80,13 +80,16 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 1e8
+    neval123 = 1e10
+    neval4 = 5e10
+    neval = max(neval123, neval4)
 
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
+    n_min = 1  # True minimal loop order for this observable
     min_order = 1
-    max_order = 3
+    max_order = 4
     min_order_plot = 1
-    max_order_plot = 3
+    max_order_plot = 4
 
     # Save total results
     save = true
@@ -109,23 +112,35 @@ function main()
 
     # UEG parameters for MC integration
     loadparam = ParaMC(; order=max_order, rs=rs, beta=beta, mass2=mass2, isDynamic=false)
+
+    # Load raw data
+    if max_order == 4
+        max_together = 3
+    else
+        max_together = max_order
+    end
     savename =
-        "results/data/sigma_x_n=$(max_order)_rs=$(rs)_" *
-        "beta_ef=$(beta)_lambda=$(mass2)_neval=$(neval)_$(solver)$(ct_string)"
-
-    # NOTE: Taking N=3 data from N=4 run, renorm for N=4 not yet implemented!
-    # loadparam = ParaMC(; order=4, rs=rs, beta=beta, mass2=mass2, isDynamic=false)
-    # savename =
-    #     "results/data/sigma_x_n=4_rs=$(rs)_" *
-    #     "beta_ef=$(beta)_lambda=$(mass2)_neval=$(neval)_$(solver)"
-
+        "results/data/sigma_x_n=$(max_together)_rs=$(rs)_" *
+        "beta_ef=$(beta)_lambda=$(mass2)_neval=$(neval123)_$(solver)$(ct_string)"
     orders, param, kgrid, partitions, res = jldopen("$savename.jld2", "a+") do f
         key = "$(UEG.short(loadparam))"
         return f[key]
     end
+    if max_order == 4
+        savename =
+            "results/data/sigma_x_n=$(max_order)_rs=$(rs)_" *
+            "beta_ef=$(beta)_lambda=$(mass2)_neval=$(neval4)_$(solver)$(ct_string)"
+        orders4, param4, kgrid4, partitions4, res4 = jldopen("$savename.jld2", "a+") do f
+            key = "$(UEG.short(loadparam))"
+            return f[key]
+        end
+    end
 
     # Get dimensionless k-grid (k / kF) and index corresponding to the Fermi energy
     k_kf_grid = kgrid / param.kF
+    if max_order == 4
+        k_kf_grid4 = kgrid4 / param.kF
+    end
     ikF = findfirst(x -> x == 1.0, k_kf_grid)
 
     # Convert results to a Dict of measurements at each order with interaction counterterms merged
@@ -133,11 +148,14 @@ function main()
     for (k, v) in data
         data[k] = v / (factorial(k[2]) * factorial(k[3]))
     end
-
-    # # TODO: Rerun with minus sign fixed
-    # for (k, v) in data
-    #     data[k] = -v / param.β
-    # end
+    # Add 4th order results to data dict
+    if max_order == 4
+        data4 = UEG_MC.restodict(res4, partitions4)
+        for (k, v) in data4
+            data4[k] = v / (factorial(k[2]) * factorial(k[3]))
+        end
+        merge!(data, data4)
+    end
 
     merged_data = CounterTerm.mergeInteraction(data)
     println([k for (k, _) in merged_data])
@@ -171,8 +189,15 @@ function main()
     # Reexpand merged data in powers of μ
     ct_filename = "examples/counterterms/data_Z$(ct_string).jld2"
     z, μ = UEG_MC.load_z_mu(param; ct_filename=ct_filename)
-    δz, δμ = CounterTerm.sigmaCT(2, μ, z; verbose=1)  # TODO: Fix order 3
-    # δz, δμ = CounterTerm.sigmaCT(max_order, μ, z; verbose=1)
+    # Add Taylor factors to CT data
+    for (p, v) in z
+        z[p] = v / (factorial(p[2]) * factorial(p[3]))
+    end
+    for (p, v) in μ
+        μ[p] = v / (factorial(p[2]) * factorial(p[3]))
+    end
+    # δz, δμ = CounterTerm.sigmaCT(2, μ, z; verbose=1)  # TODO: Fix order 3
+    δz, δμ = CounterTerm.sigmaCT(max_order - 1, μ, z; verbose=1)
     println("Computed δμ: ", δμ)
     sigma_x =
         UEG_MC.chemicalpotential_renormalization_sigma(merged_data, δμ; max_order=max_order)
@@ -202,17 +227,18 @@ function main()
         f = jldopen("$savename.jld2", "a+"; compress=true)
         # NOTE: no bare result for c1b observable (accounted for in c1b0)
         for N in min_order_plot:max_order
+            num_eval = N == 4 ? neval4 : neval123
             # Skip exact Fock (N = 1) result
             N == 1 && continue
             if haskey(f, "sigma_x") &&
                haskey(f["sigma_x"], "N=$N") &&
-               haskey(f["sigma_x/N=$N"], "neval=$(neval)")
-                @warn("replacing existing data for N=$N, neval=$(neval)")
-                delete!(f["sigma_x/N=$N"], "neval=$(neval)")
+               haskey(f["sigma_x/N=$N"], "neval=$num_eval")
+                @warn("replacing existing data for N=$N, neval=$num_eval")
+                delete!(f["sigma_x/N=$N"], "neval=$num_eval")
             end
-            f["sigma_x/N=$N/neval=$neval/meas"] = sigma_x_over_eTF_total[N]
-            f["sigma_x/N=$N/neval=$neval/param"] = param
-            f["sigma_x/N=$N/neval=$neval/kgrid"] = kgrid
+            f["sigma_x/N=$N/neval=$num_eval/meas"] = sigma_x_over_eTF_total[N]
+            f["sigma_x/N=$N/neval=$num_eval/param"] = param
+            f["sigma_x/N=$N/neval=$num_eval/kgrid"] = kgrid
         end
     end
 
@@ -225,7 +251,7 @@ function main()
     # Σₓ(k) / eTF (dimensionless moment)
     fig1, ax1 = plt.subplots()
     # Compare result to exact non-dimensionalized Fock self-energy (-F(k / kF))
-    ax1.plot(k_kf_grid, -UEG_MC.lindhard.(k_kf_grid), "k"; label="\$N=1\$ (exact, \$T=0\$)")
+    ax1.plot(k_kf_grid, -UEG_MC.lindhard.(k_kf_grid), "k"; label="\$N=0\$ (exact, \$T=0\$)")
     for (i, N) in enumerate(min_order:max_order_plot)
         # N == 1 && continue
         # Get means and error bars from the result up to this order
@@ -240,7 +266,7 @@ function main()
             marker;
             markersize=2,
             color="C$(i-1)",
-            label="\$N=$N\$ ($solver)",
+            label="\$N=$(N - n_min)\$ ($solver)",
         )
         ax1.fill_between(
             k_kf_grid,
@@ -254,8 +280,8 @@ function main()
     ax1.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
     ax1.set_xlabel("\$k / k_F\$")
     ax1.set_ylabel("\$\\Sigma_{x}(k) \\,/\\, \\epsilon_{\\mathrm{TF}}\$")
-    xloc = 1.75
-    yloc = -0.5
+    xloc = 1.5
+    yloc = -0.4
     ydiv = -0.095
     ax1.text(
         xloc,
@@ -269,6 +295,12 @@ function main()
         "\$\\lambda = $(mass2)\\epsilon_{\\mathrm{Ry}},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)},\$";
         # "\$\\lambda = \\frac{\\epsilon_{\\mathrm{Ry}}}{10},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)},\$";
         fontsize=14,
+    )
+    ax1.text(
+        xloc,
+        yloc + 2 * ydiv,
+        "\${\\epsilon}_{\\mathrm{TF}}\\equiv\\frac{\\hbar^2 q^2_{\\mathrm{TF}}}{2 m_e}=2\\pi\\mathcal{N}_F\$ (a.u.)";
+        fontsize=12,
     )
     fig1.tight_layout()
     fig1.savefig(
@@ -442,7 +474,7 @@ function main()
             marker;
             markersize=2,
             color="C$ic",
-            label="\$N=$N\$ ($solver)",
+            label="\$N=$(N - n_min)\$ ($solver)",
         )
         ax2.fill_between(
             k_kf_grid,
@@ -456,7 +488,7 @@ function main()
             qp_fit_fock(kgrid_quad) / eTF;
             color="C$ic",
             linestyle="--",
-            label="\$N=$N\$ (quasiparticle fit)",
+            # label="\$N=$N\$ (quasiparticle fit)",
         )
         ic += 1
     end
