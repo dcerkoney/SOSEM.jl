@@ -25,21 +25,22 @@ function main()
 
     rs = 1.0
     beta = 40.0
-    mass2 = 2.0
+    mass2 = 1.0
     solver = :vegasmc
     expand_bare_interactions = false
 
-    neval34 = 5e10
-    neval5 = 2e10
-    neval = min(neval34, neval5)
+    neval34 = 1e10
+    # neval5 = 2e10
+    # neval = min(neval34, neval5)
+    neval = neval34
     min_order = 3
-    max_order = 5
+    max_order = 4
     min_order_plot = 2
-    max_order_plot = 5
+    max_order_plot = 4
     @assert max_order ≥ 3
 
     # Load data from multiple fixed-order runs
-    fixed_orders = collect(min_order:max_order)
+    # fixed_orders = collect(min_order:max_order)
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -62,7 +63,7 @@ function main()
     end
 
     # Distinguish results with different counterterm schemes
-    ct_string = (renorm_mu || renorm_lambda) ? "with_ct" : ""
+    ct_string = (renorm_mu || renorm_lambda) ? "_with_ct" : ""
     renorm_string = (renorm_mu && renorm_mu_lo_ex) ? "_lo_mu_manual" : ""
     if renorm_mu
         ct_string *= "_mu"
@@ -87,7 +88,7 @@ function main()
     savename =
         "results/data/c1bL0_n=$(max_together)_rs=$(rs)_" *
         "beta_ef=$(beta)_lambda=$(mass2)_" *
-        "neval=$(neval34)_$(intn_str)$(solver)_$(ct_string)"
+        "neval=$(neval34)_$(intn_str)$(solver)$(ct_string)"
     settings, param, kgrid, partitions, res = jldopen("$savename.jld2", "a+") do f
         key = "$(UEG.short(plotparam))"
         return f[key]
@@ -99,7 +100,7 @@ function main()
         savename5 =
             "results/data/c1bL0_n=$(max_order)_rs=$(rs)_" *
             "beta_ef=$(beta)_lambda=$(mass2)_" *
-            "neval=$(neval5)_$(intn_str)$(solver)_$(ct_string)"
+            "neval=$(neval5)_$(intn_str)$(solver)$(ct_string)"
         settings5, param5, kgrid5, partitions5, res5 = jldopen("$savename5.jld2", "a+") do f
             key = "$(UEG.short(plotparam))"
             return f[key]
@@ -108,13 +109,22 @@ function main()
 
     # Get dimensionless k-grid (k / kF)
     k_kf_grid = kgrid / param.kF
-    k_kf_grid5 = kgrid5 / param.kF
+    if max_order == 5
+        k_kf_grid5 = kgrid5 / param.kF
+    end
 
     # Convert results to a Dict of measurements at each order with interaction counterterms merged
     data = UEG_MC.restodict(res, partitions)
+    for (k, v) in data
+        data[k] = v / (factorial(k[2]) * factorial(k[3]))
+    end
+
     # Add 5th order results to data dict
     if max_order == 5
         data5 = UEG_MC.restodict(res5, partitions5)
+        for (k, v) in data5
+            data5[k] = v / (factorial(k[2]) * factorial(k[3]))
+        end
         merge!(data, data5)
     end
     merged_data = CounterTerm.mergeInteraction(data)
@@ -136,9 +146,10 @@ function main()
 
     # Interpolate bare results and downsample to coarse k_kf_grid_vegas
     c1b_bare_interp  = linear_interpolation(k_kf_grid_quad, c1b_bare_quad; extrapolation_bc=Line())
-    c1b2_exact_vegas = c1b_bare_interp(k_kf_grid_vegas)  # Bare result on vegas grid
-    c1b2_exact       = c1b2_exact_vegas        # Bare result on composite grid
-    # c1b2_exact       = c1b_bare_interp(k_kf_grid)        # Bare result on composite grid
+    c1b2_exact_vegas = c1b_bare_interp(k_kf_grid_vegas)    # Bare result on vegas grid
+    c1b2_exact = c1b_bare_interp(k_kf_grid)                # Bare result on composite grid
+    # c1b2_exact = c1b2_exact_vegas                          # Bare result on vegas grid
+    # c1b2_exact       = c1b_bare_interp(k_kf_grid)          # Bare result on composite grid
 
     # RPA(+FL) corrections to LO for class (b) moment
     delta_c1b_rpa = sosem_lo.get("delta_rpa_b_vegas_N=1e+07.npy") / eTF_lo^2
@@ -173,8 +184,10 @@ function main()
             end
         else
             # Reexpand merged data in powers of μ
-            z, μ = UEG_MC.load_z_mu(param)
-            δz, δμ = CounterTerm.sigmaCT(max_order - 2, μ, z; verbose=1)
+            ct_filename = "examples/counterterms/data_Z$(ct_string).jld2"
+            z, μ = UEG_MC.load_z_mu(param; ct_filename=ct_filename)
+            δz, δμ = CounterTerm.sigmaCT(2, μ, z; verbose=1)  # TODO: Debug 3rd order CTs
+            # δz, δμ = CounterTerm.sigmaCT(max_order - 2, μ, z; verbose=1)
             println("Computed δμ: ", δμ)
             c1bL0 = UEG_MC.chemicalpotential_renormalization_sosem(
                 merged_data,
@@ -261,11 +274,12 @@ function main()
     if save
         savename =
             "results/data/rs=$(param.rs)_beta_ef=$(param.beta)_" *
-            "lambda=$(param.mass2)_$(intn_str)$(solver)_$(ct_string)"
+            "lambda=$(param.mass2)_$(intn_str)$(solver)$(ct_string)"
         f = jldopen("$savename.jld2", "a+"; compress=true)
         # NOTE: no bare result for c1b observable (accounted for in c1b0)
         for N in min_order_plot:max_order
-            num_eval = N == 5 ? neval5 : neval34
+            # num_eval = N == 5 ? neval5 : neval34
+            num_eval = neval34
             if haskey(f, "c1b0") &&
                haskey(f["c1b0"], "N=$N") &&
                haskey(f["c1b0/N=$N"], "neval=$num_eval")
@@ -287,7 +301,8 @@ function main()
         #     continue
         # end
         # NOTE: Currently using a different kgrid at order 5
-        k_over_kfs = N == 5 ? k_kf_grid5 : k_kf_grid
+        # k_over_kfs = N == 5 ? k_kf_grid5 : k_kf_grid
+        k_over_kfs = k_kf_grid
         # Get means and error bars from the result up to this order
         # NOTE: Since C⁽¹ᵇ⁾ᴸ = C⁽¹ᵇ⁾ᴿ for the UEG, the
         #       full class (b) moment is C⁽¹ᵇ⁾ = 2C⁽¹ᵇ⁾ᴸ.
@@ -327,7 +342,7 @@ function main()
     # xloc = 1.75
     # yloc = -0.5
     # ydiv = -0.095
-    xloc = 0.125
+    xloc = 0.075
     yloc = -1.05
     ydiv = -0.05
     ax.text(
@@ -357,7 +372,7 @@ function main()
     fig.savefig(
         "results/c1b0/c1b0_N=$(max_order_plot)_rs=$(param.rs)_" *
         "beta_ef=$(param.beta)_lambda=$(param.mass2)_" *
-        "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)" *
+        "neval=$(neval)_$(intn_str)$(solver)$(ct_string)" *
         "$(renorm_string)_total.pdf",
     )
     plt.close("all")

@@ -25,21 +25,22 @@ function main()
 
     rs = 1.0
     beta = 40.0
-    mass2 = 2.0
+    mass2 = 1.0
     solver = :vegasmc
     expand_bare_interactions = false
 
-    neval34 = 5e10
-    neval5 = 5e9
-    neval = min(neval34, neval5)
+    neval34 = 1e10
+    # neval5 = 5e9
+    # neval = min(neval34, neval5)
+    neval = neval34
     min_order = 3
-    max_order = 5
+    max_order = 4
     min_order_plot = 2
-    max_order_plot = 5
+    max_order_plot = 4
     @assert max_order ≥ 3
 
     # Load data from multiple fixed-order runs
-    fixed_orders = collect(min_order:max_order)
+    # fixed_orders = collect(min_order:max_order)
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -76,7 +77,7 @@ function main()
     end
 
     # Distinguish results with different counterterm schemes
-    ct_string = (renorm_mu || renorm_lambda) ? "with_ct" : ""
+    ct_string = (renorm_mu || renorm_lambda) ? "_with_ct" : ""
     renorm_string = (renorm_mu && renorm_mu_lo_ex) ? "_lo_mu_manual" : ""
     if renorm_mu
         ct_string *= "_mu"
@@ -101,7 +102,7 @@ function main()
     savename =
         "results/data/c1bL_n=$(max_together)_rs=$(rs)_" *
         "beta_ef=$(beta)_lambda=$(mass2)_" *
-        "neval=$(neval34)_$(intn_str)$(solver)_$(ct_string)"
+        "neval=$(neval34)_$(intn_str)$(solver)$(ct_string)"
     settings, param, kgrid, partitions, res = jldopen("$savename.jld2", "a+") do f
         key = "$(UEG.short(plotparam))"
         return f[key]
@@ -113,7 +114,7 @@ function main()
         savename5 =
             "results/data/c1bL_n=$(max_order)_rs=$(rs)_" *
             "beta_ef=$(beta)_lambda=$(mass2)_" *
-            "neval=$(neval5)_$(intn_str)$(solver)_$(ct_string)"
+            "neval=$(neval5)_$(intn_str)$(solver)$(ct_string)"
         settings5, param5, kgrid5, partitions5, res5 = jldopen("$savename5.jld2", "a+") do f
             key = "$(UEG.short(plotparam))"
             return f[key]
@@ -122,13 +123,22 @@ function main()
 
     # Get dimensionless k-grid (k / kF)
     k_kf_grid = kgrid / param.kF
-    k_kf_grid5 = kgrid5 / param.kF
+    if max_order == 5
+        k_kf_grid5 = kgrid5 / param.kF
+    end
 
     # Convert results to a Dict of measurements at each order with interaction counterterms merged
     data = UEG_MC.restodict(res, partitions)
+    for (k, v) in data
+        data[k] = v / (factorial(k[2]) * factorial(k[3]))
+    end
+
     # Add 5th order results to data dict
     if max_order == 5
         data5 = UEG_MC.restodict(res5, partitions5)
+        for (k, v) in data5
+            data5[k] = v / (factorial(k[2]) * factorial(k[3]))
+        end
         merge!(data, data5)
     end
     merged_data = CounterTerm.mergeInteraction(data)
@@ -167,8 +177,10 @@ function main()
             c1bL = SortedDict(3 => c1b3L, 4 => c1b4L)
         else
             # Reexpand merged data in powers of μ
-            z, μ = UEG_MC.load_z_mu(param)
-            δz, δμ = CounterTerm.sigmaCT(max_order - 2, μ, z; verbose=1)
+            ct_filename = "examples/counterterms/data_Z$(ct_string).jld2"
+            z, μ = UEG_MC.load_z_mu(param; ct_filename=ct_filename)
+            δz, δμ = CounterTerm.sigmaCT(2, μ, z; verbose=1)  # TODO: Debug 3rd order CTs
+            # δz, δμ = CounterTerm.sigmaCT(max_order - 2, μ, z; verbose=1)
             println("Computed δμ: ", δμ)
             c1bL = UEG_MC.chemicalpotential_renormalization_sosem(
                 merged_data,
@@ -264,7 +276,7 @@ function main()
     if save
         savename =
             "results/data/rs=$(param.rs)_beta_ef=$(param.beta)_" *
-            "lambda=$(param.mass2)_$(intn_str)$(solver)_$(ct_string)"
+            "lambda=$(param.mass2)_$(intn_str)$(solver)$(ct_string)"
         f = jldopen("$savename.jld2", "a+"; compress=true)
         # NOTE: no bare result for c1b observable (accounted for in c1b0)
         for N in min_order_plot:max_order
@@ -314,7 +326,11 @@ function main()
     colors = ["C2", "C1", "red"]
     for (i, N) in enumerate(min_order:max_order_plot)
         # NOTE: Currently using a different kgrid at order 5
-        k_over_kfs = N == 5 ? k_kf_grid5 : k_kf_grid
+        if max_order == 5
+            k_over_kfs = k_kf_grid5
+        else
+            k_over_kfs = k_kf_grid
+        end
         # Get means and error bars from the result up to this order
         # NOTE: Since C⁽¹ᵇ⁾ᴸ = C⁽¹ᵇ⁾ᴿ for the UEG, the
         #       full class (b) moment is C⁽¹ᵇ⁾ = 2C⁽¹ᵇ⁾ᴸ.
@@ -333,7 +349,13 @@ function main()
             # color="C$i",
             label="\$N=$N\$ ($solver)",
         )
-        ax.fill_between(k_kf_grid, means - stdevs, means + stdevs; color=colors[i], alpha=0.4)
+        ax.fill_between(
+            k_kf_grid,
+            means - stdevs,
+            means + stdevs;
+            color=colors[i],
+            alpha=0.4,
+        )
         # ax.fill_between(k_kf_grid, means - stdevs, means + stdevs; color="C$i", alpha=0.4)
         # if !renorm_mu_lo_ex && max_order <= 4 && N == 4
         #     ax.plot(
@@ -391,7 +413,7 @@ function main()
         # "results/c1b/c1b0_2+c1b_N=$(max_order_plot)_rs=$(param.rs)_" *
         "results/c1b/c1b_N=$(max_order_plot)_rs=$(param.rs)_" *
         "beta_ef=$(param.beta)_lambda=$(param.mass2)_" *
-        "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)" *
+        "neval=$(neval)_$(intn_str)$(solver)$(ct_string)" *
         "$(renorm_string)_total.pdf",
     )
     plt.close("all")

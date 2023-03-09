@@ -23,17 +23,18 @@ function main()
 
     rs = 1.0
     beta = 40.0
-    mass2 = 2.0
+    mass2 = 1.0
     solver = :vegasmc
     expand_bare_interactions = false
 
     neval34 = 1e10
-    neval5 = 2e10
-    neval = min(neval34, neval5)
+    # neval5 = 2e10
+    # neval = min(neval34, neval5)
+    neval = neval34
     min_order = 3
-    max_order = 5
+    max_order = 4
     min_order_plot = 2
-    max_order_plot = 5
+    max_order_plot = 4
     @assert max_order ≥ 3
 
     # Enable/disable interaction and chemical potential counterterms
@@ -57,7 +58,7 @@ function main()
     end
 
     # Distinguish results with different counterterm schemes
-    ct_string = (renorm_mu || renorm_lambda) ? "with_ct" : ""
+    ct_string = (renorm_mu || renorm_lambda) ? "_with_ct" : ""
     renorm_string = (renorm_mu && renorm_mu_lo_ex) ? "_lo_mu_manual" : ""
     if renorm_mu
         ct_string *= "_mu"
@@ -77,7 +78,7 @@ function main()
     # filename =
     #     "results/data/c1d_n=$(max_order)_rs=$(rs)_" *
     #     "beta_ef=$(beta)_lambda=$(mass2)_" *
-    #     "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)"
+    #     "neval=$(neval)_$(intn_str)$(solver)$(ct_string)"
     # settings, param, kgrid, partitions, res = jldopen("$filename.jld2", "a+") do f
     #     key = "$(UEG.short(plotparam))"
     #     return f[key]
@@ -91,7 +92,7 @@ function main()
     end
     filename =
         "results/data/rs=$(rs)_beta_ef=$(beta)_" *
-        "lambda=$(mass2)_$(intn_str)$(solver)_$(ct_string)"
+        "lambda=$(mass2)_$(intn_str)$(solver)$(ct_string)"
     f = jldopen("$filename.jld2", "r")
     key = "c1d_n_min=$(min_order)_n_max=$(max_together)_neval=$(neval34)"
     res = f["$key/res"]
@@ -100,19 +101,22 @@ function main()
     kgrid = f["$key/kgrid"]
     partitions = f["$key/partitions"]
     close(f)
-    # 5th order 
-    filename =
-        "results/data/rs=$(rs)_beta_ef=$(beta)_" *
-        "lambda=$(mass2)_$(intn_str)$(solver)_$(ct_string)"
-    f5 = jldopen("$filename.jld2", "r")
-    key5 = "c1d_n_min=$(max_order)_n_max=$(max_order)_neval=$(neval5)"
-    res5 = f5["$(key5)/res"]
-    settings5 = f5["$(key5)/settings"]
-    param5 = f5["$(key5)/param"]
-    kgrid5 = f5["$(key5)/kgrid"]
-    partitions5 = f5["$(key5)/partitions"]
-    # Close the JLD2 file
-    close(f)
+
+    if max_order == 5
+        # 5th order 
+        filename =
+            "results/data/rs=$(rs)_beta_ef=$(beta)_" *
+            "lambda=$(mass2)_$(intn_str)$(solver)$(ct_string)"
+        f5 = jldopen("$filename.jld2", "r")
+        key5 = "c1d_n_min=$(max_order)_n_max=$(max_order)_neval=$(neval5)"
+        res5 = f5["$(key5)/res"]
+        settings5 = f5["$(key5)/settings"]
+        param5 = f5["$(key5)/param"]
+        kgrid5 = f5["$(key5)/kgrid"]
+        partitions5 = f5["$(key5)/partitions"]
+        # Close the JLD2 file
+        close(f)
+    end
 
     print(settings)
     print(param)
@@ -122,7 +126,9 @@ function main()
 
     # Get dimensionless k-grid (k / kF)
     k_kf_grid = kgrid / param.kF
-    k_kf_grid5 = kgrid5 / param.kF
+    if max_order == 5
+        k_kf_grid5 = kgrid5 / param.kF
+    end
 
     # Load C⁽¹ᵈ⁾₂ quadrature results and interpolate on k_kf_grid
     rs_quad = 1.0
@@ -142,9 +148,16 @@ function main()
 
     # Convert results to a Dict of measurements at each order with interaction counterterms merged
     data = UEG_MC.restodict(res, partitions)
+    for (k, v) in data
+        data[k] = v / (factorial(k[2]) * factorial(k[3]))
+    end
+
     # Add 5th order results to data dict
     if max_order == 5
         data5 = UEG_MC.restodict(res5, partitions5)
+        for (k, v) in data5
+            data5[k] = v / (factorial(k[2]) * factorial(k[3]))
+        end
         merge!(data, data5)
     end
     merged_data = CounterTerm.mergeInteraction(data)
@@ -158,8 +171,10 @@ function main()
     # Get total data
     if renorm_mu
         # Reexpand merged data in powers of μ
-        z, μ = UEG_MC.load_z_mu(param)
-        δz, δμ = CounterTerm.sigmaCT(max_order - 2, μ, z; verbose=1)
+        ct_filename = "examples/counterterms/data_Z$(ct_string).jld2"
+        z, μ = UEG_MC.load_z_mu(param; ct_filename=ct_filename)
+        δz, δμ = CounterTerm.sigmaCT(2, μ, z; verbose=1)  # TODO: Debug 3rd order CTs
+        # δz, δμ = CounterTerm.sigmaCT(max_order - 2, μ, z; verbose=1)
         println("Computed δμ: ", δμ)
         δμ1_exact = UEG_MC.delta_mu1(param)  # = ReΣ₁[λ](kF, 0)
         if renorm_mu_lo_ex && max_order_plot ≥ 3
@@ -242,7 +257,7 @@ function main()
     if save
         savename =
             "results/data/rs=$(param.rs)_beta_ef=$(param.beta)_" *
-            "lambda=$(param.mass2)_$(intn_str)$(solver)_$(ct_string)"
+            "lambda=$(param.mass2)_$(intn_str)$(solver)$(ct_string)"
         f = jldopen("$savename.jld2", "a+"; compress=true)
         # NOTE: no bare result for c1b observable (accounted for in c1b0)
         for N in min_order_plot:max_order
@@ -298,7 +313,7 @@ function main()
     # xloc = 0.5
     # yloc = -0.075
     # ydiv = -0.009
-    xloc = 1.75
+    xloc = 1.6
     yloc = 0.9
     ydiv = -0.095
     ax.text(
@@ -328,7 +343,7 @@ function main()
     fig.savefig(
         "results/c1d/c1d_N=$(max_order_plot)_rs=$(param.rs)_" *
         "beta_ef=$(param.beta)_lambda=$(param.mass2)_" *
-        "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)" *
+        "neval=$(neval)_$(intn_str)$(solver)$(ct_string)" *
         "$(renorm_string)_total.pdf",
     )
     plt.close("all")
