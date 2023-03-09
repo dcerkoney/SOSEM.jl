@@ -15,7 +15,7 @@ end
 # Physical params matching data for SOSEM observables
 order = [3]  # C^{(1)}_{N≤5} includes CTs up to 3rd order
 rs = [1.0]
-mass2 = [0.5]
+mass2 = [0.5, 1.0]
 beta = [40.0]
 
 # Enable/disable interaction and chemical potential counterterms
@@ -52,17 +52,17 @@ function process(datatuple, isSave)
     printstyled(UEG.short(para); color=:yellow)
     println()
 
-    for p in sort([k for k in keys(data)])
-        println("$p: μ = $(mu(data[p]))   z = $(zfactor(data[p], para.β))")
-    end
-
     _mu = Dict()
     for (p, val) in data
-        _mu[p] = mu(val)
+        _mu[p] = mu(val) / (factorial(p[2]) * factorial(p[3]))
     end
     _z = Dict()
     for (p, val) in data
-        _z[p] = zfactor(val, para.β)
+        _z[p] = zfactor(val, para.β) / (factorial(p[2]) * factorial(p[3]))
+    end
+
+    for p in sort([k for k in keys(data)])
+        println("$p: μ = $(mu(data[p]))   z = $(zfactor(data[p], para.β))")
     end
 
     dzi, _, _ = CounterTerm.sigmaCT(para.order, _mu, _z; isfock=isFock, verbose=1)
