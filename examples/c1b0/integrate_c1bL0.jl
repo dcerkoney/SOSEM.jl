@@ -22,8 +22,8 @@ function main()
 
     settings = DiagGen.Settings{DiagGen.Observable}(
         DiagGen.c1bL0;
-        min_order=3,  # TODO: special-purpose integrator for (2,0,0) partition
-        max_order=4,
+        min_order=5,  # TODO: special-purpose integrator for (2,0,0) partition
+        max_order=5,
         verbosity=DiagGen.quiet,
         expand_bare_interactions=false,
         filter=[NoHartree],
@@ -62,7 +62,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 1e10
+    neval = 5e10
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true

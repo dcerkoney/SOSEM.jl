@@ -272,8 +272,7 @@ function main()
     end
 
     # Total loop order N (Fock self-energy is N = 1)
-    orders = [1, 2, 3]
-    # orders = [1, 2, 3, 4]
+    orders = [4]
     max_order = maximum(orders)
 
     # Settings
@@ -282,7 +281,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 1e10
+    neval = 5e10
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
