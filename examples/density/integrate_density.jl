@@ -316,7 +316,7 @@ function main()
         order=max_order,
         rs=1.0,
         beta=40.0,
-        mass2=1.0,
+        mass2=0.5,
         isDynamic=false,
         isFock=isFock,  # remove Fock insertions
     )
