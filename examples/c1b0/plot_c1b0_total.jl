@@ -32,7 +32,7 @@ function main()
     neval34 = 1e10
     neval5 = 5e10
     neval = max(neval34, neval5)
-    neval = neval34
+    # neval = neval34
 
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
     n_min = 2  # True minimal loop order for this observable
@@ -55,6 +55,9 @@ function main()
 
     # Save total results
     save = true
+
+    # Compare with the total RPA + FL results for c1b? (c1b0 + C's)
+    plot_rpa_fl = false
 
     plotparam =
         UEG.ParaMC(; order=max_order, rs=rs, beta=beta, mass2=mass2, isDynamic=false)
@@ -256,22 +259,24 @@ function main()
     fig, ax = plt.subplots()
 
     if min_order_plot == 2
-        ax.plot(k_kf_grid_vegas, c1b_rpa, "k"; linestyle="--", label="RPA (vegas)")
-        ax.fill_between(
-            k_kf_grid_vegas,
-            (c1b_rpa - c1b_rpa_err),
-            (c1b_rpa + c1b_rpa_err);
-            color="k",
-            alpha=0.3,
-        )
-        ax.plot(k_kf_grid_vegas, c1b_rpa_fl, "k"; label="RPA\$+\$FL (vegas)")
-        ax.fill_between(
-            k_kf_grid_vegas,
-            (c1b_rpa_fl - c1b_rpa_fl_err),
-            (c1b_rpa_fl + c1b_rpa_fl_err);
-            color="k",
-            alpha=0.3,
-        )
+        if plot_rpa_fl
+            ax.plot(k_kf_grid_vegas, c1b_rpa, "k"; linestyle="--", label="RPA (vegas)")
+            ax.fill_between(
+                k_kf_grid_vegas,
+                (c1b_rpa - c1b_rpa_err),
+                (c1b_rpa + c1b_rpa_err);
+                color="k",
+                alpha=0.3,
+            )
+            ax.plot(k_kf_grid_vegas, c1b_rpa_fl, "k"; label="RPA\$+\$FL (vegas)")
+            ax.fill_between(
+                k_kf_grid_vegas,
+                (c1b_rpa_fl - c1b_rpa_fl_err),
+                (c1b_rpa_fl + c1b_rpa_fl_err);
+                color="k",
+                alpha=0.3,
+            )
+        end
         ax.plot(
             k_kf_grid_vegas,
             c1b2_exact_vegas,
@@ -342,9 +347,9 @@ function main()
         end
     end
     ax.legend(; loc="lower right")
-    # ax.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
-    ax.set_xlim(minimum(k_kf_grid), 2.0)
-    ax.set_ylim(-1.2, -0.675)
+    ax.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
+    # ax.set_xlim(minimum(k_kf_grid), 2.0)
+    # ax.set_ylim(-1.2, -0.675)
     ax.set_xlabel("\$k / k_F\$")
     ax.set_ylabel(
         "\$C^{(1b0)}_{N}(k) \\,/\\, {\\epsilon}^{\\hspace{0.1em}2}_{\\mathrm{TF}}\$",
@@ -352,9 +357,9 @@ function main()
     # xloc = 1.75
     # yloc = -0.5
     # ydiv = -0.095
-    xloc = 0.06
-    yloc = -1.05
-    ydiv = -0.05
+    xloc = 0.2
+    yloc = -0.525
+    ydiv = -0.06
     ax.text(
         xloc,
         yloc,
@@ -374,7 +379,7 @@ function main()
         "\${\\epsilon}_{\\mathrm{TF}}\\equiv\\frac{\\hbar^2 q^2_{\\mathrm{TF}}}{2 m_e}=2\\pi\\mathcal{N}_F\$ (a.u.)";
         fontsize=12,
     )
-    plt.title("Using fixed bare Coulomb interactions \$V_1\$, \$V_2\$")
+    # plt.title("Using fixed bare Coulomb interactions \$V_1\$, \$V_2\$")
     # plt.title(
     #     "Using re-expanded Coulomb interactions \$V_1[V_\\lambda]\$, \$V_2[V_\\lambda]\$",
     # )

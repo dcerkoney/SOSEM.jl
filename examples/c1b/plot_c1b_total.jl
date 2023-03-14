@@ -32,7 +32,7 @@ function main()
     neval34 = 1e10
     neval5 = 5e10
     neval = max(neval34, neval5)
-    neval = neval34
+    # neval = neval34
 
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
     n_min = 2  # True minimal loop order for this observable
@@ -333,7 +333,8 @@ function main()
     end
 
     # Plot for each aggregate order
-    colors = ["C2", "C1", "red"]
+    # colors = ["C2", "C1", "red"]
+    colors = ["C1", "C2", "C3"]
     for (i, N) in enumerate(min_order:max_order_plot)
         # NOTE: Currently using a different kgrid at order 5
         if max_order == 5

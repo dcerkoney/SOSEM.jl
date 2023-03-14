@@ -279,7 +279,8 @@ function main()
     ax1.legend(; loc="lower right")
     ax1.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
     ax1.set_xlabel("\$k / k_F\$")
-    ax1.set_ylabel("\$\\Sigma_{x}(k) \\,/\\, \\epsilon_{\\mathrm{TF}}\$")
+    ax1.set_ylabel("\$C^{(0)}_\\sigma(k) \\,/\\, \\epsilon_{\\mathrm{TF}} = \\Sigma_{x}(k) \\,/\\, \\epsilon_{\\mathrm{TF}}\$")
+    # ax1.set_ylabel("\$\\Sigma_{x}(k) \\,/\\, \\epsilon_{\\mathrm{TF}}\$")
     xloc = 1.5
     yloc = -0.4
     ydiv = -0.095
@@ -498,8 +499,11 @@ function main()
     ax2.set_ylim(-2.0, 3.0)
     ax2.set_xlabel("\$k / k_F\$")
     ax2.set_ylabel(
-        "\$\\epsilon_{\\mathrm{momt.}}(k) \\,/\\, \\epsilon_{\\mathrm{TF}} =  \\left(\\epsilon_{k} + \\Sigma_{x}(k)\\right) \\,/\\, \\epsilon_{\\mathrm{TF}} \$",
+        "\$M^{(1)}_\\sigma(k) \\,/\\, \\epsilon_{\\mathrm{TF}} =  \\left(\\epsilon_{k} + \\Sigma_{x}(k)\\right) \\,/\\, \\epsilon_{\\mathrm{TF}} \$",
     )
+    # ax2.set_ylabel(
+    #     "\$\\epsilon_{\\mathrm{momt.}}(k) \\,/\\, \\epsilon_{\\mathrm{TF}} =  \\left(\\epsilon_{k} + \\Sigma_{x}(k)\\right) \\,/\\, \\epsilon_{\\mathrm{TF}} \$",
+    # )
     xloc = 0.8
     yloc = -0.5
     ydiv = -0.5
