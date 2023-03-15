@@ -228,7 +228,7 @@ function main()
     end
 
     # Total loop order N
-    orders = [3]
+    orders = [0, 1, 2, 3]
     max_order = maximum(orders)
     sort!(orders)
 
@@ -250,7 +250,7 @@ function main()
     # UEG parameters for MC integration
     param = ParaMC(;
         order=max_order,
-        rs=1.0,
+        rs=5.0,
         beta=40.0,
         mass2=1.0,
         isDynamic=false,
