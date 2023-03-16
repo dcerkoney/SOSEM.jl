@@ -307,7 +307,7 @@ function main()
     ax.text(
         xloc,
         yloc,
-        "\$r_s = 1,\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
+        "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
         fontsize=14,
     )
     ax.text(
@@ -380,7 +380,7 @@ function main()
     ax.text(
         xloc,
         yloc,
-        "\$r_s = 1,\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
+        "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
         fontsize=14,
     )
     ax.text(
@@ -419,7 +419,7 @@ function main()
     # ax.text(
     #     xloc,
     #     yloc,
-    #     "\$r_s = 1,\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta), \\lambda = $(mass2)\\epsilon_{\\mathrm{Ry}}\$";
+    #     "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta), \\lambda = $(mass2)\\epsilon_{\\mathrm{Ry}}\$";
     #     fontsize=12,
     # )
     # fig.tight_layout()
@@ -453,7 +453,7 @@ function main()
     # ax.text(
     #     xloc,
     #     yloc,
-    #     "\$r_s = 1,\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta), \\lambda = $(mass2)\\epsilon_{\\mathrm{Ry}}\$";
+    #     "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta), \\lambda = $(mass2)\\epsilon_{\\mathrm{Ry}}\$";
     #     fontsize=12,
     # )
     # fig.tight_layout()

@@ -74,13 +74,13 @@ function main()
         cd(ENV["SOSEM_HOME"])
     end
 
-    rs = 1.0
+    rs = 5.0
     beta = 40.0
     mass2 = 1.0
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval123 = 1e10
+    neval123 = 5e10
     neval4 = 5e10
     neval = max(neval123, neval4)
 
@@ -251,7 +251,7 @@ function main()
     # Σₓ(k) / eTF (dimensionless moment)
     fig1, ax1 = plt.subplots()
     # Compare result to exact non-dimensionalized Fock self-energy (-F(k / kF))
-    ax1.plot(k_kf_grid, -UEG_MC.lindhard.(k_kf_grid), "k"; label="\$N=0\$ (exact, \$T=0\$)")
+    ax1.plot(k_kf_grid, -UEG_MC.lindhard.(k_kf_grid), "k"; label="\$N=1\$ (exact, \$T=0\$)")
     for (i, N) in enumerate(min_order:max_order_plot)
         # N == 1 && continue
         # Get means and error bars from the result up to this order
@@ -266,7 +266,7 @@ function main()
             marker;
             markersize=2,
             color="C$(i-1)",
-            label="\$N=$(N - n_min)\$ ($solver)",
+            label="\$N=$(N)\$ ($solver)",
         )
         ax1.fill_between(
             k_kf_grid,
@@ -287,7 +287,7 @@ function main()
     ax1.text(
         xloc,
         yloc,
-        "\$r_s = 1,\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
+        "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
         fontsize=14,
     )
     ax1.text(
@@ -417,10 +417,10 @@ function main()
     # )
     ax2.plot(
         k_kf_grid_quad,
-        -1 .+ (π / 4alpha + 1 / 3) * k_kf_grid_quad .^ 2;
+        -1 .+ (π / (4alpha * param.rs) + 1 / 3) * k_kf_grid_quad .^ 2;
         color="k",
         # linestyle="--",
-        label="\$\\epsilon_{\\mathrm{HF}}(k \\rightarrow 0) / \\epsilon_{\\mathrm{TF}} \\sim -1 + \\left(\\frac{\\pi}{4\\alpha} + \\frac{1}{3}\\right) \\left( \\frac{k}{k_F} \\right)^2\$",
+        label="\$\\epsilon_{\\mathrm{HF}}(k \\rightarrow 0) / \\epsilon_{\\mathrm{TF}} \\sim -1 + \\left(\\frac{\\pi}{4\\alpha r_s} + \\frac{1}{3}\\right) \\left( \\frac{k}{k_F} \\right)^2\$",
     )
     # ax2.plot(
     #     kgrid_quad / param.kF,
@@ -437,6 +437,9 @@ function main()
     #     # label="\$\\left(\\epsilon_0 + \\frac{k^2}{2 m^\\star_{\\mathrm{HF}}} \\right) \\Big/ \\epsilon_{\\mathrm{TF}}\$ (quasiparticle fit)",
     # )
     ic = 0
+
+    m_test = [0.2, 0.3, 0.4, 0.5]
+    e_test = [-1.0, -1.25, -1.5, -1.75]
     for (i, N) in enumerate(min_order:max_order_plot)
         # N == 1 && continue
 
@@ -450,6 +453,7 @@ function main()
         # Gridded data for k < kF
         k_data = kgrid[kgrid .< param.kF]
         Eqp_data = means_qp[kgrid .< param.kF] * eTF
+        # Eqp_data = e_test[i] .+ k_data .^ 2 / (2 * m_test[i])
 
         # Least-squares quasiparticle fit
         fit_N = curve_fit(quasiparticle_model, k_data, Eqp_data, p0)
@@ -475,7 +479,7 @@ function main()
             marker;
             markersize=2,
             color="C$ic",
-            label="\$N=$(N - n_min)\$ ($solver)",
+            label="\$N=$(N)\$ ($solver)",
         )
         ax2.fill_between(
             k_kf_grid,
@@ -486,7 +490,7 @@ function main()
         )
         ax2.plot(
             kgrid_quad / param.kF,
-            qp_fit_fock(kgrid_quad) / eTF;
+            qp_fit_N(kgrid_quad) / eTF;
             color="C$ic",
             linestyle="--",
             # label="\$N=$N\$ (quasiparticle fit)",
@@ -496,7 +500,8 @@ function main()
     ax2.legend(; loc="upper left")
     # ax2.set_xlim(minimum(k_kf_grid), 1)
     ax2.set_xlim(minimum(k_kf_grid), 1.5)
-    ax2.set_ylim(-2.0, 3.0)
+    # ax2.set_ylim(-2.0, 3.0)
+    ax2.set_ylim(-2.0, 1.0)
     ax2.set_xlabel("\$k / k_F\$")
     ax2.set_ylabel(
         "\$M^{(1)}_\\sigma(k) \\,/\\, \\epsilon_{\\mathrm{TF}} =  \\left(\\epsilon_{k} + \\Sigma_{x}(k)\\right) \\,/\\, \\epsilon_{\\mathrm{TF}} \$",
@@ -504,13 +509,16 @@ function main()
     # ax2.set_ylabel(
     #     "\$\\epsilon_{\\mathrm{momt.}}(k) \\,/\\, \\epsilon_{\\mathrm{TF}} =  \\left(\\epsilon_{k} + \\Sigma_{x}(k)\\right) \\,/\\, \\epsilon_{\\mathrm{TF}} \$",
     # )
+    # xloc = 0.8
+    # yloc = -0.5
+    # ydiv = -0.5
     xloc = 0.8
-    yloc = -0.5
-    ydiv = -0.5
+    yloc = -1.25
+    ydiv = -0.25
     ax2.text(
         xloc,
         yloc,
-        "\$r_s = 1,\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
+        "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
         fontsize=14,
     )
     ax2.text(

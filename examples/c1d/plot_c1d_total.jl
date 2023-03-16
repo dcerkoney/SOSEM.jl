@@ -21,13 +21,13 @@ function main()
         cd(ENV["SOSEM_HOME"])
     end
 
-    rs = 1.0
+    rs = 5.0
     beta = 40.0
     mass2 = 1.0
     solver = :vegasmc
     expand_bare_interactions = false
 
-    neval34 = 1e10
+    neval34 = 5e10
     neval5 = 5e10
     neval = max(neval34, neval5)
 
@@ -95,30 +95,28 @@ function main()
     filename =
         "results/data/rs=$(rs)_beta_ef=$(beta)_" *
         "lambda=$(mass2)_$(intn_str)$(solver)$(ct_string)"
-    f = jldopen("$filename.jld2", "r")
+    f = jldopen("$filename.jld2", "a+"; compress=true)
     key = "c1d_n_min=$(min_order)_n_max=$(max_together)_neval=$(neval34)"
     res = f["$key/res"]
     settings = f["$key/settings"]
     param = f["$key/param"]
     kgrid = f["$key/kgrid"]
     partitions = f["$key/partitions"]
-    close(f)
-
     if max_order == 5
         # 5th order 
         filename =
             "results/data/rs=$(rs)_beta_ef=$(beta)_" *
             "lambda=$(mass2)_$(intn_str)$(solver)$(ct_string)"
-        f5 = jldopen("$filename.jld2", "r")
+        f5 = jldopen("$filename.jld2", "a+"; compress=true)
         key5 = "c1d_n_min=$(max_order)_n_max=$(max_order)_neval=$(neval5)"
         res5 = f5["$(key5)/res"]
         settings5 = f5["$(key5)/settings"]
         param5 = f5["$(key5)/param"]
         kgrid5 = f5["$(key5)/kgrid"]
         partitions5 = f5["$(key5)/partitions"]
-        # Close the JLD2 file
-        close(f)
     end
+    # Close the JLD2 file
+    close(f)
 
     print(settings)
     print(param)
@@ -260,7 +258,7 @@ function main()
 
     if min_order_plot == 2
         # Plot the bare (LO) result; there are no RPA(+FL) corrections for the class (d) moment
-        ax.plot(k_kf_grid_quad, c1d_bare_quad, "C0"; label="\$N=0\$ (quad)")
+        ax.plot(k_kf_grid_quad, c1d_bare_quad, "C0"; label="\$N=2\$ (quad)")
     end
 
     if save
@@ -299,7 +297,7 @@ function main()
             marker;
             markersize=2,
             color="C$i",
-            label="\$N=$(N - n_min)\$ ($solver)",
+            label="\$N=$(N)\$ ($solver)",
         )
         ax.fill_between(k_kf_grid, means - stdevs, means + stdevs; color="C$i", alpha=0.4)
         if !renorm_mu_lo_ex && max_order <= 3 && N == 3
@@ -322,13 +320,17 @@ function main()
     # xloc = 0.5
     # yloc = -0.075
     # ydiv = -0.009
+
     xloc = 1.6
-    yloc = 0.9
-    ydiv = -0.095
+    yloc = 2.0
+    ydiv = -0.3
+    # xloc = 1.6
+    # yloc = 0.9
+    # ydiv = -0.095
     ax.text(
         xloc,
         yloc,
-        "\$r_s = 1,\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
+        "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
         fontsize=14,
     )
     ax.text(

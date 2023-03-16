@@ -21,7 +21,7 @@ function main()
         cd(ENV["SOSEM_HOME"])
     end
 
-    rs = 1.0
+    rs = 5.0
     beta = 40.0
     mass2 = 1.0
     solver = :vegasmc
@@ -70,7 +70,7 @@ function main()
         Measurements.value.(c1nl_rpa_fl), Measurements.uncertainty.(c1nl_rpa_fl)
 
     # N = 3, 4
-    neval34 = 1e10
+    neval34 = 5e10
 
     # N = 5
     neval5_c1b0 = 5e10
@@ -146,7 +146,7 @@ function main()
                 c1nl_lo,
                 "C0";
                 linestyle="-",
-                label="\$N=0, T = 0\$ (quad)",
+                label="\$N=2, T = 0\$ (quad)",
             )
         end
         # ax.plot(k_kf_grid, c1nl_N_means, "o-"; color="C$i", markersize=2, label="\$N=$N\$ ($solver)")
@@ -155,7 +155,7 @@ function main()
             c1nl_N_means,
             "C$i";
             linestyle="-",
-            label="\$N=$(N - n_min)\$ ($solver)",
+            label="\$N=$(N)\$ ($solver)",
         )
         ax.fill_between(
             k_kf_grid,
@@ -178,7 +178,7 @@ function main()
     ax.text(
         xloc,
         yloc,
-        "\$r_s = 1,\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
+        "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
         fontsize=14,
     )
     ax.text(

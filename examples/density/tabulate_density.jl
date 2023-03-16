@@ -21,9 +21,7 @@ function main()
     end
 
     # Total loop order N
-    # orders = [0, 1, 2, 3]
-    # orders = [1, 2, 3]
-    orders = [5]
+    orders = [0, 1, 2, 3]
     min_order = minimum(orders)
     max_order = maximum(orders)
     sort!(orders)
@@ -34,7 +32,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 1e9
+    neval = 1e10
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -54,7 +52,7 @@ function main()
     compare_eft = false
 
     # Set green4 to zero for benchmarking?
-    no_green4 = true
+    no_green4 = false
     no_green4_str = no_green4 ? "_no_green4" : ""
 
     # Optionally give specific partition(s) to build
@@ -69,9 +67,9 @@ function main()
     # UEG parameters for MC integration
     loadparam = ParaMC(;
         order=max_order,
-        rs=1.0,
+        rs=5.0,
         beta=beta,
-        mass2=0.6,
+        mass2=1.0,
         isDynamic=false,
         isFock=isFock,  # remove Fock insertions
     )
@@ -94,7 +92,7 @@ function main()
     savename =
         "results/data/density_n=$(loadparam.order)_rs=$(loadparam.rs)_beta_ef=$(loadparam.beta)_" *
         "lambda=$(loadparam.mass2)_neval=$(neval)_$(solver)$(ct_string)" *
-        "$(no_green4_str)$(partn_string)_ct_fixes"
+        "$(no_green4_str)$(partn_string)"
     println(savename)
     orders, param, partitions, res = jldopen("$savename.jld2", "a+") do f
         key = "$(UEG.short(loadparam))"
@@ -114,9 +112,9 @@ function main()
     end
 
     # Convert results to a Dict of measurements at each order with interaction counterterms merged
-    data = sort(UEG_MC.restodict(res, partitions))
+    data = UEG_MC.restodict(res, partitions)
     if compare_eft
-        data_eft = sort(data_eft)
+        data_eft = data_eft
     end
 
     # Add overall spin summation (factor of 2) and factor of 1 / (n_μ! n_λ!)
@@ -190,8 +188,10 @@ function main()
     if haskey(data, (0, 0, 0)) == false
         data[(0, 0, 0)] = [measurement(n0, 0.0)]
     end
-    if haskey(data_eft, (0, 0, 0)) == false
-        data_eft[(0, 0, 0)] = [measurement(n0, 0.0)]
+    if compare_eft
+        if haskey(data_eft, (0, 0, 0)) == false
+            data_eft[(0, 0, 0)] = [measurement(n0, 0.0)]
+        end
     end
     if min_order == 0
         n0_calc = data[(0, 0, 0)][1]
@@ -244,11 +244,13 @@ function main()
         scaled_merged_shifted_data[(k[1] + 1, k[2])] = v / n0
     end
     sort!(scaled_merged_shifted_data)
-    scaled_merged_shifted_data_eft = OrderedDict()
-    for (k, v) in merged_data_eft
-        scaled_merged_shifted_data_eft[(k[1] + 1, k[2])] = v / n0
+    if compare_eft
+        scaled_merged_shifted_data_eft = OrderedDict()
+        for (k, v) in merged_data_eft
+            scaled_merged_shifted_data_eft[(k[1] + 1, k[2])] = v / n0
+        end
+        sort!(scaled_merged_shifted_data_eft)
     end
-    sort!(scaled_merged_shifted_data_eft)
 
     compare_eft && println("\n(SOSEM)")
     println("\nDensity partitions in units of n0 (n_loop, n_μ, n_λ):\n")

@@ -54,8 +54,8 @@ function main()
     ax.text(
         xloc,
         yloc,
-        # "\$r_s = 1,\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\\, \\xi_k = 0\$";
-        "\$r_s = 1,\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\\, \\xi_k = 1\$";
+        # "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\\, \\xi_k = 0\$";
+        "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\\, \\xi_k = 1\$";
         fontsize=14,
     )
     fig.tight_layout()

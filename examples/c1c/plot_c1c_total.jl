@@ -21,13 +21,13 @@ function main()
         cd(ENV["SOSEM_HOME"])
     end
 
-    rs = 1.0
+    rs = 5.0
     beta = 40.0
     mass2 = 1.0
     solver = :vegasmc
     expand_bare_interactions = false
 
-    neval34 = 1e10
+    neval34 = 5e10
     neval5 = 5e10
     neval = max(neval34, neval5)
     # neval = neval34
@@ -229,7 +229,7 @@ function main()
 
     if min_order_plot == 2
         # Plot the bare (LO) result; there are no RPA(+FL) corrections for the class (c) moment
-        ax.plot(k_kf_grid_quad, c1c_bare_quad, "C0"; label="\$N=0\$ (quad)")
+        ax.plot(k_kf_grid_quad, c1c_bare_quad, "C0"; label="\$N=2\$ (quad)")
     end
 
     if save
@@ -274,7 +274,7 @@ function main()
             marker;
             markersize=2,
             color="C$i",
-            label="\$N=$(N - n_min)\$ ($solver)",
+            label="\$N=$(N)\$ ($solver)",
         )
         ax.fill_between(k_over_kfs, means - stdevs, means + stdevs; color="C$i", alpha=0.4)
         if !renorm_mu_lo_ex && max_order <= 3 && N == 3
@@ -302,7 +302,7 @@ function main()
     ax.text(
         xloc,
         yloc,
-        "\$r_s = 1,\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
+        "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
         fontsize=14,
     )
     ax.text(

@@ -197,7 +197,7 @@ function main()
     ax.text(
         xloc,
         yloc,
-        "\$N = $(plot_order - n_min),\\, r_s = 1,\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
+        "\$N = $(plot_order - n_min),\\, r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
         fontsize=14,
     )
     ax.text(

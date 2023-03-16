@@ -23,19 +23,19 @@ function main()
         cd(ENV["SOSEM_HOME"])
     end
 
-    rs = 1.0
+    rs = 5.0
     beta = 40.0
     mass2 = 1.0
     solver = :vegasmc
     expand_bare_interactions = false
 
-    neval34 = 1e10
+    neval34 = 5e10
     neval5 = 5e10
     neval = max(neval34, neval5)
     # neval = neval34
 
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
-    n_min = 2  # True minimal loop order for this observable
+    n_min = 3  # True minimal loop order for this observable
     min_order = 3
     max_order = 5
     min_order_plot = 2
@@ -55,6 +55,9 @@ function main()
 
     # Save total results
     save = true
+
+    # Include RPA(+FL) results?
+    plot_rpa_fl = false
 
     plotparam =
         UEG.ParaMC(; order=max_order, rs=rs, beta=beta, mass2=mass2, isDynamic=false)
@@ -147,28 +150,31 @@ function main()
     merged_data = CounterTerm.mergeInteraction(data)
     println([k for (k, _) in merged_data])
 
-    # Non-dimensionalize bare and RPA+FL non-local moments
-    rs_lo = 1.0
-    sosem_lo = np.load("results/data/soms_rs=$(rs_lo)_beta_ef=40.0.npz")
-    # Non-dimensionalize rs = 2 quadrature results by Thomas-Fermi energy
-    param_lo = Parameter.atomicUnit(0, rs_lo)    # (dimensionless T, rs)
-    eTF_lo = param_lo.qTF^2 / (2 * param_lo.me)
+    if plot_rpa_fl
+        # Non-dimensionalize bare and RPA+FL non-local moments
+        rs_lo = rs
+        sosem_lo = np.load("results/data/soms_rs=$(rs_lo)_beta_ef=40.0.npz")
+        # Non-dimensionalize rs = 2 quadrature results by Thomas-Fermi energy
+        param_lo = Parameter.atomicUnit(0, rs_lo)    # (dimensionless T, rs)
+        eTF_lo = param_lo.qTF^2 / (2 * param_lo.me)
 
-    # Bare results (stored in Hartree a.u.)
-    k_kf_grid_quad = np.linspace(0.0, 3.0; num=600)
-    c1b_bare_quad = sosem_lo.get("bare_b") / eTF_lo^2
+        # Bare results (stored in Hartree a.u.)
+        k_kf_grid_quad = np.linspace(0.0, 3.0; num=600)
+        c1b_bare_quad = sosem_lo.get("bare_b") / eTF_lo^2
 
-    # # Interpolate bare results and downsample to coarse k_kf_grid_vegas
-    k_kf_grid_vegas = np.load("results/kgrids/kgrid_vegas_dimless_n=77_small.npy")
+        # # Interpolate bare results and downsample to coarse k_kf_grid_vegas
+        k_kf_grid_vegas = np.load("results/kgrids/kgrid_vegas_dimless_n=77_small.npy")
 
-    # c1b_bare_interp = linear_interpolation(k_kf_grid_quad, c1b_bare_quad)
-    # c1b2_exact = c1b_bare_interp(k_kf_grid)
+        # c1b_bare_interp = linear_interpolation(k_kf_grid_quad, c1b_bare_quad)
+        # c1b2_exact = c1b_bare_interp(k_kf_grid)
 
-    # RPA(+FL) corrections to LO for class (b) moment
-    delta_c1b_rpa = sosem_lo.get("delta_rpa_b_vegas_N=1e+07.npy") / eTF_lo^2
-    delta_c1b_rpa_err = sosem_lo.get("delta_rpa_b_err_vegas_N=1e+07.npy") / eTF_lo^2
-    delta_c1b_rpa_fl = sosem_lo.get("delta_rpa+fl_b_vegas_N=1e+07.npy") / eTF_lo^2
-    delta_c1b_rpa_fl_err = sosem_lo.get("delta_rpa+fl_b_err_vegas_N=1e+07.npy") / eTF_lo^2
+        # RPA(+FL) corrections to LO for class (b) moment
+        delta_c1b_rpa = sosem_lo.get("delta_rpa_b_vegas_N=1e+07.npy") / eTF_lo^2
+        delta_c1b_rpa_err = sosem_lo.get("delta_rpa_b_err_vegas_N=1e+07.npy") / eTF_lo^2
+        delta_c1b_rpa_fl = sosem_lo.get("delta_rpa+fl_b_vegas_N=1e+07.npy") / eTF_lo^2
+        delta_c1b_rpa_fl_err =
+            sosem_lo.get("delta_rpa+fl_b_err_vegas_N=1e+07.npy") / eTF_lo^2
+    end
 
     # Get total data
     if renorm_mu
@@ -244,7 +250,7 @@ function main()
     # Plot the results
     fig, ax = plt.subplots()
 
-    if min_order_plot == 2
+    if plot_rpa_fl && min_order_plot == 2
         ax.plot(
             k_kf_grid_vegas,
             delta_c1b_rpa,
@@ -292,28 +298,31 @@ function main()
         for N in min_order_plot:max_order
             # Add RPA & RPA+FL results to data group
             if N == 2
-                if haskey(f, "c1b")
-                    if haskey(f["c1b"], "RPA") && haskey(f["c1b/RPA"], "neval=$(1e7)")
-                        @warn("replacing existing data for RPA, neval=$(1e7)")
-                        delete!(f["c1b/RPA"], "neval=$(1e7)")
+                if plot_rpa_fl
+                    if haskey(f, "c1b")
+                        if haskey(f["c1b"], "RPA") && haskey(f["c1b/RPA"], "neval=$(1e7)")
+                            @warn("replacing existing data for RPA, neval=$(1e7)")
+                            delete!(f["c1b/RPA"], "neval=$(1e7)")
+                        end
+                        if haskey(f["c1b"], "RPA+FL") &&
+                           haskey(f["c1b/RPA+FL"], "neval=$(1e7)")
+                            @warn("replacing existing data for RPA+FL, neval=$(1e7)")
+                            delete!(f["c1b/RPA+FL"], "neval=$(1e7)")
+                        end
                     end
-                    if haskey(f["c1b"], "RPA+FL") && haskey(f["c1b/RPA+FL"], "neval=$(1e7)")
-                        @warn("replacing existing data for RPA+FL, neval=$(1e7)")
-                        delete!(f["c1b/RPA+FL"], "neval=$(1e7)")
-                    end
+                    # RPA
+                    meas_rpa = measurement.(delta_c1b_rpa, delta_c1b_rpa_err)
+                    # meas_rpa = measurement.(c1b_rpa, c1b_rpa_err)
+                    f["c1b/RPA/neval=$(1e7)/meas"] = meas_rpa
+                    f["c1b/RPA/neval=$(1e7)/param"] = param
+                    f["c1b/RPA/neval=$(1e7)/kgrid"] = kgrid
+                    # RPA+FL
+                    meas_rpa_fl = measurement.(delta_c1b_rpa_fl, delta_c1b_rpa_fl_err)
+                    # meas_rpa_fl = measurement.(c1b_rpa_fl, c1b_rpa_fl_err)
+                    f["c1b/RPA+FL/neval=$(1e7)/meas"] = meas_rpa_fl
+                    f["c1b/RPA+FL/neval=$(1e7)/param"] = param
+                    f["c1b/RPA+FL/neval=$(1e7)/kgrid"] = kgrid
                 end
-                # RPA
-                meas_rpa = measurement.(delta_c1b_rpa, delta_c1b_rpa_err)
-                # meas_rpa = measurement.(c1b_rpa, c1b_rpa_err)
-                f["c1b/RPA/neval=$(1e7)/meas"] = meas_rpa
-                f["c1b/RPA/neval=$(1e7)/param"] = param
-                f["c1b/RPA/neval=$(1e7)/kgrid"] = kgrid
-                # RPA+FL
-                meas_rpa_fl = measurement.(delta_c1b_rpa_fl, delta_c1b_rpa_fl_err)
-                # meas_rpa_fl = measurement.(c1b_rpa_fl, c1b_rpa_fl_err)
-                f["c1b/RPA+FL/neval=$(1e7)/meas"] = meas_rpa_fl
-                f["c1b/RPA+FL/neval=$(1e7)/param"] = param
-                f["c1b/RPA+FL/neval=$(1e7)/kgrid"] = kgrid
             else
                 num_eval = N == 5 ? neval5 : neval34
                 if haskey(f, "c1b") &&
@@ -358,7 +367,7 @@ function main()
             markersize=2,
             color=colors[i],
             # color="C$i",
-            label="\$N=$(N - n_min)\$ ($solver)",
+            label="\$N=$(N)\$ ($solver)",
         )
         ax.fill_between(
             k_kf_grid,
@@ -399,7 +408,7 @@ function main()
     ax.text(
         xloc,
         yloc,
-        "\$r_s = 1,\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
+        "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
         fontsize=14,
     )
     ax.text(
