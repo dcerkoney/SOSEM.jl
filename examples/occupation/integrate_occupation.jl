@@ -238,7 +238,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 5e10
+    neval = 5e9
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -252,7 +252,7 @@ function main()
         order=max_order,
         rs=5.0,
         beta=40.0,
-        mass2=1.0,
+        mass2=0.2,
         isDynamic=false,
         isFock=isFock,  # remove Fock insertions
     )
