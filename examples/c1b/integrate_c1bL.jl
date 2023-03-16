@@ -25,7 +25,7 @@ function main()
         min_order=5,  # no (2,0,0) partition for this observable (Γⁱ₃ > Γ₀),
         max_order=5,
         verbosity=DiagGen.quiet,
-        expand_bare_interactions=false,
+        expand_bare_interactions=true,
         filter=[NoHartree],
         interaction=[FeynmanDiagram.Interaction(ChargeCharge, Instant)],  # Yukawa-type interaction
         # interaction=[FeynmanDiagram.Interaction(ChargeCharge, Dynamic)],  # TODO: test RPA-type interaction
@@ -33,7 +33,7 @@ function main()
 
     # UEG parameters for MC integration
     param =
-        ParaMC(; order=settings.max_order, rs=5.0, beta=40.0, mass2=1.0, isDynamic=false)
+        ParaMC(; order=settings.max_order, rs=1.0, beta=40.0, mass2=1.0, isDynamic=false)
     @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)"
 
     println("lambda = $(param.mass2)")
@@ -58,7 +58,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 5e10
+    neval = 5e9
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
