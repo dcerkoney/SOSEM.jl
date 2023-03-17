@@ -272,8 +272,8 @@ function main()
     end
 
     # Total loop order N (Fock self-energy is N = 1)
-    # orders = [1, 2, 3]
-    orders = [4]
+    orders = [1, 2, 3]
+    # orders = [4]
     max_order = maximum(orders)
 
     # Settings
@@ -293,7 +293,7 @@ function main()
         order=max_order,
         rs=5.0,
         beta=40.0,
-        mass2=1.0,
+        mass2=0.2,
         isDynamic=false,
         isFock=false,
     )
