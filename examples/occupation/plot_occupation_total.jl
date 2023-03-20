@@ -28,14 +28,14 @@ function main()
 
     rs = 5.0
     beta = 40.0
-    mass2 = 1.0
+    mass2 = 0.2
     solver = :vegasmc
 
     # Number of evals
-    neval = 5e10
-    # neval12 = 5e10
-    # neval3 = 5e10
-    # neval = max(neval12, neval3)
+    # neval = 5e10
+    neval12 = 5e10
+    neval3 = 5e10
+    neval = max(neval12, neval3)
 
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
     min_order = 0
@@ -104,29 +104,29 @@ function main()
     )
 
     # Load the raw data
-    # if max_order == 3
-    #     max_together = 2
-    # else
-    #     max_together = max_order
-    # end
+    if max_order == 3
+        max_together = 2
+    else
+        max_together = max_order
+    end
     savename =
-        # "results/data/occupation_n=$(max_together)_rs=$(rs)_beta_ef=$(beta)_" *
-        "results/data/occupation_n=$(max_order)_rs=$(rs)_beta_ef=$(beta)_" *
+        "results/data/occupation_n=$(max_together)_rs=$(rs)_beta_ef=$(beta)_" *
+        # "results/data/occupation_n=$(max_order)_rs=$(rs)_beta_ef=$(beta)_" *
         "lambda=$(mass2)_neval=$(neval)_$(solver)_$(ct_string)"
     orders, param, kgrid, partitions, res = jldopen("$savename.jld2", "a+") do f
         key = "$(UEG.short(loadparam))"
         return f[key]
     end
-    # if max_order == 3
-    #     # 5th order 
-    #     savename =
-    #         "results/data/occupation_n=$(max_order)_rs=$(rs)_beta_ef=$(beta)_" *
-    #         "lambda=$(mass2)_neval=$(neval3)_$(solver)_$(ct_string)"
-    #     orders5, param5, kgrid5, partitions5, res5 = jldopen("$savename.jld2", "a+") do f
-    #         key = "$(UEG.short(loadparam))"
-    #         return f[key]
-    #     end
-    # end
+    if max_order == 3
+        # 3rd order 
+        savename =
+            "results/data/occupation_n=$(max_order)_rs=$(rs)_beta_ef=$(beta)_" *
+            "lambda=$(mass2)_neval=$(neval3)_$(solver)_$(ct_string)"
+        orders5, param5, kgrid5, partitions5, res5 = jldopen("$savename.jld2", "a+") do f
+            key = "$(UEG.short(loadparam))"
+            return f[key]
+        end
+    end
 
     if compare_eft
         # Load the EFT_UEG data (NOTE: EFT data is already in Dict format!)
@@ -155,9 +155,9 @@ function main()
 
     # Get dimensionless k-grid (k / kF) and index corresponding to the Fermi energy
     k_kf_grid = kgrid / param.kF
-    # if max_order == 3
-    #     k_kf_grid5 = kgrid5 / param.kF
-    # end
+    if max_order == 3
+        k_kf_grid5 = kgrid5 / param.kF
+    end
 
     # Convert results to a Dict of measurements at each order with interaction counterterms merged
     data = UEG_MC.restodict(res, partitions)
@@ -169,13 +169,13 @@ function main()
     #     data[k] = v / (factorial(k[2]) * factorial(k[3]))
     # end
     # Add 5th order results to data dict
-    # if max_order == 3
-    #     data5 = UEG_MC.restodict(res5, partitions5)
-    #     for (k, v) in data5
-    #         data5[k] = v / (factorial(k[2]) * factorial(k[3]))
-    #     end
-    #     merge!(data, data5)
-    # end
+    if max_order == 3
+        data3 = UEG_MC.restodict(res5, partitions5)
+        for (k, v) in data3
+            data3[k] = v / (factorial(k[2]) * factorial(k[3]))
+        end
+        merge!(data, data3)
+    end
     # data_eft = sort(data_eft)
 
     # Zero out partitions with mu renorm if present (fix mu)
@@ -395,8 +395,8 @@ function main()
         f = jldopen("$savename.jld2", "a+"; compress=true)
         # NOTE: no bare result for c1b observable (accounted for in c1b0)
         for N in min_order_plot:max_order
-            # num_eval = N == 3 ? neval3 : neval12
-            num_eval = neval
+            num_eval = N == 3 ? neval3 : neval12
+            # num_eval = neval
             # Skip exact (N = 0) result
             N == 0 && continue
             # Skip Fock result if HF renormalization was used
