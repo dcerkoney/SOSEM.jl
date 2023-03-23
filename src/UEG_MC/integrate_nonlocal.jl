@@ -70,10 +70,6 @@ function integrate_nonlocal_with_ct(
     print=-1,
     solver=:vegasmc,
 )
-    # Get necessary DiagGen properties from settings (the observable sign and
-    # discontinuity side are the same ∀ partitions, but extT depend on n_loop!)
-    # dummy_cfg = Config(settings)
-
     # We assume that each partition expression tree has a single root
     @assert all(length(et.root) == 1 for et in exprtrees)
 
@@ -81,9 +77,6 @@ function integrate_nonlocal_with_ct(
     # loop numbers for each tree (to be passed to integrand)
     # roots = [et.root[1] for et in exprtrees]
     innerLoopNums = [p.innerLoopNum for p in diagparams]
-
-    # Get tree-dependent outgoing external time values/indices directly from expression trees
-    # extTs = [exprtrees[i].node.object[r].para.extT for (i, r) in enumerate(roots)]
 
     # Grid size
     n_kgrid = length(kgrid)
@@ -147,14 +140,6 @@ function integrate_full_nonlocal_with_ct(
     # List of expression tree roots and inner loop numbers for each tree (to be passed to integrand)
     # roots = [et.root for et in exprtrees]
     innerLoopNums = [p.innerLoopNum for p in diagparams]
-
-    # Get tree-dependent outgoing external time values/indices directly from expression trees
-    # extTs = [
-    #     (
-    #         exprtrees[i].node.object[r[1]].para.extT,  # c1c
-    #         exprtrees[i].node.object[r[2]].para.extT,  # rest
-    #     ) for (i, r) in enumerate(roots)
-    # ]
 
     # Grid size
     n_kgrid = length(kgrid)
@@ -308,12 +293,6 @@ function integrand_full(vars, config)
 
         # Two roots: one for c1c, and one for the remaining observables (additional = mcparam)
         root1, root2 = exprtrees[i].root[1], exprtrees[i].root[2]
-
-        # # Evaluate the expression tree for c1c
-        # ExprTree.evalKT!(root1, varK, T.data, mcparam; eval=UEG_MC.Propagators.eval)
-
-        # # Evaluate the expression tree for the remaining observables (additional = mcparam)
-        # ExprTree.evalKT!(root2, varK, T.data, mcparam; eval=UEG_MC.Propagators.eval)
 
         # Evaluate the expression tree (additional = mcparam)
         ExprTree.evalKT!(exprtrees[i], varK, T.data, mcparam; eval=UEG_MC.Propagators.eval)
