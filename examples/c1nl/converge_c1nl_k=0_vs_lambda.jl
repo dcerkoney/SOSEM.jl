@@ -58,14 +58,14 @@ function main()
     kgrid = [0.0]
 
     # Settings
-    rs = 1.0
+    rs = 5.0
     beta = 40.0
     alpha = 3.0
     print = 0
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 1e7
+    neval = 1e9
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
