@@ -37,6 +37,14 @@ function Settings{O}(
         name,
     )
 end
+function Base.isequal(a::Settings, b::Settings)
+    typeof(a) != typeof(b) && return false
+    for field in fieldnames(typeof(a))
+        getproperty(a, field) != getproperty(b, field) && return false
+    end
+    return true
+end
+Base.:(==)(a::Settings, b::Settings) = Base.isequal(a, b)
 
 """Split settings for a composite observable into a list of settings for each atomic observable."""
 function atomize(settings::Settings{CompositeObservable})

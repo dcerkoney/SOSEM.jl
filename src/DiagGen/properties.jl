@@ -187,6 +187,13 @@ function CompositeObservable(observables; factors=ones(size(observables)), name=
     exact_unif = sum(factors .* get_exact_k0.(observables))
     return CompositeObservable(name, observables, signs, factors, exact_unif)
 end
+function Base.isequal(a::CompositeObservable, b::CompositeObservable)
+    for field in fieldnames(typeof(a))
+        getproperty(a, field) != getproperty(b, field) && return false
+    end
+    return true
+end
+Base.:(==)(a::CompositeObservable, b::CompositeObservable) = Base.isequal(a, b)
 
 # Total class (b) contribution (with/without vertex corrections):  C⁽¹ᵇ⁰⁾ᴸ + C⁽¹ᵇ⁾ᴸ + (L -> R)
 const c1b_total =
