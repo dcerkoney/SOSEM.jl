@@ -37,9 +37,9 @@ function main()
         cd(ENV["SOSEM_HOME"])
     end
 
-    rs = 1.0
+    rs = 5.0
     beta = 40.0
-    neval = 1e7
+    neval = 1e9
     solver = :vegasmc
     expand_bare_interactions = false
 
@@ -49,6 +49,16 @@ function main()
 
     # Scanning λ to check relative convergence wrt perturbation order
     lambdas = [0.1, 0.2, 0.3, 0.4, 0.5, 1.0, 1.5, 2.0]
+
+    # Optimal lambdas on this grid for rs = 1, 2, 5
+    lambda_star = missing
+    if rs ≈ 1
+        lambda_star = 1.0
+    elseif rs ≈ 2
+        lambda_star = 0.4
+    elseif rs ≈ 5
+        lambda_star = 0.1  # Check 0.15? Throw out lambda > 1
+    end
 
     n_min = 2  # lowest possible loop order for this observable
     min_order = 2
@@ -99,8 +109,8 @@ function main()
         merged_data = CounterTerm.mergeInteraction(data)
         println([k for (k, _) in merged_data])
 
-        if min_order_plot == 2 && min_order > 2
-            # if min_order_plot == 2
+        # if min_order_plot == 2 && min_order > 2
+        if min_order_plot == 2
             # Set bare result manually using exact value to avoid statistical error in (2,0,0) calculation
             merged_data[(2, 0)] = [measurement(DiagGen.c1nl_ueg.exact_unif, 0.0)]
         end
@@ -153,7 +163,14 @@ function main()
 
     # Plot the results for each order ξ vs lambda and compare to RPA(+FL)
     fig, ax = plt.subplots()
-    # ax.axvline(1.0; linestyle="--", color="dimgray", label="\$\\lambda^\\star = 1\$")
+    if !ismissing(lambda_star)
+        ax.axvline(
+            lambda_star;
+            linestyle="--",
+            color="dimgray",
+            label="\$\\lambda^\\star = $lambda_star\$",
+        )
+    end
     if min_order_plot == 2
         ax.plot(
             lambdas,
@@ -168,8 +185,8 @@ function main()
     c1nl_unif_N_stdevs = []
     for (j, N) in enumerate(min_order:max_order_plot)
         # Get means and error bars from the result up to this order
-        c1nl_unif_N_means = [c1nl_totals[i][j][1].val for i in eachindex(lambdas)]
-        c1nl_unif_N_stdevs = [c1nl_totals[i][j][1].err for i in eachindex(lambdas)]
+        c1nl_unif_N_means = [c1nl_totals[j][N][1].val for j in eachindex(lambdas)]
+        c1nl_unif_N_stdevs = [c1nl_totals[j][N][1].err for j in eachindex(lambdas)]
         ax.plot(
             lambdas,
             c1nl_unif_N_means,
@@ -186,25 +203,27 @@ function main()
             alpha=0.3,
         )
     end
-    # ax.set_xlim(0.5, 3.0)
-    ax.set_ylim(; bottom=-0.75)
+    ax.set_xlim(0.0, 2.1)
+    ax.set_ylim(; bottom=-1.25)
     ax.legend(; loc="best")
     ax.set_xlabel("\$\\lambda\$ (Ry)")
     ax.set_ylabel(
         "\$C^{(1)nl}(k=0,\\, \\lambda) \\,/\\, {\\epsilon}^{\\hspace{0.1em}2}_{\\mathrm{TF}}\$",
     )
-    xloc = 1.325
-    yloc = -0.54
-    ydiv = -0.025
+    xloc = 0.875
+    yloc = -0.89
+    ydiv = -0.08
     ax.text(
         xloc,
         yloc,
-        "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta), N_{\\mathrm{eval}} = \\mathrm{$(neval)},\$";
+        "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)},\$";
         fontsize=14,
     )
+    # ax.text(xloc, yloc + ydiv, "\$N_{\\mathrm{eval}} = \\mathrm{$(neval)},\$"; fontsize=14)
     ax.text(
         xloc,
         yloc + ydiv,
+        # yloc + 2 * ydiv,
         "\${\\epsilon}_{\\mathrm{TF}}\\equiv\\frac{\\hbar^2 q^2_{\\mathrm{TF}}}{2 m_e}=2\\pi\\mathcal{N}_F\$ (a.u.)";
         fontsize=12,
     )
