@@ -228,8 +228,8 @@ function main()
     end
 
     # Total loop order N
-    # orders = [0, 1, 2]
-    orders = [3]
+    orders = [0, 1, 2]
+    # orders = [3]
     max_order = maximum(orders)
     sort!(orders)
 
@@ -253,7 +253,7 @@ function main()
         order=max_order,
         rs=5.0,
         beta=40.0,
-        mass2=0.2,
+        mass2=0.1375,
         isDynamic=false,
         isFock=isFock,  # remove Fock insertions
     )

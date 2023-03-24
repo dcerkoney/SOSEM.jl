@@ -15,7 +15,7 @@ end
 # Physical params matching data for SOSEM observables
 order = [3]  # C^{(1)}_{N≤5} includes CTs up to 3rd order
 rs = [5.0]
-mass2 = [0.125]
+mass2 = [0.1375]
 beta = [40.0]
 
 # Enable/disable interaction and chemical potential counterterms
