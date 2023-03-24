@@ -39,7 +39,9 @@ function main()
 
     rs = 5.0
     beta = 40.0
-    neval = 1e9
+    neval_lo = 1e10
+    neval_hi = 5e10
+    neval = min(neval_lo, neval_hi)
     solver = :vegasmc
     expand_bare_interactions = false
 
@@ -47,17 +49,21 @@ function main()
     renorm_mu = true
     renorm_lambda = true
 
-    # Scanning λ to check relative convergence wrt perturbation order
-    lambdas = [0.1, 0.2, 0.3, 0.4, 0.5, 1.0, 1.5, 2.0]
+    # Combining results from low & high accuracy runs?
+    multirun = true
 
-    # Optimal lambdas on this grid for rs = 1, 2, 5
+    # # Scanning λ to check relative convergence wrt perturbation order
+    # lambdas_lo = [0.05, 0.1, 0.15, 0.2, 0.25, 0.5, 0.75, 1.0]
+    # lambdas_hi = [0.1, 0.125, 0.15]
+
+    # Optimal lambdas_lo on this grid for rs = 1, 2, 5
     lambda_star = missing
     if rs ≈ 1
         lambda_star = 1.0
     elseif rs ≈ 2
         lambda_star = 0.4
     elseif rs ≈ 5
-        lambda_star = 0.1  # Check 0.15? Throw out lambda > 1
+        lambda_star = 0.1375  # estimate at midpoint
     end
 
     n_min = 2  # lowest possible loop order for this observable
@@ -87,22 +93,59 @@ function main()
     loadparam = ParaMC(; order=max_order, rs=rs, beta=beta, isDynamic=false)
     savename =
         "results/data/c1nl_k=0_n=$(max_order)_rs=$(rs)_" *
-        "beta_ef=$(beta)_neval=$(neval)_" *
+        "beta_ef=$(beta)_neval=$(neval_lo)_" *
         "$(intn_str)$(solver)$(ct_string)_vs_lambda"
-    settings, params, kgrid, lambdas, partitions, res_list =
+    settings, params_lo, kgrid, lambdas_lo, partitions_lo, res_list_lo =
         jldopen("$savename.jld2", "a+") do f
             key = "$(short_no_lambda(loadparam))"
             return f[key]
         end
+    if multirun
+        # Load the higher-accuracy results from JLD2
+        savename =
+            "results/data/c1nl_k=0_n=$(max_order)_rs=$(rs)_" *
+            "beta_ef=$(beta)_neval=$(neval_hi)_" *
+            "$(intn_str)$(solver)$(ct_string)_vs_lambda"
+        settings_hi, params_hi, kgrid_hi, lambdas_hi, partitions_hi, res_list_hi =
+            jldopen("$savename.jld2", "a+") do f
+                key = "$(short_no_lambda(loadparam))"
+                return f[key]
+            end
+        @assert settings == settings_hi
+        @assert kgrid == kgrid_hi
+
+        # Merge lambda grid data in sorted order, storing the permutation vector
+        all_lambdas = union(lambdas_lo, lambdas_hi)
+        P = sortperm(all_lambdas)
+        sort!(all_lambdas)
+        # Merge params in the same order
+        params = union(params_lo, params_hi)[P]
+    else
+        all_lambdas = lambdas_lo
+        params = params_lo
+        lambdas_hi = []
+        res_list_hi = []
+    end
 
     c1nl_totals = []
-    for (i, lambda) in enumerate(lambdas)
+    for (i, lambda) in enumerate(all_lambdas)
+        # Use highest-accuracy results available at this lambda
+        idx_in_lambdas_lo = findall(x -> x == lambda, lambdas_lo)
+        idx_in_lambdas_hi = findall(x -> x == lambda, lambdas_hi)
+        idx_res = !isempty(idx_in_lambdas_hi) ? idx_in_lambdas_hi : idx_in_lambdas_lo
+        @assert length(idx_res) == 1
+        idx_res = idx_res[1]
+
         # UEG parameters for MC integration
         loadparam =
             ParaMC(; order=max_order, rs=rs, beta=beta, mass2=lambda, isDynamic=false)
 
         # Convert results to a Dict of measurements at each order with interaction counterterms merged
-        data = UEG_MC.restodict(res_list[i], partitions)
+        if lambda ∈ lambdas_hi
+            data = UEG_MC.restodict(res_list_hi[idx_res], partitions_hi)
+        else
+            data = UEG_MC.restodict(res_list_lo[idx_res], partitions_lo)
+        end
         for (k, v) in data
             data[k] = v / (factorial(k[2]) * factorial(k[3]))
         end
@@ -150,31 +193,29 @@ function main()
         )
         # Aggregate the full results for C⁽¹ᶜ⁾ up to order N
         push!(c1nl_totals, UEG_MC.aggregate_orders(c1nl_unif))
-
-        println(settings)
-        println(UEG.paraid(params[i]))
-        println(partitions)
-        println(res_list[i])
     end
+    @assert length(c1nl_totals) == length(all_lambdas)
 
     # Use LaTex fonts for plots
     plt.rc("text"; usetex=true)
     plt.rc("font"; family="serif")
 
     # Plot the results for each order ξ vs lambda and compare to RPA(+FL)
+    colors_high_acc = ["darkblue", "chocolate", "darkgreen"]
     fig, ax = plt.subplots()
     if !ismissing(lambda_star)
+        token = rs ≈ 5 ? "\\approx" : "="
         ax.axvline(
             lambda_star;
             linestyle="--",
             color="dimgray",
-            label="\$\\lambda^\\star = $lambda_star\$",
+            label="\$\\lambda^\\star $token $lambda_star\$",
         )
     end
     if min_order_plot == 2
         ax.plot(
-            lambdas,
-            DiagGen.c1nl_ueg.exact_unif * one.(lambdas),
+            all_lambdas,
+            DiagGen.c1nl_ueg.exact_unif * one.(all_lambdas),
             "-";
             color="k",
             markersize=3,
@@ -183,12 +224,13 @@ function main()
     end
     c1nl_unif_N_means = []
     c1nl_unif_N_stdevs = []
+    idxs_high_acc = findall(x -> x ∈ lambdas_hi, all_lambdas)
     for (j, N) in enumerate(min_order:max_order_plot)
         # Get means and error bars from the result up to this order
-        c1nl_unif_N_means = [c1nl_totals[j][N][1].val for j in eachindex(lambdas)]
-        c1nl_unif_N_stdevs = [c1nl_totals[j][N][1].err for j in eachindex(lambdas)]
+        c1nl_unif_N_means = [c1nl_totals[j][N][1].val for j in eachindex(all_lambdas)]
+        c1nl_unif_N_stdevs = [c1nl_totals[j][N][1].err for j in eachindex(all_lambdas)]
         ax.plot(
-            lambdas,
+            all_lambdas,
             c1nl_unif_N_means,
             "o-";
             color="C$(j-1)",
@@ -196,23 +238,40 @@ function main()
             label="\$N=$N\$ ($solver)",
         )
         ax.fill_between(
-            lambdas,
+            all_lambdas,
             (c1nl_unif_N_means - c1nl_unif_N_stdevs),
             (c1nl_unif_N_means + c1nl_unif_N_stdevs);
             color="C$(j-1)",
             alpha=0.3,
         )
+        if multirun
+            # Overlay darkened colors for points in higher-accuracy run
+            ax.plot(
+                all_lambdas[idxs_high_acc],
+                c1nl_unif_N_means[idxs_high_acc],
+                "o-";
+                color=colors_high_acc[j],
+                markersize=3,
+            )
+            ax.fill_between(
+                all_lambdas[idxs_high_acc],
+                (c1nl_unif_N_means[idxs_high_acc] - c1nl_unif_N_stdevs[idxs_high_acc]),
+                (c1nl_unif_N_means[idxs_high_acc] + c1nl_unif_N_stdevs[idxs_high_acc]);
+                color=colors_high_acc[j],
+                alpha=0.3,
+            )
+        end
     end
-    ax.set_xlim(0.0, 2.1)
-    ax.set_ylim(; bottom=-1.25)
+    ax.set_xlim(0.0, 1.05)
+    ax.set_ylim(; top=-0.2, bottom=-1.4)
     ax.legend(; loc="best")
     ax.set_xlabel("\$\\lambda\$ (Ry)")
     ax.set_ylabel(
         "\$C^{(1)nl}(k=0,\\, \\lambda) \\,/\\, {\\epsilon}^{\\hspace{0.1em}2}_{\\mathrm{TF}}\$",
     )
-    xloc = 0.875
-    yloc = -0.89
-    ydiv = -0.08
+    xloc = 0.2
+    yloc = -0.3
+    ydiv = -0.125
     ax.text(
         xloc,
         yloc,
