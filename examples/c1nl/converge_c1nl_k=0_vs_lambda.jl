@@ -52,7 +52,7 @@ function main()
     @assert c1nl_ueg.observables == [c1bL0, c1bL, c1c, c1d]
 
     # Scanning λ to check relative convergence wrt perturbation order
-    lambdas = [0.1, 0.2, 0.3, 0.4, 0.5, 1.0, 1.5, 2.0]
+    lambdas = [0.05, 0.1, 0.15, 0.2, 0.25, 0.5, 0.75, 1.0]
 
     # K-mesh for measurement
     kgrid = [0.0]
@@ -65,7 +65,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 1e9
+    neval = 1e10
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true

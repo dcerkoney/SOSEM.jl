@@ -16,8 +16,8 @@ end
 function main()
     # Physical params matching data for SOSEM observables
     order = [3]  # C^{(1)}_{N≤5} includes CTs up to 3rd order
-    rs = [1.0, 2.0, 5.0]
-    mass2 = [0.1, 0.2, 0.3, 0.4, 0.5, 1.0, 1.5, 2.0]
+    rs = [5.0]
+    mass2 = [0.05, 0.15, 0.25, 0.75]
     beta = [40.0]
 
     # Total number of MCMC evaluations
