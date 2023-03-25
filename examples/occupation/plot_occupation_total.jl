@@ -28,7 +28,7 @@ function main()
 
     rs = 5.0
     beta = 40.0
-    mass2 = 0.2
+    mass2 = 0.1375
     solver = :vegasmc
 
     # Number of evals
@@ -39,9 +39,9 @@ function main()
 
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
     min_order = 0
-    max_order = 3
+    max_order = 2
     min_order_plot = 0
-    max_order_plot = 3
+    max_order_plot = 2
 
     # Save total results
     save = true
@@ -745,7 +745,7 @@ function main()
         ydiv = -0.125
     else
         # xloc = 1.5
-        xloc = 1.125
+        xloc = 1.05
         yloc = 0.5
         ydiv = -0.15
     end
