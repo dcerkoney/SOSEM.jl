@@ -272,8 +272,8 @@ function main()
     end
 
     # Total loop order N (Fock self-energy is N = 1)
-    orders = [1, 2, 3]
-    # orders = [4]
+    # orders = [1, 2, 3]
+    orders = [4]
     max_order = maximum(orders)
 
     # Settings
@@ -291,9 +291,9 @@ function main()
     # UEG parameters for MC integration
     param = ParaMC(;
         order=max_order,
-        rs=5.0,
+        rs=2.0,
         beta=40.0,
-        mass2=0.2,
+        mass2=0.4,
         isDynamic=false,
         isFock=false,
     )
