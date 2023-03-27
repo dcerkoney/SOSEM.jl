@@ -24,8 +24,8 @@ function main()
     # Composite observable; measure all non-local moments together
     settings = Settings{CompositeObservable}(
         c1nl_ueg;
-        min_order=3,  # TODO: special-purpose integrator for (2,0,0) partition
-        max_order=4,
+        min_order=5,  # TODO: special-purpose integrator for (2,0,0) partition
+        max_order=5,
         verbosity=quiet,
         expand_bare_interactions=false,
         filter=[NoHartree],
@@ -36,9 +36,9 @@ function main()
     # UEG parameters for MC integration
     param = ParaMC(;
         order=settings.max_order,
-        rs=5.0,
+        rs=2.0,
         beta=40.0,
-        mass2=1.0,
+        mass2=0.4,
         isDynamic=false,
 	isFock=false,
     )
