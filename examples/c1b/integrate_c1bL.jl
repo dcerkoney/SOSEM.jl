@@ -25,7 +25,7 @@ function main()
         min_order=3,  # no (2,0,0) partition for this observable (Γⁱ₃ > Γ₀),
         max_order=4,
         verbosity=DiagGen.quiet,
-        expand_bare_interactions=true,
+        expand_bare_interactions=false,
         filter=[NoHartree],
         interaction=[FeynmanDiagram.Interaction(ChargeCharge, Instant)],  # Yukawa-type interaction
         # interaction=[FeynmanDiagram.Interaction(ChargeCharge, Dynamic)],  # TODO: test RPA-type interaction

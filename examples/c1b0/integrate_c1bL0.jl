@@ -25,7 +25,7 @@ function main()
         min_order=2,  # TODO: special-purpose integrator for (2,0,0) partition
         max_order=4,
         verbosity=DiagGen.quiet,
-        expand_bare_interactions=true,
+        expand_bare_interactions=false,
         filter=[NoHartree],
         interaction=[FeynmanDiagram.Interaction(ChargeCharge, Instant)],  # Yukawa-type interaction
         # interaction=[FeynmanDiagram.Interaction(ChargeCharge, Dynamic)],  # TODO: test RPA-type interaction
