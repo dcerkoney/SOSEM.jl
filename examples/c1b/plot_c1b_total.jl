@@ -23,9 +23,9 @@ function main()
         cd(ENV["SOSEM_HOME"])
     end
 
-    rs = 5.0
+    rs = 2.0
     beta = 40.0
-    mass2 = 1.0
+    mass2 = 0.4
     solver = :vegasmc
     expand_bare_interactions = false
 
@@ -37,9 +37,9 @@ function main()
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
     n_min = 3  # True minimal loop order for this observable
     min_order = 3
-    max_order = 5
+    max_order = 4
     min_order_plot = 2
-    max_order_plot = 5
+    max_order_plot = 4
     @assert max_order ≥ 3
 
     # Load data from multiple fixed-order runs
@@ -398,9 +398,10 @@ function main()
     )
     # # For C^{(1b)}_N
     xloc = 0.125
-    yloc = -0.02
-    ydiv = -0.02
-    # ydiv = -0.0125
+    # yloc = -0.0175
+    # ydiv = -0.01
+    yloc = -0.03
+    ydiv = -0.025
     # For C^{(1b0)}_2 + C^{(1b)}_N
     # xloc = 0.125
     # yloc = -1.05

@@ -26,9 +26,9 @@ function main()
         cd(ENV["SOSEM_HOME"])
     end
 
-    rs = 5.0
+    rs = 2.0
     beta = 40.0
-    mass2 = 0.1375
+    mass2 = 0.4
     solver = :vegasmc
 
     # Number of evals
@@ -39,9 +39,9 @@ function main()
 
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
     min_order = 0
-    max_order = 2
+    max_order = 3
     min_order_plot = 0
-    max_order_plot = 2
+    max_order_plot = 3
 
     # Save total results
     save = true

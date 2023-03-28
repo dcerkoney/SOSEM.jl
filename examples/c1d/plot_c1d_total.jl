@@ -21,9 +21,9 @@ function main()
         cd(ENV["SOSEM_HOME"])
     end
 
-    rs = 5.0
+    rs = 2.0
     beta = 40.0
-    mass2 = 1.0
+    mass2 = 0.4
     solver = :vegasmc
     expand_bare_interactions = false
 
@@ -33,10 +33,10 @@ function main()
 
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
     n_min = 2  # True minimal loop order for this observable
-    min_order = 3
-    max_order = 5
+    min_order = 2
+    max_order = 4
     min_order_plot = 2
-    max_order_plot = 5
+    max_order_plot = 4
     @assert max_order ≥ 3
 
     # Enable/disable interaction and chemical potential counterterms
@@ -321,12 +321,12 @@ function main()
     # yloc = -0.075
     # ydiv = -0.009
 
-    xloc = 1.6
-    yloc = 2.0
-    ydiv = -0.3
     # xloc = 1.6
-    # yloc = 0.9
-    # ydiv = -0.095
+    # yloc = 2.0
+    # ydiv = -0.3
+    xloc = 1.6
+    yloc = 0.9
+    ydiv = -0.095
     ax.text(
         xloc,
         yloc,
