@@ -27,7 +27,7 @@ function main()
     beta = 40.0
     mass2 = 0.4
     solver = :vegasmc
-    expand_bare_interactions = false
+    expand_bare_interactions = true
 
     neval34 = 5e10
     neval5 = 5e10
@@ -40,7 +40,7 @@ function main()
     max_order = 4
     min_order_plot = 2
     max_order_plot = 4
-    @assert max_order ≥ 3
+    # @assert max_order ≥ 3
 
     # Load data from multiple fixed-order runs
     # fixed_orders = collect(min_order:max_order)
@@ -169,7 +169,8 @@ function main()
     c1b_rpa_fl = delta_c1b_rpa_fl + c1b2_exact_vegas
     c1b_rpa_fl_err = delta_c1b_rpa_fl_err
 
-    if min_order_plot == 2
+    # if min_order_plot == 2
+    if min_order_plot == 2 && min_order > 2
         # Set bare result manually using exact data to avoid systematic error in (2,0,0) calculation
         # NOTE: Since C⁽¹ᵇ⁾ᴸ = C⁽¹ᵇ⁾ᴿ for the UEG, the
         #       full class (b) moment is C⁽¹ᵇ⁾ = 2C⁽¹ᵇ⁾ᴸ.
@@ -277,13 +278,15 @@ function main()
                 alpha=0.3,
             )
         end
-        ax.plot(
-            k_kf_grid_vegas,
-            c1b2_exact_vegas,
-            "C0";
-            linestyle="-",
-            label="\$N=2\$ (quad)",
-        )
+        if expand_bare_interactions == false
+            ax.plot(
+                k_kf_grid_vegas,
+                c1b2_exact_vegas,
+                "C0";
+                linestyle="--",
+                label="\$N=2\$ (quad)",
+            )
+        end
     end
 
     if save
@@ -332,10 +335,10 @@ function main()
             means,
             marker;
             markersize=2,
-            color="C$i",
+            color="C$(i-1)",
             label="\$N=$(N)\$ ($solver)",
         )
-        ax.fill_between(k_over_kfs, means - stdevs, means + stdevs; color="C$i", alpha=0.3)
+        ax.fill_between(k_over_kfs, means - stdevs, means + stdevs; color="C$(i-1)", alpha=0.3)
         if !renorm_mu_lo_ex && max_order <= 3 && N == 3
             ax.plot(
                 k_over_kfs,
@@ -360,9 +363,12 @@ function main()
     # xloc = 1.5
     # yloc = -1.25
     # ydiv = -0.25
+    # xloc = 0.2
+    # yloc = -0.525
+    # ydiv = -0.075
     xloc = 0.2
-    yloc = -0.525
-    ydiv = -0.075
+    yloc = -0.375
+    ydiv = -0.04
     ax.text(
         xloc,
         yloc,

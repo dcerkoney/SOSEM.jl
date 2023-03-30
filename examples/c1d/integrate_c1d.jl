@@ -22,7 +22,7 @@ function main()
 
     settings = DiagGen.Settings{DiagGen.Observable}(
         DiagGen.c1d;
-        min_order=2,  # TODO: write special-purpose integrator for (2,0,0) partition
+        min_order=2,
         max_order=2,
         verbosity=DiagGen.quiet,
         expand_bare_interactions=false,
@@ -33,7 +33,7 @@ function main()
 
     # TODO: Write special-purpose integrator for bare result; currently using the old numerically
     #       exact results from quadrature, wich are valid for `expand_bare_interactions=false` only!
-    @assert settings.expand_bare_interactions == false
+    # @assert settings.expand_bare_interactions == false
 
     # UEG parameters for MC integration
     param =

@@ -69,7 +69,6 @@ function build_diagtree(; n_loop=0)
         type=PolarDiag,
         hasTau=true,
         innerLoopNum=n_loop,
-        totalTauNum=n_loop + 2,
         filter=[Proper, NoHartree],
         interaction=[FeynmanDiagram.Interaction(ChargeCharge, Instant)],  # Yukawa interaction
     )
@@ -92,7 +91,7 @@ function integrate_polarization_with_ct(
     print=-1,
     solver=:vegasmc,
 )
-    @assert all(p.totalTauNum ≤ mcparam.order + 2 for p in diagparams)
+    @assert all(p.totalTauNum ≤ mcparam.order + 1 for p in diagparams)
 
     # We assume that each partition expression tree has a single root
     @assert all(length(et.root) == 1 for et in exprtrees)
@@ -191,6 +190,7 @@ function integrand(vars, config)
     # External time via random index into tgrid
     it = ExtTidx[1]
     varT.data[2] = tgrid[it]
+    # @assert varT.data[1] == 0
 
     # Evaluate the integrand for each partition
     integrand = Vector(undef, config.N)
@@ -205,7 +205,6 @@ function integrand(vars, config)
             varK[3, j + 1] = r * cos(θ)
             phifactor *= r^2 * sin(θ) / (1 - R[j])^2
         end
-        # @assert T.data[1] == 0
 
         @debug "K = $(varK)" maxlog = 3
         @debug "ik = $ik" maxlog = 3
@@ -237,7 +236,7 @@ function main()
     end
 
     # Total loop order N
-    orders = [1, 2]
+    orders = [1, 2, 3]
     max_order = maximum(orders)
     sort!(orders)
 
@@ -335,7 +334,7 @@ function main()
                 @warn("replacing existing data for $key")
                 delete!(f, key)
             end
-            return f[key] = (orders, param, kgrid, partitions, res)
+            return f[key] = (orders, param, kgrid, tgrid, partitions, res)
         end
     end
 end

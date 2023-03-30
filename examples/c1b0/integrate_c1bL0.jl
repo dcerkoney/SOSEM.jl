@@ -22,7 +22,7 @@ function main()
 
     settings = DiagGen.Settings{DiagGen.Observable}(
         DiagGen.c1bL0;
-        min_order=2,  # TODO: special-purpose integrator for (2,0,0) partition
+        min_order=2,
         max_order=2,
         verbosity=DiagGen.quiet,
         expand_bare_interactions=false,

@@ -18,9 +18,22 @@ using SOSEM
 @pyimport matplotlib.pyplot as plt
 @pyimport mpl_toolkits.axes_grid1.inset_locator as il
 
-function main()
-    @todo  # continue refactoring
+"""Returns the static structure factor S(q) of the UEG."""
+function static_structure_factor(q, param::ParaMC)
+    x = q / param.kF
+    if x < 2
+        return 3x / 4.0 - x^3 / 16.0
+    end
+    return 1.0
+end
 
+"""Π₀(q, τ=0) = -n₀ S(q)"""
+function bare_polarization_exact_t0(q, param::ParaMC)
+    n0 = param.kF^3 / 3π^2
+    return -n0 * static_structure_factor(q, param)
+end
+
+function main()
     # Change to project directory
     if haskey(ENV, "SOSEM_CEPH")
         cd(ENV["SOSEM_CEPH"])
@@ -52,9 +65,6 @@ function main()
     renorm_mu = true
     renorm_lambda = true
 
-    # Remove Fock insertions?
-    isFock = false
-
     # Ignore measured mu/lambda partitions?
     fix_mu = false
     fix_lambda = false
@@ -67,16 +77,12 @@ function main()
     end
 
     # Distinguish results with different counterterm schemes
-    ct_string = (renorm_mu || renorm_lambda) ? "with_ct" : ""
+    ct_string = (renorm_mu || renorm_lambda) ? "_with_ct" : ""
     if renorm_mu
         ct_string *= "_mu"
     end
     if renorm_lambda
         ct_string *= "_lambda"
-    end
-    ct_string_short = ct_string
-    if isFock
-        ct_string *= "_noFock"
     end
 
     # UEG parameters for MC integration
@@ -86,21 +92,27 @@ function main()
         beta=beta,
         mass2=mass2,
         isDynamic=false,
-        isFock=isFock,
+        isFock=false,
     )
 
     # Load the raw data
     savename =
         "results/data/polarization_n=$(max_order)_rs=$(rs)_beta_ef=$(beta)_" *
         "lambda=$(mass2)_neval=$(neval)_$(solver)$(ct_string)"
+    # TODO: Rerun with new format,
+    #   orders, param, kgrid, tgrid, partitions, res = jldopen("$savename.jld2", "a+") do f
     orders, param, kgrid, partitions, res = jldopen("$savename.jld2", "a+") do f
         key = "$(UEG.short(loadparam))"
         return f[key]
     end
 
+    # T-mesh for measurement; we need a fine τ-grid for accurate integration
+    n_tau = 1000
+    tgrid = collect(LinRange(1e-8, param.β - 1e-8, n_tau))
+
     # Get dimensionless k-grid (k / kF)
     k_kf_grid = kgrid / param.kF
-    
+
     # Get dimensionless t-grid (τ / β)
     tau_beta_grid = tgrid / param.β
 
@@ -128,52 +140,35 @@ function main()
         end
     end
 
-    println(data)
+    println(typeof(data))
     for P in keys(data)
-        # Undo extra minus sign factor
-        data[P] = -data[P]
+        # Is there a missing sign for Π2?
+        # sum(P) == 2 && continue
+        # TODO: Where does this extra overall sign come from, N&O definition of Π?
+        data[P] *= -1
+        # NOTE: Adding missing factor of β back to old data (now fixed in integration script)
+        data[P] /= param.β
     end
 
-    # Zero out double-counted (Fock renormalized) partitions
-    if isFock && min_order ≤ 1
-        data[(1, 0, 0)] = zero(data[(max_order, 0, 0)])
-    end
+    merged_data = UEG_MC.mergeInteraction(data)
+    println(typeof(merged_data))
 
-    merged_data = CounterTerm.mergeInteraction(data)
+    # Get exact instantaneous bare polarization Π₀(q, τ=0)
+    pi0_t0 = bare_polarization_exact_t0.(kgrid, [param])
 
-    # Get exact bare/Fock polarization
-    if param.isFock
-        fock =
-            SelfEnergy.Fock0_ZeroTemp.(kgrid, [param.basic]) .-
-            SelfEnergy.Fock0_ZeroTemp(param.kF, param.basic)
-        ϵk = kgrid .^ 2 / (2 * param.me) .- param.μ + fock  # ϵ_HF = ϵ_0 + (Σ_F(k) - δμ₁)
-    else
-        ϵk = kgrid .^ 2 / (2 * param.me) .- param.μ         # ϵ_0
-    end
-    bare_occupation_exact = -Spectral.kernelFermiT.(-1e-8, ϵk, param.β)
-
-    # Set bare result manually using exact Fermi function
-    if haskey(merged_data, (0, 0)) == false
+    # Set bare result manually using exact function
+    if haskey(merged_data, (1, 0)) == false
         # treat quadrature data as numerically exact
-        merged_data[(0, 0)] = [measurement(bare_occupation_exact, 0.0)]
-    end
-    if min_order == 0
-        stdscores = stdscore.(merged_data[(0, 0)], bare_occupation_exact)
+        merged_data[(1, 0)][:, 1] = measurement.(pi0_t0, 0.0)
+    elseif min_order == 1
+        stdscores = stdscore.(merged_data[(1, 0)][:, 1], pi0_t0)
         worst_score = argmax(abs, stdscores)
-        println("Worst standard score for N=0 (measured): $worst_score")
-        # println("Scores:\n$stdscores")
-        if isFock
-            bm_occupation_2_meas = measurement.(bm_occupation_0, bm_occupation_0_err)
-            stdscores = stdscore.(bm_occupation_2_meas, bare_occupation_exact)
-            worst_score = argmax(abs, stdscores)
-            println("Worst standard score for N=0 (benchmark): $worst_score")
-            # println("Scores:\n$stdscores")
-            @assert worst_score ≤ 10
-        end
+        println("Worst standard score for N=1 (measured): $worst_score")
+        # @assert worst_score ≤ 10
     end
 
     # Reexpand merged data in powers of μ
-    ct_filename = "examples/counterterms/data_Z_$(ct_string_short).jld2"
+    ct_filename = "examples/counterterms/data_Z$(ct_string).jld2"
     z, μ = UEG_MC.load_z_mu(param; ct_filename=ct_filename)
     # Add Taylor factors to CT data
     for (p, v) in z
@@ -200,57 +195,36 @@ function main()
             end
         end
     end
-    δz, δμ = CounterTerm.sigmaCT(max_order, μ, z; isfock=isFock, verbose=1)
+    δz, δμ = CounterTerm.sigmaCT(max_order, μ, z; isfock=false, verbose=1)
 
     println("Computed δμ: ", δμ)
-    polarization = UEG_MC.chemicalpotential_renormalization_green(
+    polarization = UEG_MC.chemicalpotential_renormalization_poln(
         merged_data,
         δμ;
-        min_order=0,
+        min_order=1,
         max_order=max_order,
     )
-    occupation_2_manual =
-        merged_data[(2, 0)] +
-        δμ[1] * merged_data[(1, 1)] +
-        δμ[1]^2 * merged_data[(0, 2)] +
-        δμ[2] * merged_data[(0, 1)]
-    scores_2 = stdscore.(polarization[2] - occupation_2_manual, 0.0)
-    println("Deviation: ", polarization[2] - occupation_2_manual)
+    δμ1_exact = UEG_MC.delta_mu1(param)  # = ReΣ₁[λ](kF, 0)
+    poln_2_manual = merged_data[(2, 0)] + δμ1_exact * merged_data[(1, 1)]
+    scores_2 = stdscore.(polarization[2] - poln_2_manual, 0.0)
     worst_score_2 = argmax(abs, scores_2)
     println("2nd order renorm vs manual worst score: $worst_score_2")
 
-    if max_order ≥ 1 && renorm_mu == true && isFock == false && fix_mu == false
-        # Test manual renormalization with exact lowest-order chemical potential
-        δμ1_exact = UEG_MC.delta_mu1(param)  # = ReΣ₁[λ](kF, 0)
-        # nₖ⁽¹⁾ = nₖ_{1,0} + δμ₁ nₖ_{0,1}
-        occupation_1_manual = merged_data[(1, 0)] + δμ1_exact * merged_data[(0, 1)]
-        stdscores = stdscore.(polarization[1], occupation_1_manual)
-        worst_score = argmax(abs, stdscores)
-        println("Exact δμ₁: ", δμ1_exact)
-        println("Computed δμ₁: ", δμ[1])
-        println(
-            "Worst standard score for total result to 1st " *
-            "order (auto vs exact+manual): $worst_score",
-        )
-        @assert worst_score ≤ 10
-    end
-
     println(UEG.paraid(param))
     println(partitions)
-    println(res)
+    println(typeof(polarization))
+
+    # Aggregate the full results for Σₓ up to order N
+    polarization_total = UEG_MC.aggregate_orders(polarization)
 
     if save
         savename =
             "results/data/rs=$(param.rs)_beta_ef=$(param.beta)_" *
-            "lambda=$(param.mass2)_$(intn_str)$(solver)_$(ct_string)"
+            "lambda=$(param.mass2)_$(intn_str)$(solver)$(ct_string)"
         f = jldopen("$savename.jld2", "a+"; compress=true)
         # NOTE: no bare result for c1b observable (accounted for in c1b0)
         for N in min_order_plot:max_order
-            num_eval = N == 3 ? neval3 : neval12
-            # Skip exact (N = 0) result
-            N == 0 && continue
-            # Skip Fock result if HF renormalization was used
-            isFock && N == 1 && continue
+            num_eval = neval
             # Update existing results if applicable
             if haskey(f, "polarization") &&
                haskey(f["polarization"], "N=$N") &&
@@ -261,6 +235,7 @@ function main()
             f["polarization/N=$N/neval=$num_eval/meas"] = polarization_total[N]
             f["polarization/N=$N/neval=$num_eval/param"] = param
             f["polarization/N=$N/neval=$num_eval/kgrid"] = kgrid
+            f["polarization/N=$N/neval=$num_eval/tgrid"] = tgrid
         end
     end
 
@@ -268,59 +243,84 @@ function main()
     plt.rc("text"; usetex=true)
     plt.rc("font"; family="serif")
 
-    kgrid_fine = param.kF * np.linspace(0.0, 3.0; num=600)
-    k_kf_grid_fine = np.linspace(0.0, 3.0; num=600)
+    qgrid_fine = param.kF * np.linspace(0.0, 3.0; num=600)
+    q_2kf_grid_fine = np.linspace(0.0, 1.5; num=600)
+    pi0_t0_fine = bare_polarization_exact_t0.(qgrid_fine, [param])
+    n0 = param.kF^3 / 3π^2
 
-    # Plot the polarization number for each aggregate order
+    # Plot the instantaneous polarization for each aggregate order
     fig, ax = plt.subplots()
     ax.axvline(1.0; linestyle="--", linewidth=1, color="gray")
-    if min_order_plot == 0
-        # Include bare polarization fₖ in plot
-        ax.plot(k_kf_grid_fine, bare_occupation_fine, "k"; label="\$N=0\$ (exact)")
+    ax.axhline(1.0; linestyle="--", linewidth=1, color="gray")
+    # ax.axhline(n0; linestyle="--", linewidth=1, color="k", label="\$n_0\$")
+    if min_order_plot == 1
+        # Include exact instantaneous bare polarization in plot
+        ax.plot(q_2kf_grid_fine, -pi0_t0_fine / n0, "k"; label="\$N=1\$ (exact)")
     end
     ic = 1
     colors = ["C0", "C1", "C2", "C3"]
     # colors = ["orchid", "cornflowerblue", "turquoise", "chartreuse"]
-    for (i, n) in enumerate(min_order:max_order_plot)
-        # n == 0 && continue
-        # Plot measured data
-        means = Measurements.value.(polarization_total[n])
-        stdevs = Measurements.uncertainty.(polarization_total[n])
+    for (i, N) in enumerate(min_order:max_order_plot)
+        # N == 0 && continue
+        # Plot measured data at first τ-grid point (τ = 1e-8)
+        # TODO: Fix factor of 1/β
+        poln_means = Measurements.value.(polarization_total[N][:, 1])
+        poln_stdevs = Measurements.uncertainty.(polarization_total[N][:, 1])
+        # S(q) = -Π(q, τ=0) / n₀
+        static_structure_means = -poln_means / n0
+        static_structure_stdevs = poln_stdevs / n0
+        println(poln_means)
         marker = "o-"
         ax.plot(
-            k_kf_grid,
-            means,
+            k_kf_grid / 2.0,  # q / 2kF
+            static_structure_means,
             marker;
             markersize=2,
             color="$(colors[ic])",
-            label="\$n=$n\$ ($solver)",
+            label="\$N=$N\$ ($solver)",
         )
         ax.fill_between(
-            k_kf_grid,
-            means - stdevs,
-            means + stdevs;
+            k_kf_grid / 2.0,  # q / 2kF
+            static_structure_means - static_structure_stdevs,
+            static_structure_means + static_structure_stdevs;
             color="$(colors[ic])",
             alpha=0.4,
         )
         ic += 1
+        # Compare to results with sign flip on Π2
+        if N == 2
+            poln_2 = Measurements.value.(polarization[2][:, 1])
+            sign_flip_means = static_structure_means + 2 * poln_2 / n0
+            sign_flip_stdevs = poln_stdevs
+            ax.plot(
+                k_kf_grid / 2.0,  # q / 2kF
+                sign_flip_means,
+                marker;
+                markersize=2,
+                color="$(colors[ic])",
+                label="\$N=$N\$ ($solver + sign flip)",
+            )
+            ax.fill_between(
+                k_kf_grid / 2.0,  # q / 2kF
+                sign_flip_means - sign_flip_stdevs,
+                sign_flip_means + sign_flip_stdevs;
+                color="$(colors[ic])",
+                alpha=0.4,
+            )
+            ic += 1
+        end
     end
     ax.legend(; loc="best")
     # ax.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
     # ax.set_xlim(0.75, 1.25)
-    ax.set_xlim(0, 3)
+    ax.set_xlim(0, 1.5)
     # ax.set_ylim(nothing, 2)
-    ax.set_xlabel("\$k / k_F\$")
-    ax.set_ylabel("\$\\Pi_n(q, \\tau)\$")
-    if isFock
-        xloc = 1.035
-        yloc = 0.6
-        ydiv = -0.125
-    else
-        # xloc = 1.5
-        xloc = 1.125
-        yloc = 0.5
-        ydiv = -0.15
-    end
+    ax.set_xlabel("\$q / 2 k_F\$")
+    ax.set_ylabel("\$S(q \\ne 0) = -\\Pi(q, \\tau=0) / n_0\$")
+    # xloc = 1.5
+    xloc = 0.225
+    yloc = 0.2
+    ydiv = -0.125
     ax.text(
         xloc,
         yloc,
@@ -335,60 +335,16 @@ function main()
         fontsize=14,
     )
     fig.tight_layout()
-    if inset
-        # Reset color index
-        ic = 1
-        # Plot inset
-        ax_inset =
-            il.inset_axes(ax; width="38%", height="28.5%", loc="lower left", borderpad=0)
-        # Compare result to bare polarization fₖ
-        ax_inset.plot(k_kf_grid_fine, bare_occupation_fine, "k"; label="\$N=0\$ (exact)")
-        ax_inset.axvline(1.0; linestyle="--", linewidth=1, color="gray")
-        # ax_inset.axhspan(0, 1; alpha=0.2, facecolor="k", edgecolor=nothing)
-        ax_inset.axhline(0.0; linestyle="-", linewidth=0.5, color="k")
-        ax_inset.axhline(1.0; linestyle="-", linewidth=0.5, color="k")
-        for (i, N) in enumerate(min_order:max_order_plot)
-            # for (i, N) in enumerate(min_order:1)
-            # N == 0 && continue
-            isFock && N == 1 && continue
-            # Get means and error bars from the result up to this order
-            means = Measurements.value.(polarization_total[N])
-            stdevs = Measurements.uncertainty.(polarization_total[N])
-            marker = "o-"
-            ax_inset.plot(
-                k_kf_grid,
-                means,
-                marker;
-                markersize=2,
-                color="$(colors[ic])",
-                label="\$N=$N\$ ($solver)",
-            )
-            ax_inset.fill_between(
-                k_kf_grid,
-                means - stdevs,
-                means + stdevs;
-                color="$(colors[ic])",
-                alpha=0.4,
-            )
-            ic += 1
-        end
-        xpad = 0.04
-        ypad = 0.2
-        ax_inset.set_xlim(0.95 - xpad, 1.05 + xpad)
-        ax_inset.set_ylim(-ypad, 1 + ypad)
-        ax_inset.set_xlabel("\$k / k_F\$"; labelpad=7)
-        ax_inset.set_ylabel("\$n_{k\\sigma}\$")
-        ax_inset.xaxis.set_label_position("top")
-        ax_inset.yaxis.set_label_position("right")
-        ax_inset.xaxis.tick_top()
-        ax_inset.yaxis.tick_right()
-    end
-    dirstring = isFock ? "results/polarization/benchmark/" : "results/polarization/"
     fig.savefig(
-        dirstring *
-        "occupation_N=$(max_order_plot)_rs=$(param.rs)_" *
-        "beta_ef=$(param.beta)_lambda=$(param.mass2)_neval=$(neval)_$(solver)_$(ct_string)$(fix_string).pdf",
+        "results/polarization/static_structure_factor_N=$(max_order_plot)_rs=$(param.rs)_" *
+        "beta_ef=$(param.beta)_lambda=$(param.mass2)_neval=$(neval)_$(solver)$(ct_string)$(fix_string).pdf",
     )
+
+    # Plot the polarization at a few Matsubara times
+    # TODO
+
+    # Plot the q=0 polarization vs τ
+    # TODO
 
     plt.close("all")
     return

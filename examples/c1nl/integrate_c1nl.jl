@@ -24,7 +24,7 @@ function main()
     # Composite observable; measure all non-local moments together
     settings = Settings{CompositeObservable}(
         c1nl_ueg;
-        min_order=5,  # TODO: special-purpose integrator for (2,0,0) partition
+        min_order=5,
         max_order=5,
         verbosity=quiet,
         expand_bare_interactions=false,
