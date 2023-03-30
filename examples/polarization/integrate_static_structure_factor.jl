@@ -246,9 +246,9 @@ function main()
     # UEG parameters for MC integration
     param = ParaMC(;
         order=max_order,
-        rs=1.0,
+        rs=2.0,
         beta=40.0,
-        mass2=1.0,
+        mass2=0.4,
         isDynamic=false,
         isFock=isFock,  # remove Fock insertions
     )
