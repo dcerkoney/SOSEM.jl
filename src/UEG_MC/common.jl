@@ -1,6 +1,10 @@
 """Convert MCIntegration results for partitions {P} to a Dict of measurements."""
 function restodict(res, partitions::Vector{PartitionType})
-    data = Dict()
+    N = length(partitions) == 1 ? ndims(res.mean) : ndims(res.mean[1])
+    T = length(partitions) == 1 ? eltype(res.mean) : eltype(res.mean[1])
+    S = Array{Measurement{T},N}
+    # println(N, " ", T, " ", S)
+    data = MeasType{S}()
     if length(partitions) == 1
         data[partitions[1]] = measurement.(res.mean, res.stdev)
     else
@@ -13,7 +17,12 @@ end
 
 function restodict(res_list::Vector{Result}, partitions_list::Vector{Vector{PartitionType}})
     @assert length(res_list) == length(partitions_list)
-    data = Dict()
+    o1 = partitions_list[1]
+    N = length(partitions) == 1 ? ndims(res_list[o1].mean) : ndims(res_list[o1].mean[1])
+    T = length(partitions) == 1 ? eltype(res_list[o1].mean) : eltype(res_list[o1].mean[1])
+    S = Array{Measurement{T},N}
+    # println(N, " ", T, " ", S)
+    data = MeasType{S}()
     for o in eachindex(partitions_list)
         partitions = partitions_list[o]
         if length(partitions) == 1
@@ -25,6 +34,30 @@ function restodict(res_list::Vector{Result}, partitions_list::Vector{Vector{Part
         end
     end
     return data
+end
+
+"""
+Merge interaction order and the main order
+(normal_order, G_order, W_order) --> (normal+W_order, G_order)
+"""
+function mergeInteraction(data)
+    if data isa Dict && all(x -> length(x) == 3, keys(data))
+        T = valtype(data)
+        res = MergedMeasType{T}()
+        for (p, val) in data
+            @assert length(p) == 3
+            # println(p)
+            mp = (p[1] + p[3], p[2])
+            if haskey(res, mp)
+                res[mp] += val
+            else
+                res[mp] = val
+            end
+        end
+        return res
+    else # nothing to merge
+        return data
+    end
 end
 
 """Load JLD2 data from multiple fixed orders."""
@@ -123,8 +156,8 @@ Aggregate the measurements for C⁽¹ᶜ⁾ up to order N for nmin ≤ N ≤ nma
 Assumes the input data has been merged by interaction order and
 reexpanded in μ.
 """
-function aggregate_orders(data::RenormMeasType)
-    return TotalMeasType(zip(keys(data), accumulate(+, values(data))))
+function aggregate_orders(data::RenormMeasType{T}) where {T}
+    return TotalMeasType{T}(zip(keys(data), accumulate(+, values(data))))
 end
 
 # function aggregate_orders(renorm_data::Vector{Vector{Measurement}}; nmax, nmin=2)
