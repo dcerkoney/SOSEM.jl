@@ -47,10 +47,10 @@ function main()
     solver = :vegasmc
 
     # Number of evals
-    neval = 1e7
+    neval = 1e10
 
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
-    min_order = 1
+    min_order = 2
     max_order = 3
     min_order_plot = 1
     max_order_plot = 3
@@ -106,6 +106,8 @@ function main()
     # Get dimensionless k-grid (k / kF)
     k_kf_grid = kgrid / param.kF
 
+    n0 = param.kF^3 / 3π^2
+
     # Convert results to a Dict of measurements at each order with interaction counterterms merged
     data = UEG_MC.restodict(res, partitions)
     for (k, v) in data
@@ -131,23 +133,29 @@ function main()
     end
 
     println(typeof(data))
+    data_signflip = deepcopy(data)
     for P in keys(data)
         # Is there a missing sign for Π2?
+        if sum(P) == 1
+            data_signflip[P] *= -1
+        end
         # sum(P) == 2 && continue
         # TODO: Where does this extra overall sign come from, N&O definition of Π?
         data[P] *= -1
     end
 
     merged_data = UEG_MC.mergeInteraction(data)
+    merged_data_signflip = UEG_MC.mergeInteraction(data_signflip)
     println(typeof(merged_data))
 
     # Get exact instantaneous bare polarization Π₀(q, τ=0)
     pi0_t0 = bare_polarization_exact_t0.(kgrid, [param])
 
     # Set bare result manually using exact function
-    if haskey(merged_data, (1, 0)) == false
+    # if haskey(merged_data, (1, 0)) == false
+    if min_order > 1
         # treat quadrature data as numerically exact
-        merged_data[(1, 0)] = measurement.(pi0_t0, 0.0)
+        merged_data[(1, 0)] = measurement.(-pi0_t0 / n0, 0.0)
     elseif min_order == 1
         stdscores = stdscore.(merged_data[(1, 0)], pi0_t0)
         worst_score = argmax(abs, stdscores)
@@ -192,6 +200,12 @@ function main()
         min_order=1,
         max_order=max_order,
     )
+    static_structure_factor_signflip = UEG_MC.chemicalpotential_renormalization_poln(
+        merged_data_signflip,
+        δμ;
+        min_order=1,
+        max_order=max_order,
+    )
     δμ1_exact = UEG_MC.delta_mu1(param)  # = ReΣ₁[λ](kF, 0)
     static_structure_factor_2_manual = merged_data[(2, 0)] + δμ1_exact * merged_data[(1, 1)]
     scores_2 = stdscore.(static_structure_factor[2] - static_structure_factor_2_manual, 0.0)
@@ -204,27 +218,28 @@ function main()
 
     # Aggregate the full results for Σₓ up to order N
     static_structure_factor_total = UEG_MC.aggregate_orders(static_structure_factor)
+    static_structure_factor_total_signflip =
+        UEG_MC.aggregate_orders(static_structure_factor_signflip)
 
     # Use LaTex fonts for plots
     plt.rc("text"; usetex=true)
     plt.rc("font"; family="serif")
 
     qgrid_fine = param.kF * np.linspace(0.0, 3.0; num=600)
-    q_2kf_grid_fine = np.linspace(0.0, 1.5; num=600)
+    q_kf_grid_fine = np.linspace(0.0, 3.0; num=600)
     pi0_t0_fine = bare_polarization_exact_t0.(qgrid_fine, [param])
-    n0 = param.kF^3 / 3π^2
 
     # Plot the instantaneous polarization for each aggregate order
     fig, ax = plt.subplots()
-    ax.axvline(1.0; linestyle="--", linewidth=1, color="gray")
+    ax.axvline(2.0; linestyle="--", linewidth=1, color="gray")
     ax.axhline(1.0; linestyle="--", linewidth=1, color="gray")
     # ax.axhline(n0; linestyle="--", linewidth=1, color="k", label="\$n_0\$")
     if min_order_plot == 1
         # Include exact instantaneous bare polarization in plot
-        ax.plot(q_2kf_grid_fine, -pi0_t0_fine / n0, "k"; label="\$N=1\$ (exact)")
+        ax.plot(q_kf_grid_fine, -pi0_t0_fine / n0, "k"; label="\$N=1\$ (exact)")
     end
     ic = 1
-    colors = ["C0", "C1", "C2", "C3"]
+    colors = ["C0", "C1", "C2", "C3", "C4", "C5"]
     # colors = ["orchid", "cornflowerblue", "turquoise", "chartreuse"]
     for (i, N) in enumerate(min_order:max_order_plot)
         # S(q) = -Π(q, τ=0) / n₀
@@ -233,7 +248,7 @@ function main()
             Measurements.uncertainty.(static_structure_factor_total[N])
         marker = "o-"
         ax.plot(
-            k_kf_grid / 2.0,  # q / 2kF
+            k_kf_grid,
             static_structure_means,
             marker;
             markersize=2,
@@ -241,45 +256,45 @@ function main()
             label="\$N=$N\$ ($solver)",
         )
         ax.fill_between(
-            k_kf_grid / 2.0,  # q / 2kF
+            k_kf_grid,
             static_structure_means - static_structure_stdevs,
             static_structure_means + static_structure_stdevs;
             color="$(colors[ic])",
             alpha=0.4,
         )
         ic += 1
-        # Compare to results with sign flip on Π2
-        if N == 2
-            static_structure_2 = Measurements.value.(static_structure_factor[2])
-            sign_flip_means = static_structure_means - 2 * static_structure_2
-            sign_flip_stdevs = poln_stdevs
-            ax.plot(
-                k_kf_grid / 2.0,  # q / 2kF
-                sign_flip_means,
-                marker;
-                markersize=2,
-                color="$(colors[ic])",
-                label="\$N=$N\$ ($solver + sign flip)",
-            )
-            ax.fill_between(
-                k_kf_grid / 2.0,  # q / 2kF
-                sign_flip_means - sign_flip_stdevs,
-                sign_flip_means + sign_flip_stdevs;
-                color="$(colors[ic])",
-                alpha=0.4,
-            )
-            ic += 1
-        end
+        # # Compare to results with sign flip
+        # if N > 1
+        #     signflip_means = Measurements.value.(static_structure_factor_total_signflip[N])
+        #     signflip_stdevs =
+        #         Measurements.uncertainty.(static_structure_factor_total_signflip[N])
+        #     ax.plot(
+        #         k_kf_grid,
+        #         signflip_means,
+        #         marker;
+        #         markersize=2,
+        #         color="$(colors[ic])",
+        #         label="\$N=$N\$ ($solver + sign flip)",
+        #     )
+        #     ax.fill_between(
+        #         k_kf_grid,
+        #         signflip_means - signflip_stdevs,
+        #         signflip_means + signflip_stdevs;
+        #         color="$(colors[ic])",
+        #         alpha=0.4,
+        #     )
+        #     ic += 1
+        # end
     end
     ax.legend(; loc="best")
     # ax.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
     # ax.set_xlim(0.75, 1.25)
-    ax.set_xlim(0, 1.5)
+    ax.set_xlim(0, 3.0)
     # ax.set_ylim(nothing, 2)
-    ax.set_xlabel("\$q / 2 k_F\$")
+    ax.set_xlabel("\$q / k_F\$")
     ax.set_ylabel("\$S(q \\ne 0) = -\\Pi(q, \\tau=0) / n_0\$")
     # xloc = 1.5
-    xloc = 0.225
+    xloc = 0.45
     yloc = 0.2
     ydiv = -0.125
     ax.text(
