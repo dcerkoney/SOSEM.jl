@@ -22,8 +22,8 @@ function main()
 
     settings = DiagGen.Settings{DiagGen.Observable}(
         DiagGen.c1bL;
-        min_order=3,  # no (2,0,0) partition for this observable (Γⁱ₃ > Γ₀),
-        max_order=4,
+        min_order=5,  # no (2,0,0) partition for this observable (Γⁱ₃ > Γ₀),
+        max_order=5,
         verbosity=DiagGen.quiet,
         expand_bare_interactions=false,
         filter=[NoHartree],
@@ -33,7 +33,7 @@ function main()
 
     # UEG parameters for MC integration
     param =
-        ParaMC(; order=settings.max_order, rs=2.0, beta=40.0, mass2=0.4, isDynamic=false)
+        ParaMC(; order=settings.max_order, rs=5.0, beta=40.0, mass2=0.1375, isDynamic=false)
     @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)"
 
     println("lambda = $(param.mass2)")
