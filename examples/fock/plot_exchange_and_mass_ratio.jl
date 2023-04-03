@@ -74,9 +74,9 @@ function main()
         cd(ENV["SOSEM_HOME"])
     end
 
-    rs = 2.0
+    rs = 5.0
     beta = 40.0
-    mass2 = 0.4
+    mass2 = 0.1375
     solver = :vegasmc
 
     # Number of evals below and above kF
@@ -281,9 +281,12 @@ function main()
     ax1.set_xlabel("\$k / k_F\$")
     ax1.set_ylabel("\$C^{(0)}_\\sigma(k) \\,/\\, \\epsilon_{\\mathrm{TF}} = \\Sigma_{x}(k) \\,/\\, \\epsilon_{\\mathrm{TF}}\$")
     # ax1.set_ylabel("\$\\Sigma_{x}(k) \\,/\\, \\epsilon_{\\mathrm{TF}}\$")
+    # xloc = 1.5
+    # yloc = -0.4
+    # ydiv = -0.095
     xloc = 1.5
-    yloc = -0.4
-    ydiv = -0.095
+    yloc = -0.6
+    ydiv = -0.175
     ax1.text(
         xloc,
         yloc,
