@@ -26,13 +26,15 @@ function main()
         cd(ENV["SOSEM_HOME"])
     end
 
+    # rs = 1.0
     rs = 2.0
     beta = 40.0
+    # mass2 = 1.0
     mass2 = 0.4
     solver = :vegasmc
 
     # Number of evals
-    # neval = 5e10
+    # neval12 = 1e10
     neval12 = 5e10
     neval3 = 5e10
     neval = max(neval12, neval3)
@@ -112,20 +114,24 @@ function main()
     savename =
         "results/data/occupation_n=$(max_together)_rs=$(rs)_beta_ef=$(beta)_" *
         # "results/data/occupation_n=$(max_order)_rs=$(rs)_beta_ef=$(beta)_" *
-        "lambda=$(mass2)_neval=$(neval)_$(solver)_$(ct_string)"
+        "lambda=$(mass2)_neval=$(neval12)_$(solver)_$(ct_string)"
+    print("Loading data from $savename...")
     orders, param, kgrid, partitions, res = jldopen("$savename.jld2", "a+") do f
         key = "$(UEG.short(loadparam))"
         return f[key]
     end
+    println("done!")
     if max_order == 3
         # 3rd order 
         savename =
             "results/data/occupation_n=$(max_order)_rs=$(rs)_beta_ef=$(beta)_" *
             "lambda=$(mass2)_neval=$(neval3)_$(solver)_$(ct_string)"
+        print("Loading 3rd order data from $savename...")
         orders5, param5, kgrid5, partitions5, res5 = jldopen("$savename.jld2", "a+") do f
             key = "$(UEG.short(loadparam))"
             return f[key]
         end
+        println("done!")
     end
 
     if compare_eft
@@ -161,13 +167,10 @@ function main()
 
     # Convert results to a Dict of measurements at each order with interaction counterterms merged
     data = UEG_MC.restodict(res, partitions)
+    # NOTE: Old data for orders 0, 1, and 2 at rs = 1 has Taylor factors already present in eval!
     for (k, v) in data
         data[k] = v / (factorial(k[2]) * factorial(k[3]))
     end
-    # NOTE: Old data for orders 0, 1, and 2 may have Taylor factors already present in eval!
-    # for (k, v) in data
-    #     data[k] = v / (factorial(k[2]) * factorial(k[3]))
-    # end
     # Add 5th order results to data dict
     if max_order == 3
         data3 = UEG_MC.restodict(res5, partitions5)
@@ -366,24 +369,6 @@ function main()
         occupation_total_eft = UEG_MC.aggregate_orders(occupation_eft)
     end
 
-    # occupation = Dict()
-    # for (k, v) in merged_data
-    #     if k[2] > 0
-    #         println("Skipping partition $k with mu CTs")
-    #         continue
-    #     end
-    #     println("md key: $k => $(sum(k))")
-    #     occupation[sum(k)] = v
-    # end
-    # println(collect(keys(occupation)))
-
-    # occupation_total = Dict()
-    # occupation_total[0] = occupation[0]
-    # occupation_total[1] = occupation_total[0] + occupation[1]
-    # occupation_total[2] = occupation_total[1] + occupation[2]
-    # occupation_total[3] = occupation_total[2] + occupation[3]
-    # println(collect(keys(occupation_total)))
-
     println(UEG.paraid(param))
     println(partitions)
     println(res)
@@ -539,62 +524,6 @@ function main()
         fig.savefig("results/occupation/minus_delta_nk1.pdf")
     end
 
-    # fig, ax = plt.subplots()
-    # # ax.axhline(0.0; linewidth=1, color="k")
-    # fpnes = [fpe_fine, fppe_fine, fpppe_fine]
-    # colors = ["sienna", "darkgreen", "darkred"]
-    # signs = [-1.0, 1.0, -1.0]
-    # signstrs = ["(-1) \\times", "", "(-1) \\times"]
-    # for N in 1:3
-    #     ax.plot(
-    #         k_kf_grid_fine,
-    #         fpnes[N],
-    #         "-";
-    #         color="$(colors[N])",
-    #         label="\$f$(repeat("'", N))(\\xi_k)\$",
-    #     )
-    #     # if N == 1
-    #     #     ax.plot(
-    #     #         k_kf_grid_fine,
-    #     #         fpe_fine_exact,
-    #     #         "--";
-    #     #         color="k",
-    #     #         label="\$f'(\\xi_k)\$ (exact)",
-    #     #     )
-    #     # elseif N == 2
-    #     #     ax.plot(
-    #     #         k_kf_grid_fine,
-    #     #         fppe_fine_exact,
-    #     #         "--";
-    #     #         color="gray",
-    #     #         label="\$f''(\\xi_k)\$ (exact)",
-    #     #     )
-    #     # end
-    #     means = Measurements.value.(data[(0, N, 0)])
-    #     stdevs = Measurements.uncertainty.(data[(0, N, 0)])
-    #     ax.plot(
-    #         k_kf_grid,
-    #         signs[N] * means,
-    #         "o-";
-    #         markersize=2,
-    #         color="C$N",
-    #         label="\$$(signstrs[N])(0, $N, 0)\$ ($solver)",
-    #     )
-    #     ax.fill_between(
-    #         k_kf_grid,
-    #         signs[N] * (means - stdevs),
-    #         signs[N] * (means + stdevs);
-    #         color="C$N",
-    #         alpha=0.4,
-    #     )
-    # end
-    # ax.set_xlabel("\$k / k_F\$")
-    # ax.set_xlim(0.75, 1.25)
-    # # ax.set_ylim(nothing, 4)
-    # ax.legend(; loc="best")
-    # fig.tight_layout()
-    # fig.savefig("results/occupation/green_derivatives.pdf")
-
     # Bare/Fock occupation on dense grid for plotting
     kgrid_fine = param.kF * np.linspace(0.0, 3.0; num=600)
     k_kf_grid_fine = np.linspace(0.0, 3.0; num=600)
@@ -622,9 +551,19 @@ function main()
     # Plot the occupation number for each aggregate order
     fig, ax = plt.subplots()
     ax.axvline(1.0; linestyle="--", linewidth=1, color="gray")
+    # Shade the thermal broadening region of the Fermi function
+    # NOTE: the FWHM of the Fermi distribution is ~ 3.53 kB T
+    # fermi_hwhm = 3.53 / (2 * param.β * param.kF)  # HWHM in units of kF
+    fermi_hwhm = 3.53 / (2 * param.beta)  # HWHM in units of kF
+    ax.axvspan(
+        1 - fermi_hwhm,
+        1 + fermi_hwhm;
+        color="0.9",
+        label="\$\\mathrm{FWHM}(f_{k\\sigma}) \\approx 3.53 T / k_F\$",
+    )
     if min_order_plot == 0
         # Include bare occupation fₖ in plot
-        ax.plot(k_kf_grid_fine, bare_occupation_fine, "k"; label="\$N=0\$ (exact)")
+        # ax.plot(k_kf_grid_fine, bare_occupation_fine, "k"; label="\$N=0\$ (exact)")
     end
     ic = 1
     colors = ["C0", "C1", "C2", "C3"]
@@ -714,6 +653,53 @@ function main()
                 alpha=0.4,
             )
         end
+        # Extrapolate Z-factor to kF⁻ & kF⁺ at the maximum order
+        if N == max_order_plot
+            # Grid data outside of thermal broadening window
+            k_kf_grid_lower = k_kf_grid[k_kf_grid .≤ 1 - fermi_hwhm]
+            k_kf_grid_upper = k_kf_grid[k_kf_grid .≥ 1 + fermi_hwhm]
+            k_kf_grid_lower_range = range
+            k_kf_grid_upper_range = range
+            zfactor_lower = means[k_kf_grid .≤ 1 - fermi_hwhm]
+            zfactor_upper = means[k_kf_grid .≥ 1 + fermi_hwhm]
+
+            # Interpolate Z-factor curves below and above kF
+            zfactor_lower_interp = linear_interpolation(
+                k_kf_grid_lower,
+                zfactor_lower;
+                extrapolation_bc=Line(),
+            )
+            zfactor_upper_interp = linear_interpolation(
+                k_kf_grid_upper,
+                zfactor_upper;
+                extrapolation_bc=Line(),
+            )
+            # TODO: need to do this the hard way for cubic interp :(
+            # zfactor_lower_interp = cubic_spline_interpolation(k_kf_grid_lower, zfactor_lower; extrapolation_bc=Line())
+            # zfactor_upper_interp = cubic_spline_interpolation(k_kf_grid_upper, zfactor_upper; extrapolation_bc=Line())
+
+            # Plot the interpolated data with extrapolation to kF⁻ & kF⁺
+            k_kf_lower_fine = LinRange(0.0, 1.0, 200)
+            k_kf_upper_fine = LinRange(1.0, 2.0, 200)
+            zfactor_lower_fine = zfactor_lower_interp.(k_kf_lower_fine)
+            zfactor_upper_fine = zfactor_upper_interp.(k_kf_upper_fine)
+            zfactor_estimate = zfactor_lower_interp(1) - zfactor_upper_interp(1)  # n(kF⁻) - n(kF⁺)
+            println(zfactor_estimate)
+            ax.plot(k_kf_lower_fine, zfactor_lower_fine; linestyle="-", color="k")
+            ax.plot(
+                k_kf_upper_fine,
+                zfactor_upper_fine;
+                linestyle="-",
+                color="k",
+                label="\$N=$N\$ (\$T=0\$ extrapolation)",
+            )
+            ax.text(
+                0.25,
+                0.6,
+                "\$Z \\approx $(round(zfactor_estimate; digits=4))\$";
+                fontsize=14,
+            )
+        end
         ic += 1
     end
     ax.legend(; loc="upper right")
@@ -745,9 +731,9 @@ function main()
         ydiv = -0.125
     else
         # xloc = 1.5
-        xloc = 1.05
+        xloc = 1.15
         yloc = 0.5
-        ydiv = -0.15
+        ydiv = -0.1
     end
     ax.text(
         xloc,

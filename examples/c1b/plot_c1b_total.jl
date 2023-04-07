@@ -27,7 +27,7 @@ function main()
     beta = 40.0
     mass2 = 0.4
     solver = :vegasmc
-    expand_bare_interactions = false
+    expand_bare_interactions = true
 
     neval34 = 5e10
     neval5 = 5e10
@@ -57,7 +57,7 @@ function main()
     save = true
 
     # Include RPA(+FL) results?
-    plot_rpa_fl = false
+    plot_rpa_fl = true
 
     plotparam =
         UEG.ParaMC(; order=max_order, rs=rs, beta=beta, mass2=mass2, isDynamic=false)
@@ -397,15 +397,15 @@ function main()
         # "\$\\left(C^{(1b0)}_{2}(k) + C^{(1b)}_{N}(k)\\right) \\,\\Big/\\, {\\epsilon}^{\\hspace{0.1em}2}_{\\mathrm{TF}}\$",
     )
     # # For C^{(1b)}_N
-    xloc = 0.125
+    # xloc = 0.125
+    # yloc = -0.03
+    # ydiv = -0.025
     # yloc = -0.0175
     # ydiv = -0.01
-    yloc = -0.03
-    ydiv = -0.025
     # For C^{(1b0)}_2 + C^{(1b)}_N
-    # xloc = 0.125
-    # yloc = -1.05
-    # ydiv = -0.05
+    xloc = 1.6
+    yloc = -0.175
+    ydiv = -0.03
     ax.text(
         xloc,
         yloc,

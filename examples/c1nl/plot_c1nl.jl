@@ -64,9 +64,9 @@ function main()
     # Prefixes for split \delta C^{(1b0)} run
     # obsprefixes = [["\\delta C^{(1b0)}_{$plot_order}", "C^{(1b0)}_2 + C^{(1b)}_{$plot_order}"], "C^{(1c)}_{$plot_order}", "C^{(1d)}_{$plot_order}"]
     obsprefixes = [
-        ["C^{(1b0)}_{$(plot_order - n_min)}", "C^{(1b)}_{$(plot_order - n_min)}"],
-        "C^{(1c)}_{$(plot_order - n_min)}",
-        "C^{(1d)}_{$(plot_order - n_min)}",
+        ["C^{(1b0)}_{$(plot_order)}", "C^{(1b)}_{$(plot_order)}"],
+        "C^{(1c)}_{$(plot_order)}",
+        "C^{(1d)}_{$(plot_order)}",
     ]
     next_color = 0
     for (i, obsname) in enumerate(obsnames)
@@ -197,7 +197,7 @@ function main()
     ax.text(
         xloc,
         yloc,
-        "\$N = $(plot_order - n_min),\\, r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
+        "\$N = $(plot_order),\\, r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
         fontsize=14,
     )
     ax.text(

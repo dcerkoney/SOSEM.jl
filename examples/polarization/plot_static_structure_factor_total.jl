@@ -18,7 +18,7 @@ using SOSEM
 @pyimport matplotlib.pyplot as plt
 @pyimport mpl_toolkits.axes_grid1.inset_locator as il
 
-"""Returns the static structure factor S(q) of the UEG."""
+"""Returns the static structure factor S₀(q) of the UEG in the HF approximation."""
 function static_structure_factor(q, param::ParaMC)
     x = q / param.kF
     if x < 2
@@ -27,7 +27,7 @@ function static_structure_factor(q, param::ParaMC)
     return 1.0
 end
 
-"""Π₀(q, τ=0) = -n₀ S(q)"""
+"""Π₀(q, τ=0) = χ₀(q, τ=0) = -n₀ S₀(q)"""
 function bare_polarization_exact_t0(q, param::ParaMC)
     n0 = param.kF^3 / 3π^2
     return -n0 * static_structure_factor(q, param)
@@ -41,9 +41,9 @@ function main()
         cd(ENV["SOSEM_HOME"])
     end
 
-    rs = 1.0
+    rs = 2.0
     beta = 40.0
-    mass2 = 1.0
+    mass2 = 0.4
     solver = :vegasmc
 
     # Number of evals
@@ -194,32 +194,24 @@ function main()
     δz, δμ = CounterTerm.sigmaCT(max_order, μ, z; isfock=false, verbose=1)
 
     println("Computed δμ: ", δμ)
-    static_structure_factor = UEG_MC.chemicalpotential_renormalization_poln(
+    inst_poln = UEG_MC.chemicalpotential_renormalization_poln(
         merged_data,
         δμ;
         min_order=1,
         max_order=max_order,
     )
-    static_structure_factor_signflip = UEG_MC.chemicalpotential_renormalization_poln(
-        merged_data_signflip,
-        δμ;
-        min_order=1,
-        max_order=max_order,
-    )
     δμ1_exact = UEG_MC.delta_mu1(param)  # = ReΣ₁[λ](kF, 0)
-    static_structure_factor_2_manual = merged_data[(2, 0)] + δμ1_exact * merged_data[(1, 1)]
-    scores_2 = stdscore.(static_structure_factor[2] - static_structure_factor_2_manual, 0.0)
+    inst_poln_2_manual = merged_data[(2, 0)] + δμ1_exact * merged_data[(1, 1)]
+    scores_2 = stdscore.(inst_poln[2] - inst_poln_2_manual, 0.0)
     worst_score_2 = argmax(abs, scores_2)
     println("2nd order renorm vs manual worst score: $worst_score_2")
 
     println(UEG.paraid(param))
     println(partitions)
-    println(typeof(static_structure_factor))
+    println(typeof(inst_poln))
 
     # Aggregate the full results for Σₓ up to order N
-    static_structure_factor_total = UEG_MC.aggregate_orders(static_structure_factor)
-    static_structure_factor_total_signflip =
-        UEG_MC.aggregate_orders(static_structure_factor_signflip)
+    inst_poln_total = UEG_MC.aggregate_orders(inst_poln)
 
     # Use LaTex fonts for plots
     plt.rc("text"; usetex=true)
@@ -243,9 +235,8 @@ function main()
     # colors = ["orchid", "cornflowerblue", "turquoise", "chartreuse"]
     for (i, N) in enumerate(min_order:max_order_plot)
         # S(q) = -Π(q, τ=0) / n₀
-        static_structure_means = Measurements.value.(static_structure_factor_total[N])
-        static_structure_stdevs =
-            Measurements.uncertainty.(static_structure_factor_total[N])
+        static_structure_means = Measurements.value.(inst_poln_total[N])
+        static_structure_stdevs = Measurements.uncertainty.(inst_poln_total[N])
         marker = "o-"
         ax.plot(
             k_kf_grid,
@@ -263,36 +254,12 @@ function main()
             alpha=0.4,
         )
         ic += 1
-        # # Compare to results with sign flip
-        # if N > 1
-        #     signflip_means = Measurements.value.(static_structure_factor_total_signflip[N])
-        #     signflip_stdevs =
-        #         Measurements.uncertainty.(static_structure_factor_total_signflip[N])
-        #     ax.plot(
-        #         k_kf_grid,
-        #         signflip_means,
-        #         marker;
-        #         markersize=2,
-        #         color="$(colors[ic])",
-        #         label="\$N=$N\$ ($solver + sign flip)",
-        #     )
-        #     ax.fill_between(
-        #         k_kf_grid,
-        #         signflip_means - signflip_stdevs,
-        #         signflip_means + signflip_stdevs;
-        #         color="$(colors[ic])",
-        #         alpha=0.4,
-        #     )
-        #     ic += 1
-        # end
     end
     ax.legend(; loc="best")
-    # ax.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
-    # ax.set_xlim(0.75, 1.25)
     ax.set_xlim(0, 3.0)
     # ax.set_ylim(nothing, 2)
     ax.set_xlabel("\$q / k_F\$")
-    ax.set_ylabel("\$S(q \\ne 0) = -\\Pi(q, \\tau=0) / n_0\$")
+    ax.set_ylabel("\$-\\Pi(q, \\tau=0) / n_0\$")
     # xloc = 1.5
     xloc = 0.45
     yloc = 0.2
@@ -312,7 +279,7 @@ function main()
     )
     fig.tight_layout()
     fig.savefig(
-        "results/polarization/static_structure_factor_N=$(max_order_plot)_rs=$(param.rs)_" *
+        "results/polarization/instantaneous_polarization_N=$(max_order_plot)_rs=$(param.rs)_" *
         "beta_ef=$(param.beta)_lambda=$(param.mass2)_neval=$(neval)_$(solver)$(ct_string)$(fix_string).pdf",
     )
 
