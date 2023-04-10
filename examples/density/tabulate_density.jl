@@ -21,9 +21,7 @@ function main()
     end
 
     # Total loop order N
-    # orders = [0, 1, 2, 3]
-    # orders = [1, 2, 3]
-    orders = [3, 4]
+    orders = [0, 1, 2, 3]
     min_order = minimum(orders)
     max_order = maximum(orders)
     sort!(orders)
@@ -54,12 +52,11 @@ function main()
     compare_eft = false
 
     # Set green4 to zero for benchmarking?
-    no_green4 = true
+    no_green4 = false
     no_green4_str = no_green4 ? "_no_green4" : ""
 
     # Optionally give specific partition(s) to build
-    build_partitions = [(1, 0, 2), (2, 0, 2)]
-    # build_partitions = nothing
+    build_partitions = nothing
     partn_string = ""
     if isnothing(build_partitions) == false
         for P in build_partitions
@@ -70,7 +67,7 @@ function main()
     # UEG parameters for MC integration
     loadparam = ParaMC(;
         order=max_order,
-        rs=1.0,
+        rs=5.0,
         beta=beta,
         mass2=1.0,
         isDynamic=false,
@@ -101,6 +98,7 @@ function main()
         key = "$(UEG.short(loadparam))"
         return f[key]
     end
+    println(partitions)
 
     if compare_eft
         # Load the EFT_UEG data (NOTE: EFT data is already in Dict format!)
@@ -114,39 +112,41 @@ function main()
     end
 
     # Convert results to a Dict of measurements at each order with interaction counterterms merged
-    data = sort(UEG_MC.restodict(res, partitions))
+    data = UEG_MC.restodict(res, partitions)
     if compare_eft
-        data_eft = sort(data_eft)
+        data_eft = data_eft
     end
 
-    # Add overall spin summation (factor of 2)
+    # Add overall spin summation (factor of 2) and factor of 1 / (n_μ! n_λ!)
     n0 = param.kF^3 / (3 * pi^2)
     for (k, v) in data
-        data[k] = [2 * v / n0]
+        data[k] = [2 * v / (factorial(k[2]) * factorial(k[3]))]
+        # data[k] = [2 * v / n0 / (factorial(k[2]) * factorial(k[3]))]
     end
     if compare_eft
         for (k, v) in data_eft
-            data_eft[k] = [2 * v / n0]
+            data_eft[k] = [2 * v / (factorial(k[2]) * factorial(k[3]))]
+            # data_eft[k] = [2 * v / n0]
         end
     end
 
-    println(n0)
-    println("\nPartitions SOSEM (n_loop, n_λ, n_μ):\n")
-    for Pm in keys(data)
-        # fix_mu && Pm[2] > 0 && continue
-        # Pm[3] > 0 && continue  # No lambda counterterms
-        println("$((Pm[1]+1, Pm[3], Pm[2])):\t$(data[Pm][1])")
-    end
-    println("\nPartitions EFT (n_loop, n_λ, n_μ):\n")
-    if compare_eft
-        for Pm in keys(data_eft)
-            # fix_mu && Pm[2] > 0 && continue
-            # Pm[3] > 0 && continue  # No lambda counterterms
-            println("$((Pm[1]+1, Pm[3], Pm[2])):\t$(data_eft[Pm][1])")
-        end
-    end
-    println("Done!")
-    return
+    # println(n0)
+    # println("\nPartitions SOSEM in units of n0 (n_loop, n_λ, n_μ):\n")
+    # for Pm in keys(data)
+    #     # fix_mu && Pm[2] > 0 && continue
+    #     # Pm[3] > 0 && continue  # No lambda counterterms
+    #     println("$((Pm[1]+1, Pm[3], Pm[2])):\t$(data[Pm][1])")
+    # end
+    # if compare_eft
+    #     println("\nPartitions EFT in units of n0 (n_loop, n_λ, n_μ):\n")
+    #     for Pm in keys(data_eft)
+    #         # fix_mu && Pm[2] > 0 && continue
+    #         # Pm[3] > 0 && continue  # No lambda counterterms
+    #         println("$((Pm[1]+1, Pm[3], Pm[2])):\t$(data_eft[Pm][1])")
+    #     end
+    # end
+    # println("Done!")
+    # return
 
     # Zero out partitions with mu renorm if present (fix mu)
     if renorm_mu == false || fix_mu
@@ -188,8 +188,10 @@ function main()
     if haskey(data, (0, 0, 0)) == false
         data[(0, 0, 0)] = [measurement(n0, 0.0)]
     end
-    if haskey(data_eft, (0, 0, 0)) == false
-        data_eft[(0, 0, 0)] = [measurement(n0, 0.0)]
+    if compare_eft
+        if haskey(data_eft, (0, 0, 0)) == false
+            data_eft[(0, 0, 0)] = [measurement(n0, 0.0)]
+        end
     end
     if min_order == 0
         n0_calc = data[(0, 0, 0)][1]
@@ -242,11 +244,13 @@ function main()
         scaled_merged_shifted_data[(k[1] + 1, k[2])] = v / n0
     end
     sort!(scaled_merged_shifted_data)
-    scaled_merged_shifted_data_eft = OrderedDict()
-    for (k, v) in merged_data_eft
-        scaled_merged_shifted_data_eft[(k[1] + 1, k[2])] = v / n0
+    if compare_eft
+        scaled_merged_shifted_data_eft = OrderedDict()
+        for (k, v) in merged_data_eft
+            scaled_merged_shifted_data_eft[(k[1] + 1, k[2])] = v / n0
+        end
+        sort!(scaled_merged_shifted_data_eft)
     end
-    sort!(scaled_merged_shifted_data_eft)
 
     compare_eft && println("\n(SOSEM)")
     println("\nDensity partitions in units of n0 (n_loop, n_μ, n_λ):\n")
@@ -281,6 +285,13 @@ function main()
     # Load counterterm data
     ct_filename = "examples/counterterms/data_Z$(ct_string_short).jld2"
     z, μ = UEG_MC.load_z_mu(param; ct_filename=ct_filename)
+    # Add Taylor factors to CT data
+    for (p, v) in z
+        z[p] = v / (factorial(p[2]) * factorial(p[3]))
+    end
+    for (p, v) in μ
+        μ[p] = v / (factorial(p[2]) * factorial(p[3]))
+    end
     # Zero out partitions with mu renorm if present (fix mu)
     if renorm_mu == false || fix_mu
         for P in keys(μ)

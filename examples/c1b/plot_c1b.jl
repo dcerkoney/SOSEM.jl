@@ -175,7 +175,7 @@ function main()
     ax.text(
         xloc,
         yloc,
-        "\$r_s = 1,\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
+        "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
         fontsize=14,
     )
     ax.text(
@@ -191,7 +191,7 @@ function main()
         "\${\\epsilon}_{\\mathrm{TF}}\\equiv\\frac{\\hbar^2 q^2_{\\mathrm{TF}}}{2 m_e}=2\\pi\\mathcal{N}_F\$ (a.u.)";
         fontsize=12,
     )
-    plt.title("Using fixed bare Coulomb interactions \$V_1\$, \$V_2\$")
+    # plt.title("Using fixed bare Coulomb interactions \$V_1\$, \$V_2\$")
     # plt.title(
     #     "Using re-expanded Coulomb interactions \$V_1[V_\\lambda]\$, \$V_2[V_\\lambda]\$",
     # )

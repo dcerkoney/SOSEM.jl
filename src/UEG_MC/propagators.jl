@@ -33,27 +33,37 @@ function eval(id::BareGreenId, K, _, varT, p::ParaMC)
         ϵ = k^2 / (2me * massratio) - μ         # ϵ_0
     end
 
+    # Since τout = -δ for some SOSEM observables, it is possible to generate
+    # out-of-bounds time differences => use anti-periodicity on [0, β)
+    s = 1.0
+    if τ < 0.0
+        τ += β
+        s = -s
+    elseif τ >= β
+        τ -= β
+        s = -s
+    end
+
     # Check for counterterms; note that we have:
     # \partial^(n)_\mu g(Ek - \mu, \tau) = (-1)^n * Spectral.kernelFermiT_dωn
-    # green = s
+    green = s
     order = id.order[1]
     if order == 0
         if τ ≈ 0.0
-            return Spectral.kernelFermiT(-1e-8, ϵ, β)
+            green *= Spectral.kernelFermiT(-1e-8, ϵ, β)
         else
-            return Spectral.kernelFermiT(τ, ϵ, β)
+            green *= Spectral.kernelFermiT(τ, ϵ, β)
         end
     elseif order == 1
-        return -Spectral.kernelFermiT_dω(τ, ϵ, β)
+        green *= -Spectral.kernelFermiT_dω(τ, ϵ, β)
     elseif order == 2
-        return Spectral.kernelFermiT_dω2(τ, ϵ, β) / 2.0
+        green *= Spectral.kernelFermiT_dω2(τ, ϵ, β)
     elseif order == 3
-        # return -Spectral.kernelFermiT_dω3(τ, ϵ, β) / 6.0
-        return 0.0
+        green *= -Spectral.kernelFermiT_dω3(τ, ϵ, β)
     else
         @todo
     end
-    # return green
+    return green
 end
 
 # Unscreened Coulomb interaction (for outer V lines of non-local SOSEM)
@@ -76,7 +86,7 @@ function eval(id::BareInteractionId, K, _, varT, p::ParaMC)
     else
         # Counterterms for screened interaction
         invK = 1.0 / (qd^2 + mass2)
-        return e0^2 / ϵ0 * invK * (mass2 * invK)^id.order[2]
+        return factorial(id.order[2]) * e0^2 / ϵ0 * invK * (mass2 * invK)^id.order[2]
     end
 end
 

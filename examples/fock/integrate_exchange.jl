@@ -1,4 +1,4 @@
-# using AbstractTrees
+using AbstractTrees
 using CodecZlib
 using CompositeGrids
 using ElectronGas
@@ -41,7 +41,7 @@ function exchange_param(order=1)
     )
 end
 
-function build_sigma_x_with_ct(orders=[1])
+function build_sigma_x_with_ct(orders=[1]; renorm_mu=renorm_mu, renorm_lambda=renorm_lambda)
     DiagTree.uidreset()
     valid_partitions = Vector{PartitionType}()
     diagparams = Vector{DiagParaF64}()
@@ -53,8 +53,8 @@ function build_sigma_x_with_ct(orders=[1])
         n_min,
         n_max;
         n_lowest=1,
-        renorm_mu=true,
-        renorm_lambda=true,
+        renorm_mu=renorm_mu,
+        renorm_lambda=renorm_lambda,
     )
         # Build diagram tree for this partition
         @debug "Partition (n_loop, n_ct_mu, n_ct_lambda): $p"
@@ -68,7 +68,8 @@ function build_sigma_x_with_ct(orders=[1])
             continue
         end
         @debug "\nDiagTree:\n" * repr_tree(dλ_dμ_diagtree)
-
+        # Optimize the tree
+        # DiagTree.optimize!(dλ_dμ_diagtree)
         # Compile to expression tree and save results for this partition
         exprtree = ExprTree.build(dλ_dμ_diagtree)
         push!(valid_partitions, p)
@@ -94,12 +95,14 @@ function build_diagtree(; n_loop=1)
     extT = (1, 1)
     g_param = DiagParaF64(;
         type=GreenDiag,
-        innerLoopNum=n_loop - 1,  # k and q already taken
-        totalLoopNum=n_loop + 1,  # Part of Sigma diagram
+        hasTau=true,
         firstLoopIdx=3,           # k and q already taken
+        innerLoopNum=n_loop - 1,  # k and q already taken
         firstTauIdx=2,            # 1 external time (instantaneous Σ)
         totalTauNum=n_loop,       # includes outgoing external time
-        hasTau=true,
+        totalLoopNum=n_loop + 1,  # Part of Sigma diagram
+        interaction=[FeynmanDiagram.Interaction(ChargeCharge, Instant)],  # Yukawa interaction
+        filter=[NoHartree],
     )
     G = Parquet.green(g_param, k - q, extT; name=:G)
 
@@ -269,49 +272,9 @@ function main()
     end
 
     # Total loop order N (Fock self-energy is N = 1)
-    orders = [1, 2, 3, 4]
+    # orders = [1, 2, 3]
+    orders = [4]
     max_order = maximum(orders)
-
-    # UEG parameters for MC integration
-    param = ParaMC(; order=max_order, rs=1.0, beta=40.0, mass2=1.0, isDynamic=false)
-    @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)"
-
-    # K-mesh for measurement
-    minK = 0.1 * param.kF
-    Nk, korder = 4, 7
-    kleft =
-        CompositeGrid.LogDensedGrid(
-            :uniform,
-            [0.0, param.kF - 1e-8],
-            [param.kF - 1e-8],
-            Nk,
-            minK,
-            korder,
-        ).grid
-    kright =
-        CompositeGrid.LogDensedGrid(
-            :uniform,
-            [param.kF + 1e-8, 3 * param.kF],
-            [param.kF + 1e-8],
-            Nk,
-            minK,
-            korder,
-        ).grid
-    kgrid = [kleft; kright]
-    # minK = 0.2 * param.kF
-    # Nk, korder = 4, 7
-    # kgrid =
-    #     CompositeGrid.LogDensedGrid(
-    #         :uniform,
-    #         [0.0, 3 * param.kF],
-    #         [param.kF],
-    #         Nk,
-    #         minK,
-    #         korder,
-    #     ).grid
-
-    # Dimensionless k-grid
-    k_kf_grid = kgrid / param.kF
 
     # Settings
     alpha = 3.0
@@ -319,23 +282,86 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 5e9
+    neval = 5e10
+
+    # Enable/disable interaction and chemical potential counterterms
+    renorm_mu = true
+    renorm_lambda = true
+
+    # UEG parameters for MC integration
+    param = ParaMC(;
+        order=max_order,
+        rs=5.0,
+        beta=40.0,
+        mass2=0.1375,
+        isDynamic=false,
+        isFock=false,
+    )
+    @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)"
+
+    # # Dimensionless k-mesh for measurement
+    # minK = 0.04
+    # Nk, korder = 4, 4
+    # k_kf_grid = CompositeGrid.LogDensedGrid(:cheb, [0.0, 3.0], [0.0, 1.0], Nk, minK, korder)
+
+    # # Dimensionful k-grid
+    # kgrid = k_kf_grid * param.kF
+
+    # K-mesh for measurement
+    minK = 0.2 * param.kF
+    Nk, korder = 4, 7
+    kgrid =
+        CompositeGrid.LogDensedGrid(
+            :uniform,
+            [0.0, 3 * param.kF],
+            [param.kF],
+            Nk,
+            minK,
+            korder,
+        ).grid
+
+    # minK = 0.1 * param.kF
+    # Nk, korder = 4, 7
+    # kleft =
+    #     CompositeGrid.LogDensedGrid(
+    #         :uniform,
+    #         [0.0, param.kF - 1e-8],
+    #         [param.kF - 1e-8],
+    #         Nk,
+    #         minK,
+    #         korder,
+    #     ).grid
+    # kright =
+    #     CompositeGrid.LogDensedGrid(
+    #         :uniform,
+    #         [param.kF + 1e-8, 3 * param.kF],
+    #         [param.kF + 1e-8],
+    #         Nk,
+    #         minK,
+    #         korder,
+    #     ).grid
+    # kgrid = [kleft; kright]
+
+    # # Dimensionless k-grid
+    k_kf_grid = kgrid / param.kF
 
     # Build diagram/expression trees for the exchange self-energy to order
     # ξᴺ in the renormalized perturbation theory (includes CTs in μ and λ)
-    partitions, diagparams, diagtrees, exprtrees = build_sigma_x_with_ct(orders)
+    partitions, diagparams, diagtrees, exprtrees =
+        build_sigma_x_with_ct(orders; renorm_mu=renorm_mu, renorm_lambda=renorm_lambda)
 
     println("Integrating partitions: $partitions")
     println("diagtrees: $diagtrees")
     println("exprtrees: $exprtrees")
 
-    # Check the diagram trees
+    # # Check the diagram trees
     # for (i, d) in enumerate(diagtrees)
-    # println("\nDiagram tree #$i, partition P = $(partitions[i]):")
-    # print_tree(d)
-    # plot_tree(d)
-    # # println(diagparams[i])
+    #     println("\nDiagram tree #$i, partition P = $(partitions[i]):")
+    #     print_tree(d)
+    #     plot_tree(d)
+    #     # println(diagparams[i])
     # end
+    # return
 
     res = integrate_sigma_x_with_ct(
         param,
@@ -348,11 +374,20 @@ function main()
         solver=solver,
     )
 
+    # Distinguish results with different counterterm schemes
+    ct_string = (renorm_mu || renorm_lambda) ? "_with_ct" : ""
+    if renorm_mu
+        ct_string *= "_mu"
+    end
+    if renorm_lambda
+        ct_string *= "_lambda"
+    end
+
     # Save to JLD2 on main thread
     if !isnothing(res)
         savename =
             "results/data/sigma_x_n=$(param.order)_rs=$(param.rs)_" *
-            "beta_ef=$(param.beta)_lambda=$(param.mass2)_neval=$(neval)_$(solver)"
+            "beta_ef=$(param.beta)_lambda=$(param.mass2)_neval=$(neval)_$(solver)$(ct_string)"
         jldopen("$savename.jld2", "a+"; compress=true) do f
             key = "$(UEG.short(param))"
             if haskey(f, key)
@@ -362,12 +397,16 @@ function main()
             return f[key] = (orders, param, kgrid, partitions, res)
         end
         # Test the Fock self-energy
-        if orders == [1]
+        if 1 in orders
             # The nondimensionalized Fock self-energy is the negative Lindhard function
             exact = -UEG_MC.lindhard.(kgrid / param.kF)
             # Check the MC result at k = 0 against the exact (non-dimensionalized)
             # Fock (exhange) self-energy: Σx(0) / E_{TF} = -F(0) = -1
-            means_fock, stdevs_fock = res.mean, res.stdev
+            if orders == [1]
+                means_fock, stdevs_fock = res.mean, res.stdev
+            else
+                means_fock, stdevs_fock = res.mean[1], res.stdev[1]
+            end
             meas = measurement.(means_fock, stdevs_fock)
             scores = stdscore.(meas, exact)
             score_k0 = scores[1]

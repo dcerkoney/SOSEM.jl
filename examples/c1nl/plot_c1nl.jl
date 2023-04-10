@@ -1,3 +1,4 @@
+using CodecZlib
 using ElectronLiquid
 using ElectronGas
 using Interpolations
@@ -19,10 +20,10 @@ function main()
     elseif haskey(ENV, "SOSEM_HOME")
         cd(ENV["SOSEM_HOME"])
     end
-    
+
     rs = 1.0
     beta = 40.0
-    mass2 = 4.0
+    mass2 = 1.0
     solver = :vegasmc
     expand_bare_interactions = false
 
@@ -32,8 +33,8 @@ function main()
     neval_c1d = 5e10
     neval = max(neval_c1b0, neval_c1b, neval_c1c, neval_c1d)
 
-    # Plot total results to order ξ 
-    plot_order = 4
+    plot_order = 5  # Plot total results to order ξᴺ
+    n_min = 2       # True minimal loop order for this observable
 
     # Distinguish results with fixed vs re-expanded bare interactions
     intn_str = ""
@@ -53,6 +54,9 @@ function main()
         "results/data/rs=$(rs)_beta_ef=$(beta)_" *
         "lambda=$(mass2)_$(intn_str)$(solver)_with_ct_mu_lambda"
 
+    # Get vegas k-mesh for RPA(+FL)
+    k_kf_grid_vegas = np.load("results/kgrids/kgrid_vegas_dimless_n=77_small.npy")
+
     # Plot each observable at order N = plot_order
     fig, ax = plt.subplots()
     nevals = [nothing, neval_c1c, neval_c1d]
@@ -60,9 +64,9 @@ function main()
     # Prefixes for split \delta C^{(1b0)} run
     # obsprefixes = [["\\delta C^{(1b0)}_{$plot_order}", "C^{(1b0)}_2 + C^{(1b)}_{$plot_order}"], "C^{(1c)}_{$plot_order}", "C^{(1d)}_{$plot_order}"]
     obsprefixes = [
-        ["C^{(1b0)}_{$plot_order}", "C^{(1b)}_{$plot_order}"],
-        "C^{(1c)}_{$plot_order}",
-        "C^{(1d)}_{$plot_order}",
+        ["C^{(1b0)}_{$(plot_order)}", "C^{(1b)}_{$(plot_order)}"],
+        "C^{(1c)}_{$(plot_order)}",
+        "C^{(1d)}_{$(plot_order)}",
     ]
     next_color = 0
     for (i, obsname) in enumerate(obsnames)
@@ -100,27 +104,27 @@ function main()
             c1b_rpa_fl = Measurements.value.(meas_rpa_fl)
             c1b_rpa_fl_err = Measurements.uncertainty.(meas_rpa_fl)
             ax.plot(
-                k_kf_grid,
+                k_kf_grid_vegas,
                 c1b_rpa,
                 "k";
                 linestyle="--",
                 label="\$C^{(1b)}_{\\mathrm{RPA}}\$ (vegas)",
             )
             ax.fill_between(
-                k_kf_grid,
+                k_kf_grid_vegas,
                 (c1b_rpa - c1b_rpa_err),
                 (c1b_rpa + c1b_rpa_err);
                 color="k",
                 alpha=0.3,
             )
             ax.plot(
-                k_kf_grid,
+                k_kf_grid_vegas,
                 c1b_rpa_fl,
                 "k";
                 label="\$C^{(1b)}_{\\mathrm{RPA}+\\mathrm{FL}}\$ (vegas)",
             )
             ax.fill_between(
-                k_kf_grid,
+                k_kf_grid_vegas,
                 (c1b_rpa_fl - c1b_rpa_fl_err),
                 (c1b_rpa_fl + c1b_rpa_fl_err);
                 color="k",
@@ -178,22 +182,22 @@ function main()
         ax.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
         # ax.set_xlim(minimum(k_kf_grid), 2.0)
     end
-    ax.set_ylim(-2.1, 2.1)
+    ax.set_ylim(-2.2, 2.2)
     ax.legend(; loc="best")
     ax.set_xlabel("\$k / k_F\$")
     ax.set_ylabel(
-        "\$C^{(1\\cdot)}(k) \\,/\\, {\\epsilon}^{\\hspace{0.1em}2}_{\\mathrm{TF}}\$",
+        "\$C^{(1\\cdot)}_N(k\\sigma) \\,/\\, {\\epsilon}^{\\hspace{0.1em}2}_{\\mathrm{TF}}\$",
     )
     # xloc = 0.5
     # yloc = -0.075
     # ydiv = -0.009
-    xloc = 1.7
+    xloc = 1.65
     yloc = -1.175
-    ydiv = -0.3
+    ydiv = -0.35
     ax.text(
         xloc,
         yloc,
-        "\$N = $plot_order,\\, r_s = 1,\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
+        "\$N = $(plot_order),\\, r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
         fontsize=14,
     )
     ax.text(

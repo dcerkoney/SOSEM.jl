@@ -1,3 +1,4 @@
+using CodecZlib
 using CompositeGrids
 using ElectronGas
 using ElectronLiquid.UEG: ParaMC, short
@@ -32,7 +33,7 @@ function main()
 
     # UEG parameters for MC integration
     param =
-        ParaMC(; order=settings.max_order, rs=1.0, beta=40.0, mass2=2.0, isDynamic=false)
+        ParaMC(; order=settings.max_order, rs=5.0, beta=40.0, mass2=0.1375, isDynamic=false)
     @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)"
 
     println("lambda = $(param.mass2)")
@@ -57,7 +58,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 5e9
+    neval = 5e10
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -99,7 +100,7 @@ function main()
     end
 
     # Distinguish results with different counterterm schemes
-    ct_string = (renorm_mu || renorm_lambda) ? "with_ct" : ""
+    ct_string = (renorm_mu || renorm_lambda) ? "_with_ct" : ""
     if renorm_mu
         ct_string *= "_mu"
     end
@@ -112,7 +113,7 @@ function main()
         savename =
             "results/data/c1bL_n=$(param.order)_rs=$(param.rs)_" *
             "beta_ef=$(param.beta)_lambda=$(param.mass2)_" *
-            "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)"
+            "neval=$(neval)_$(intn_str)$(solver)$(ct_string)"
         jldopen("$savename.jld2", "a+"; compress=true) do f
             key = "$(short(param))"
             if haskey(f, key)
@@ -127,7 +128,7 @@ function main()
     if !isnothing(res)
         savename =
             "results/data/rs=$(param.rs)_beta_ef=$(param.beta)_" *
-            "lambda=$(param.mass2)_$(intn_str)$(solver)_$(ct_string)"
+            "lambda=$(param.mass2)_$(intn_str)$(solver)$(ct_string)"
         jldopen("$savename.jld2", "a+"; compress=true) do f
             key = "c1bL_n_min=$(settings.min_order)_n_max=$(settings.max_order)_neval=$(neval)"
             if haskey(f, key)

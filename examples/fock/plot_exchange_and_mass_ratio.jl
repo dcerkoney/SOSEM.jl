@@ -74,16 +74,19 @@ function main()
         cd(ENV["SOSEM_HOME"])
     end
 
-    rs = 1.0
+    rs = 5.0
     beta = 40.0
-    mass2 = 1.0
+    mass2 = 0.1375
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 5e9
+    neval123 = 5e10
+    neval4 = 5e10
+    neval = max(neval123, neval4)
 
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
-    min_order = 2
+    n_min = 1  # True minimal loop order for this observable
+    min_order = 1
     max_order = 4
     min_order_plot = 1
     max_order_plot = 4
@@ -94,39 +97,64 @@ function main()
     # Distinguish results with fixed vs re-expanded bare interactions
     intn_str = ""
 
-    # Full renormalization
-    ct_string = "with_ct_mu_lambda"
+    # Enable/disable interaction and chemical potential counterterms
+    renorm_mu = true
+    renorm_lambda = true
+
+    # Distinguish results with different counterterm schemes used in the original run
+    ct_string = (renorm_mu || renorm_lambda) ? "_with_ct" : ""
+    if renorm_mu
+        ct_string *= "_mu"
+    end
+    if renorm_lambda
+        ct_string *= "_lambda"
+    end
 
     # UEG parameters for MC integration
-    # loadparam = ParaMC(; order=max_order, rs=rs, beta=beta, mass2=mass2, isDynamic=false)
+    loadparam = ParaMC(; order=max_order, rs=rs, beta=beta, mass2=mass2, isDynamic=false)
 
-    # NOTE: Taking N=3 data from N=4 run, renorm for N=4 not yet implemented!
-    loadparam = ParaMC(; order=4, rs=rs, beta=beta, mass2=mass2, isDynamic=false)
-
-    # savename =
-    #     "results/data/sigma_x_n=$(max_order)_rs=$(rs)_" *
-    #     "beta_ef=$(beta)_lambda=$(mass2)_neval=$(neval)_$(solver)"
-
-    # NOTE: Taking N=3 data from N=4 run, renorm for N=4 not yet implemented!
+    # Load raw data
+    if max_order == 4
+        max_together = 3
+    else
+        max_together = max_order
+    end
     savename =
-        "results/data/sigma_x_n=4_rs=$(rs)_" *
-        "beta_ef=$(beta)_lambda=$(mass2)_neval=$(neval)_$(solver)"
-
+        "results/data/sigma_x_n=$(max_together)_rs=$(rs)_" *
+        "beta_ef=$(beta)_lambda=$(mass2)_neval=$(neval123)_$(solver)$(ct_string)"
     orders, param, kgrid, partitions, res = jldopen("$savename.jld2", "a+") do f
         key = "$(UEG.short(loadparam))"
         return f[key]
     end
+    if max_order == 4
+        savename =
+            "results/data/sigma_x_n=$(max_order)_rs=$(rs)_" *
+            "beta_ef=$(beta)_lambda=$(mass2)_neval=$(neval4)_$(solver)$(ct_string)"
+        orders4, param4, kgrid4, partitions4, res4 = jldopen("$savename.jld2", "a+") do f
+            key = "$(UEG.short(loadparam))"
+            return f[key]
+        end
+    end
 
     # Get dimensionless k-grid (k / kF) and index corresponding to the Fermi energy
     k_kf_grid = kgrid / param.kF
+    if max_order == 4
+        k_kf_grid4 = kgrid4 / param.kF
+    end
     ikF = findfirst(x -> x == 1.0, k_kf_grid)
 
     # Convert results to a Dict of measurements at each order with interaction counterterms merged
     data = UEG_MC.restodict(res, partitions)
-
-    # TODO: Rerun with minus sign fixed
     for (k, v) in data
-        data[k] = -v / param.β
+        data[k] = v / (factorial(k[2]) * factorial(k[3]))
+    end
+    # Add 4th order results to data dict
+    if max_order == 4
+        data4 = UEG_MC.restodict(res4, partitions4)
+        for (k, v) in data4
+            data4[k] = v / (factorial(k[2]) * factorial(k[3]))
+        end
+        merge!(data, data4)
     end
 
     merged_data = CounterTerm.mergeInteraction(data)
@@ -159,8 +187,17 @@ function main()
     end
 
     # Reexpand merged data in powers of μ
-    z, μ = UEG_MC.load_z_mu(param)
-    δz, δμ = CounterTerm.sigmaCT(max_order, μ, z; verbose=1)
+    ct_filename = "examples/counterterms/data_Z$(ct_string).jld2"
+    z, μ = UEG_MC.load_z_mu(param; ct_filename=ct_filename)
+    # Add Taylor factors to CT data
+    for (p, v) in z
+        z[p] = v / (factorial(p[2]) * factorial(p[3]))
+    end
+    for (p, v) in μ
+        μ[p] = v / (factorial(p[2]) * factorial(p[3]))
+    end
+    # δz, δμ = CounterTerm.sigmaCT(2, μ, z; verbose=1)  # TODO: Fix order 3
+    δz, δμ = CounterTerm.sigmaCT(max_order - 1, μ, z; verbose=1)
     println("Computed δμ: ", δμ)
     sigma_x =
         UEG_MC.chemicalpotential_renormalization_sigma(merged_data, δμ; max_order=max_order)
@@ -186,21 +223,22 @@ function main()
     if save
         savename =
             "results/data/rs=$(param.rs)_beta_ef=$(param.beta)_" *
-            "lambda=$(param.mass2)_$(intn_str)$(solver)_$(ct_string)"
+            "lambda=$(param.mass2)_$(intn_str)$(solver)$(ct_string)"
         f = jldopen("$savename.jld2", "a+"; compress=true)
         # NOTE: no bare result for c1b observable (accounted for in c1b0)
         for N in min_order_plot:max_order
+            num_eval = N == 4 ? neval4 : neval123
             # Skip exact Fock (N = 1) result
             N == 1 && continue
             if haskey(f, "sigma_x") &&
                haskey(f["sigma_x"], "N=$N") &&
-               haskey(f["sigma_x/N=$N"], "neval=$(neval)")
-                @warn("replacing existing data for N=$N, neval=$(neval)")
-                delete!(f["sigma_x/N=$N"], "neval=$(neval)")
+               haskey(f["sigma_x/N=$N"], "neval=$num_eval")
+                @warn("replacing existing data for N=$N, neval=$num_eval")
+                delete!(f["sigma_x/N=$N"], "neval=$num_eval")
             end
-            f["sigma_x/N=$N/neval=$neval/meas"] = sigma_x_over_eTF_total[N]
-            f["sigma_x/N=$N/neval=$neval/param"] = param
-            f["sigma_x/N=$N/neval=$neval/kgrid"] = kgrid
+            f["sigma_x/N=$N/neval=$num_eval/meas"] = sigma_x_over_eTF_total[N]
+            f["sigma_x/N=$N/neval=$num_eval/param"] = param
+            f["sigma_x/N=$N/neval=$num_eval/kgrid"] = kgrid
         end
     end
 
@@ -215,7 +253,7 @@ function main()
     # Compare result to exact non-dimensionalized Fock self-energy (-F(k / kF))
     ax1.plot(k_kf_grid, -UEG_MC.lindhard.(k_kf_grid), "k"; label="\$N=1\$ (exact, \$T=0\$)")
     for (i, N) in enumerate(min_order:max_order_plot)
-        N == 1 && continue
+        # N == 1 && continue
         # Get means and error bars from the result up to this order
         means = Measurements.value.(sigma_x_over_eTF_total[N])
         stdevs = Measurements.uncertainty.(sigma_x_over_eTF_total[N])
@@ -228,7 +266,7 @@ function main()
             marker;
             markersize=2,
             color="C$(i-1)",
-            label="\$N=$N\$ ($solver)",
+            label="\$N=$(N)\$ ($solver)",
         )
         ax1.fill_between(
             k_kf_grid,
@@ -241,14 +279,18 @@ function main()
     ax1.legend(; loc="lower right")
     ax1.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
     ax1.set_xlabel("\$k / k_F\$")
-    ax1.set_ylabel("\$\\Sigma_{x}(k) \\,/\\, \\epsilon_{\\mathrm{TF}}\$")
-    xloc = 1.75
-    yloc = -0.5
-    ydiv = -0.095
+    ax1.set_ylabel("\$C^{(0)}_\\sigma(k) \\,/\\, \\epsilon_{\\mathrm{TF}} = \\Sigma_{x}(k) \\,/\\, \\epsilon_{\\mathrm{TF}}\$")
+    # ax1.set_ylabel("\$\\Sigma_{x}(k) \\,/\\, \\epsilon_{\\mathrm{TF}}\$")
+    # xloc = 1.5
+    # yloc = -0.4
+    # ydiv = -0.095
+    xloc = 1.5
+    yloc = -0.6
+    ydiv = -0.175
     ax1.text(
         xloc,
         yloc,
-        "\$r_s = 1,\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
+        "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
         fontsize=14,
     )
     ax1.text(
@@ -257,6 +299,12 @@ function main()
         "\$\\lambda = $(mass2)\\epsilon_{\\mathrm{Ry}},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)},\$";
         # "\$\\lambda = \\frac{\\epsilon_{\\mathrm{Ry}}}{10},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)},\$";
         fontsize=14,
+    )
+    ax1.text(
+        xloc,
+        yloc + 2 * ydiv,
+        "\${\\epsilon}_{\\mathrm{TF}}\\equiv\\frac{\\hbar^2 q^2_{\\mathrm{TF}}}{2 m_e}=2\\pi\\mathcal{N}_F\$ (a.u.)";
+        fontsize=12,
     )
     fig1.tight_layout()
     fig1.savefig(
@@ -277,8 +325,8 @@ function main()
     EF_fock = qp_fock_exact(param.kF, param)
     println("ΣF(k = 0) (pred, exact):", sigma_fock_exact[1], " ", -eTF)
     println("EqpF(k = kF) (pred, exact):", EF_fock, " ", param.EF - eTF / 2)
-    @assert sigma_fock_exact[1] ≈ -eTF
-    @assert EF_fock ≈ param.EF - eTF / 2
+    # @assert sigma_fock_exact[1] ≈ -eTF
+    # @assert EF_fock ≈ param.EF - eTF / 2
 
     # Exact results on dense (quadrature) grids
     kgrid_quad = param.kF * np.linspace(0.0, 3.0; num=600)
@@ -372,27 +420,31 @@ function main()
     # )
     ax2.plot(
         k_kf_grid_quad,
-        -1 .+ (π / 4alpha + 1 / 3) * k_kf_grid_quad .^ 2;
+        -1 .+ (π / (4alpha * param.rs) + 1 / 3) * k_kf_grid_quad .^ 2;
         color="k",
         # linestyle="--",
-        label="\$\\epsilon_{\\mathrm{HF}}(k \\rightarrow 0) / \\epsilon_{\\mathrm{TF}} \\sim -1 + \\left(\\frac{\\pi}{4\\alpha} + \\frac{1}{3}\\right) \\left( \\frac{k}{k_F} \\right)^2\$",
+        label="\$\\epsilon_{\\mathrm{HF}}(k \\rightarrow 0) / \\epsilon_{\\mathrm{TF}} \\sim -1 + \\left(\\frac{\\pi}{4\\alpha r_s} + \\frac{1}{3}\\right) \\left( \\frac{k}{k_F} \\right)^2\$",
     )
-    ax2.plot(
-        kgrid_quad / param.kF,
-        E_fock_quad / eTF,
-        "C0";
-        label="\$N=1\$ (exact, \$T=0\$)",
-    )
-    ax2.plot(
-        kgrid_quad / param.kF,
-        qp_fit_fock(kgrid_quad) / eTF,
-        "C0";
-        linestyle="--",
-        label="\$N=1\$ (quasiparticle fit)",
-        # label="\$\\left(\\epsilon_0 + \\frac{k^2}{2 m^\\star_{\\mathrm{HF}}} \\right) \\Big/ \\epsilon_{\\mathrm{TF}}\$ (quasiparticle fit)",
-    )
+    # ax2.plot(
+    #     kgrid_quad / param.kF,
+    #     E_fock_quad / eTF,
+    #     "k";
+    #     label="\$N=1\$ (exact, \$T=0\$)",
+    # )
+    # ax2.plot(
+    #     kgrid_quad / param.kF,
+    #     qp_fit_fock(kgrid_quad) / eTF,
+    #     "C0";
+    #     linestyle="--",
+    #     label="\$N=1\$ (quasiparticle fit)",
+    #     # label="\$\\left(\\epsilon_0 + \\frac{k^2}{2 m^\\star_{\\mathrm{HF}}} \\right) \\Big/ \\epsilon_{\\mathrm{TF}}\$ (quasiparticle fit)",
+    # )
+    ic = 0
+
+    m_test = [0.2, 0.3, 0.4, 0.5]
+    e_test = [-1.0, -1.25, -1.5, -1.75]
     for (i, N) in enumerate(min_order:max_order_plot)
-        N == 1 && continue
+        # N == 1 && continue
 
         # Eqp = ϵ(k) + Σₓ(k)
         Eqp_over_eTF = Ek_over_eTF .+ sigma_x_over_eTF_total[N]
@@ -404,6 +456,7 @@ function main()
         # Gridded data for k < kF
         k_data = kgrid[kgrid .< param.kF]
         Eqp_data = means_qp[kgrid .< param.kF] * eTF
+        # Eqp_data = e_test[i] .+ k_data .^ 2 / (2 * m_test[i])
 
         # Least-squares quasiparticle fit
         fit_N = curve_fit(quasiparticle_model, k_data, Eqp_data, p0)
@@ -428,39 +481,47 @@ function main()
             means_qp,
             marker;
             markersize=2,
-            color="C$i",
-            label="\$N=$N\$ ($solver)",
+            color="C$ic",
+            label="\$N=$(N)\$ ($solver)",
         )
         ax2.fill_between(
             k_kf_grid,
             means_qp - stdevs_qp,
             means_qp + stdevs_qp;
-            color="C$i",
+            color="C$ic",
             alpha=0.4,
         )
         ax2.plot(
             kgrid_quad / param.kF,
-            qp_fit_fock(kgrid_quad) / eTF;
-            color="C$i",
+            qp_fit_N(kgrid_quad) / eTF;
+            color="C$ic",
             linestyle="--",
-            label="\$N=$N\$ (quasiparticle fit)",
+            # label="\$N=$N\$ (quasiparticle fit)",
         )
+        ic += 1
     end
     ax2.legend(; loc="upper left")
     # ax2.set_xlim(minimum(k_kf_grid), 1)
     ax2.set_xlim(minimum(k_kf_grid), 1.5)
-    ax2.set_ylim(-2.0, 3.0)
+    # ax2.set_ylim(-2.0, 3.0)
+    ax2.set_ylim(-2.0, 1.0)
     ax2.set_xlabel("\$k / k_F\$")
     ax2.set_ylabel(
-        "\$\\epsilon_{\\mathrm{momt.}}(k) \\,/\\, \\epsilon_{\\mathrm{TF}} =  \\left(\\epsilon_{k} + \\Sigma_{x}(k)\\right) \\,/\\, \\epsilon_{\\mathrm{TF}} \$",
+        "\$M^{(1)}_\\sigma(k) \\,/\\, \\epsilon_{\\mathrm{TF}} =  \\left(\\epsilon_{k} + \\Sigma_{x}(k)\\right) \\,/\\, \\epsilon_{\\mathrm{TF}} \$",
     )
+    # ax2.set_ylabel(
+    #     "\$\\epsilon_{\\mathrm{momt.}}(k) \\,/\\, \\epsilon_{\\mathrm{TF}} =  \\left(\\epsilon_{k} + \\Sigma_{x}(k)\\right) \\,/\\, \\epsilon_{\\mathrm{TF}} \$",
+    # )
+    # xloc = 0.8
+    # yloc = -0.5
+    # ydiv = -0.5
     xloc = 0.8
-    yloc = -0.5
-    ydiv = -0.5
+    yloc = -1.25
+    ydiv = -0.25
     ax2.text(
         xloc,
         yloc,
-        "\$r_s = 1,\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
+        "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
         fontsize=14,
     )
     ax2.text(

@@ -24,7 +24,7 @@ function main()
     # Composite observable; measure all non-local moments together
     settings = Settings{CompositeObservable}(
         c1nl_ueg;
-        min_order=3,  # TODO: special-purpose integrator for (2,0,0) partition
+        min_order=5,
         max_order=5,
         verbosity=quiet,
         expand_bare_interactions=false,
@@ -36,10 +36,11 @@ function main()
     # UEG parameters for MC integration
     param = ParaMC(;
         order=settings.max_order,
-        rs=1.0,
+        rs=2.0,
         beta=40.0,
-        mass2=1.0,
+        mass2=0.4,
         isDynamic=false,
+	isFock=false,
     )
     @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)"
 
@@ -64,7 +65,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 5e11
+    neval = 5e10
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -108,7 +109,7 @@ function main()
     end
 
     # Distinguish results with different counterterm schemes
-    ct_string = (renorm_mu || renorm_lambda) ? "with_ct" : ""
+    ct_string = (renorm_mu || renorm_lambda) ? "_with_ct" : ""
     if renorm_mu
         ct_string *= "_mu"
     end
@@ -121,7 +122,7 @@ function main()
         savename =
             "results/data/c1nl_n=$(param.order)_rs=$(param.rs)_" *
             "beta_ef=$(param.beta)_lambda=$(param.mass2)_" *
-            "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)"
+            "neval=$(neval)_$(intn_str)$(solver)$(ct_string)"
         jldopen("$savename.jld2", "a+"; compress=true) do f
             key = "$(short(param))"
             if haskey(f, key)

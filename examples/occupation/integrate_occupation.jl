@@ -228,7 +228,8 @@ function main()
     end
 
     # Total loop order N
-    orders = [0, 1, 2]
+    # orders = [0, 1, 2]
+    orders = [3]
     max_order = maximum(orders)
     sort!(orders)
 
@@ -238,7 +239,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 1e10
+    neval = 5e10
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -250,9 +251,9 @@ function main()
     # UEG parameters for MC integration
     param = ParaMC(;
         order=max_order,
-        rs=1.0,
+        rs=2.0,
         beta=40.0,
-        mass2=1.0,
+        mass2=0.4,
         isDynamic=false,
         isFock=isFock,  # remove Fock insertions
     )
@@ -315,7 +316,7 @@ function main()
     )
 
     # Distinguish results with different counterterm schemes
-    ct_string = (renorm_mu || renorm_lambda) ? "with_ct" : ""
+    ct_string = (renorm_mu || renorm_lambda) ? "_with_ct" : ""
     if renorm_mu
         ct_string *= "_mu"
     end
@@ -330,7 +331,7 @@ function main()
     if !isnothing(res)
         savename =
             "results/data/occupation_n=$(param.order)_rs=$(param.rs)_beta_ef=$(param.beta)_" *
-            "lambda=$(param.mass2)_neval=$(neval)_$(solver)_$(ct_string)"
+            "lambda=$(param.mass2)_neval=$(neval)_$(solver)$(ct_string)"
         jldopen("$savename.jld2", "a+"; compress=true) do f
             key = "$(UEG.short(param))"
             if haskey(f, key)

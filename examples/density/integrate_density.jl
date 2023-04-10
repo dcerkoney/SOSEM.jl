@@ -279,8 +279,7 @@ function main()
     end
 
     # Total loop order N
-    # orders = [0, 1, 2, 3]
-    orders = [3]
+    orders = [0, 1, 2, 3]
     max_order = maximum(orders)
     sort!(orders)
 
@@ -300,12 +299,11 @@ function main()
     isFock = false
 
     # Do we set green4 to zero for benchmarking?
-    no_green4 = true
+    no_green4 = false
     no_green4_str = no_green4 ? "_no_green4" : ""
 
     # Optionally give specific partition(s) to build
-    build_partitions = [(2, 0, 1)]
-    # build_partitions = nothing
+    build_partitions = nothing
     partn_string = ""
     if isnothing(build_partitions) == false
         for P in build_partitions
@@ -316,7 +314,7 @@ function main()
     # UEG parameters for MC integration
     param = ParaMC(;
         order=max_order,
-        rs=1.0,
+        rs=5.0,
         beta=40.0,
         mass2=1.0,
         isDynamic=false,

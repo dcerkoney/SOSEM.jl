@@ -107,7 +107,7 @@ function measure(vars, obs, weights, config)
     iT = vars[4][1]  # ExtT bin index
     # Measure the weight of each partition
     for o in 1:(config.N)
-        obs[o][ik] += weights[o]
+        obs[o][ik, iT] += weights[o]
     end
     return
 end
@@ -351,7 +351,7 @@ function main()
 
     # ... 
 
-    # Build diagram/expression trees for the polarization to order
+    # Build diagram/expression trees for the pe from local noiselarization to order
     # ξᴺ in the renormalized perturbation theory (includes CTs in μ and λ)
     partitions, diagparams, diagtrees, exprtrees = build_poln_with_ct(orders)
 

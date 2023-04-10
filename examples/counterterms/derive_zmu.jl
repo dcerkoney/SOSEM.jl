@@ -14,24 +14,9 @@ end
 
 # Physical params matching data for SOSEM observables
 order = [3]  # C^{(1)}_{N≤5} includes CTs up to 3rd order
-
-# Grid-search 1: rs, mass2
-# rs = LinRange(0.1, 2.0, 5)
-rs = [1.0]
-#mass2 = LinRange(1.0, 5.0, 5)
-mass2 = [1.0]
-beta = [100.0]
-# beta = [25.0, 40.0, 80.0]
-
-# Grid-search 2: rs, beta
-#rs = LinRange(0.1, 2.0, 5)
-#mass2 = [<lambda_opt>]
-#beta = [20.0, 40.0, 100.0]
-
-# Post-search: finer, wider rs mesh at chosen beta and mass2
-#rs = LinRange(0.1, 3.0, 21)
-#mass2 = [<lambda_opt>]
-#beta = [<beta_opt>]
+rs = [5.0]
+mass2 = [0.1375]
+beta = [40.0]
 
 # Enable/disable interaction and chemical potential counterterms
 renorm_mu = true
@@ -41,7 +26,7 @@ renorm_lambda = true
 isFock = false
 
 # Distinguish results with different counterterm schemes
-ct_string = (renorm_mu || renorm_lambda) ? "with_ct" : ""
+ct_string = (renorm_mu || renorm_lambda) ? "_with_ct" : ""
 if renorm_mu
     ct_string *= "_mu"
 end
@@ -49,7 +34,7 @@ if renorm_lambda
     ct_string *= "_lambda"
 end
 
-const filename = "data_Z_$(ct_string).jld2"
+const filename = "data_Z$(ct_string).jld2"
 const parafilename = "para.csv"
 
 function zfactor(data, β)
@@ -67,17 +52,17 @@ function process(datatuple, isSave)
     printstyled(UEG.short(para); color=:yellow)
     println()
 
-    for p in sort([k for k in keys(data)])
-        println("$p: μ = $(mu(data[p]))   z = $(zfactor(data[p], para.β))")
-    end
-
     _mu = Dict()
     for (p, val) in data
-        _mu[p] = mu(val)
+        _mu[p] = mu(val) / (factorial(p[2]) * factorial(p[3]))
     end
     _z = Dict()
     for (p, val) in data
-        _z[p] = zfactor(val, para.β)
+        _z[p] = zfactor(val, para.β) / (factorial(p[2]) * factorial(p[3]))
+    end
+
+    for p in sort([k for k in keys(data)])
+        println("$p: μ = $(mu(data[p]))   z = $(zfactor(data[p], para.β))")
     end
 
     dzi, _, _ = CounterTerm.sigmaCT(para.order, _mu, _z; isfock=isFock, verbose=1)

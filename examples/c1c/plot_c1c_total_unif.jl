@@ -29,7 +29,7 @@ function main()
 
     neval34 = 1e10
     neval5 = 1e9
-    neval = min(neval34, neval5)
+    neval = max(neval34, neval5)
     min_order = 3
     max_order = 5
     min_order_plot = 2
@@ -279,7 +279,7 @@ function main()
     ax.text(
         xloc,
         yloc,
-        "\$r_s = 1,\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
+        "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
         fontsize=14,
     )
     ax.text(

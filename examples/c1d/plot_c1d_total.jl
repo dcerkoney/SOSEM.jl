@@ -23,18 +23,21 @@ function main()
 
     rs = 1.0
     beta = 40.0
-    mass2 = 2.0
+    mass2 = 1.0
     solver = :vegasmc
     expand_bare_interactions = false
 
-    neval34 = 1e10
-    neval5 = 2e10
-    neval = min(neval34, neval5)
-    min_order = 3
-    max_order = 5
+    neval34 = 5e10
+    neval5 = 5e10
+    neval = max(neval34, neval5)
+
+    # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
+    n_min = 2  # True minimal loop order for this observable
+    min_order = 2
+    max_order = 2
     min_order_plot = 2
-    max_order_plot = 5
-    @assert max_order ≥ 3
+    max_order_plot = 2
+    # @assert max_order ≥ 3
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -57,7 +60,7 @@ function main()
     end
 
     # Distinguish results with different counterterm schemes
-    ct_string = (renorm_mu || renorm_lambda) ? "with_ct" : ""
+    ct_string = (renorm_mu || renorm_lambda) ? "_with_ct" : ""
     renorm_string = (renorm_mu && renorm_mu_lo_ex) ? "_lo_mu_manual" : ""
     if renorm_mu
         ct_string *= "_mu"
@@ -77,7 +80,7 @@ function main()
     # filename =
     #     "results/data/c1d_n=$(max_order)_rs=$(rs)_" *
     #     "beta_ef=$(beta)_lambda=$(mass2)_" *
-    #     "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)"
+    #     "neval=$(neval)_$(intn_str)$(solver)$(ct_string)"
     # settings, param, kgrid, partitions, res = jldopen("$filename.jld2", "a+") do f
     #     key = "$(UEG.short(plotparam))"
     #     return f[key]
@@ -91,26 +94,27 @@ function main()
     end
     filename =
         "results/data/rs=$(rs)_beta_ef=$(beta)_" *
-        "lambda=$(mass2)_$(intn_str)$(solver)_$(ct_string)"
-    f = jldopen("$filename.jld2", "r")
+        "lambda=$(mass2)_$(intn_str)$(solver)$(ct_string)"
+    f = jldopen("$filename.jld2", "a+"; compress=true)
     key = "c1d_n_min=$(min_order)_n_max=$(max_together)_neval=$(neval34)"
     res = f["$key/res"]
     settings = f["$key/settings"]
     param = f["$key/param"]
     kgrid = f["$key/kgrid"]
     partitions = f["$key/partitions"]
-    close(f)
-    # 5th order 
-    filename =
-        "results/data/rs=$(rs)_beta_ef=$(beta)_" *
-        "lambda=$(mass2)_$(intn_str)$(solver)_$(ct_string)"
-    f5 = jldopen("$filename.jld2", "r")
-    key5 = "c1d_n_min=$(max_order)_n_max=$(max_order)_neval=$(neval5)"
-    res5 = f5["$(key5)/res"]
-    settings5 = f5["$(key5)/settings"]
-    param5 = f5["$(key5)/param"]
-    kgrid5 = f5["$(key5)/kgrid"]
-    partitions5 = f5["$(key5)/partitions"]
+    if max_order == 5
+        # 5th order 
+        filename =
+            "results/data/rs=$(rs)_beta_ef=$(beta)_" *
+            "lambda=$(mass2)_$(intn_str)$(solver)$(ct_string)"
+        f5 = jldopen("$filename.jld2", "a+"; compress=true)
+        key5 = "c1d_n_min=$(max_order)_n_max=$(max_order)_neval=$(neval5)"
+        res5 = f5["$(key5)/res"]
+        settings5 = f5["$(key5)/settings"]
+        param5 = f5["$(key5)/param"]
+        kgrid5 = f5["$(key5)/kgrid"]
+        partitions5 = f5["$(key5)/partitions"]
+    end
     # Close the JLD2 file
     close(f)
 
@@ -122,7 +126,9 @@ function main()
 
     # Get dimensionless k-grid (k / kF)
     k_kf_grid = kgrid / param.kF
-    k_kf_grid5 = kgrid5 / param.kF
+    if max_order == 5
+        k_kf_grid5 = kgrid5 / param.kF
+    end
 
     # Load C⁽¹ᵈ⁾₂ quadrature results and interpolate on k_kf_grid
     rs_quad = 1.0
@@ -142,9 +148,16 @@ function main()
 
     # Convert results to a Dict of measurements at each order with interaction counterterms merged
     data = UEG_MC.restodict(res, partitions)
+    for (k, v) in data
+        data[k] = v / (factorial(k[2]) * factorial(k[3]))
+    end
+
     # Add 5th order results to data dict
     if max_order == 5
         data5 = UEG_MC.restodict(res5, partitions5)
+        for (k, v) in data5
+            data5[k] = v / (factorial(k[2]) * factorial(k[3]))
+        end
         merge!(data, data5)
     end
     merged_data = CounterTerm.mergeInteraction(data)
@@ -158,7 +171,16 @@ function main()
     # Get total data
     if renorm_mu
         # Reexpand merged data in powers of μ
-        z, μ = UEG_MC.load_z_mu(param)
+        ct_filename = "examples/counterterms/data_Z$(ct_string).jld2"
+        z, μ = UEG_MC.load_z_mu(param; ct_filename=ct_filename)
+        # Add Taylor factors to CT data
+        for (p, v) in z
+            z[p] = v / (factorial(p[2]) * factorial(p[3]))
+        end
+        for (p, v) in μ
+            μ[p] = v / (factorial(p[2]) * factorial(p[3]))
+        end
+        # δz, δμ = CounterTerm.sigmaCT(2, μ, z; verbose=1)  # TODO: Debug 3rd order CTs
         δz, δμ = CounterTerm.sigmaCT(max_order - 2, μ, z; verbose=1)
         println("Computed δμ: ", δμ)
         δμ1_exact = UEG_MC.delta_mu1(param)  # = ReΣ₁[λ](kF, 0)
@@ -242,7 +264,7 @@ function main()
     if save
         savename =
             "results/data/rs=$(param.rs)_beta_ef=$(param.beta)_" *
-            "lambda=$(param.mass2)_$(intn_str)$(solver)_$(ct_string)"
+            "lambda=$(param.mass2)_$(intn_str)$(solver)$(ct_string)"
         f = jldopen("$savename.jld2", "a+"; compress=true)
         # NOTE: no bare result for c1b observable (accounted for in c1b0)
         for N in min_order_plot:max_order
@@ -275,7 +297,7 @@ function main()
             marker;
             markersize=2,
             color="C$i",
-            label="\$N=$N\$ ($solver)",
+            label="\$N=$(N)\$ ($solver)",
         )
         ax.fill_between(k_kf_grid, means - stdevs, means + stdevs; color="C$i", alpha=0.4)
         if !renorm_mu_lo_ex && max_order <= 3 && N == 3
@@ -284,7 +306,7 @@ function main()
                 Measurements.value.(c1d3_manual);
                 color="r",
                 linestyle="--",
-                label="\$N=3\$ (manual, vegasmc)",
+                label="\$N=1\$ (manual, vegasmc)",
             )
         end
     end
@@ -298,13 +320,17 @@ function main()
     # xloc = 0.5
     # yloc = -0.075
     # ydiv = -0.009
-    xloc = 1.75
+
+    # xloc = 1.6
+    # yloc = 2.0
+    # ydiv = -0.3
+    xloc = 1.6
     yloc = 0.9
     ydiv = -0.095
     ax.text(
         xloc,
         yloc,
-        "\$r_s = 1,\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
+        "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
         fontsize=14,
     )
     ax.text(
@@ -320,7 +346,7 @@ function main()
         "\${\\epsilon}_{\\mathrm{TF}}\\equiv\\frac{\\hbar^2 q^2_{\\mathrm{TF}}}{2 m_e}=2\\pi\\mathcal{N}_F\$ (a.u.)";
         fontsize=12,
     )
-    plt.title("Using fixed bare Coulomb interactions \$V_1\$, \$V_2\$")
+    # plt.title("Using fixed bare Coulomb interactions \$V_1\$, \$V_2\$")
     # plt.title(
     #     "Using re-expanded Coulomb interactions \$V_1[V_\\lambda]\$, \$V_2[V_\\lambda]\$",
     # )
@@ -328,7 +354,7 @@ function main()
     fig.savefig(
         "results/c1d/c1d_N=$(max_order_plot)_rs=$(param.rs)_" *
         "beta_ef=$(param.beta)_lambda=$(param.mass2)_" *
-        "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)" *
+        "neval=$(neval)_$(intn_str)$(solver)$(ct_string)" *
         "$(renorm_string)_total.pdf",
     )
     plt.close("all")
