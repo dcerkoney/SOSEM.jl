@@ -58,13 +58,6 @@ function main()
     # Remove Fock insertions?
     isFock = false
 
-    # Plot benchmark results?
-    benchmark = false
-
-    # Set green4 to zero for benchmarking?
-    no_green4 = false
-    no_green4_str = no_green4 ? "_no_green4" : ""
-
     # Ignore measured mu/lambda partitions?
     fix_mu = false
     fix_lambda = false
@@ -128,20 +121,6 @@ function main()
         println("done!")
     end
 
-    # Read in benchmark data
-    benchmark_dfs = DataFrame[]
-    for order in 2:3
-        data, header = readdlm(
-            "results/occupation/benchmark/Nk_beta40.0_rs1.0_ms1.0_o$(order).txt",
-            ' ';
-            header=true,
-        )
-        push!(benchmark_dfs, DataFrame(data, vec(header)))
-    end
-    bm_kgrid, bm_occupation_0, bm_occupation_0_err = eachcol(benchmark_dfs[1])
-    bm_kgrid, bm_occupation_2, bm_occupation_2_err = eachcol(benchmark_dfs[2])
-    bm_k_kf_grid = bm_kgrid / param.kF
-
     # Get dimensionless k-grid (k / kF) and index corresponding to the Fermi energy
     k_kf_grid = kgrid / param.kF
     if max_order == 3
@@ -151,8 +130,10 @@ function main()
     # Convert results to a Dict of measurements at each order with interaction counterterms merged
     data = UEG_MC.restodict(res, partitions)
     # NOTE: Old data for orders 0, 1, and 2 at rs = 1 has Taylor factors already present in eval!
-    for (k, v) in data
-        data[k] = v / (factorial(k[2]) * factorial(k[3]))
+    if loadparam.rs != 1.0
+        for (k, v) in data
+            data[k] = v / (factorial(k[2]) * factorial(k[3]))
+        end
     end
     # Add 5th order results to data dict
     if max_order == 3
@@ -216,14 +197,6 @@ function main()
         worst_score = argmax(abs, stdscores)
         println("Worst standard score for N=0 (measured): $worst_score")
         # println("Scores:\n$stdscores")
-        if isFock
-            bm_occupation_2_meas = measurement.(bm_occupation_0, bm_occupation_0_err)
-            stdscores = stdscore.(bm_occupation_2_meas, bare_occupation_exact)
-            worst_score = argmax(abs, stdscores)
-            println("Worst standard score for N=0 (benchmark): $worst_score")
-            # println("Scores:\n$stdscores")
-            @assert worst_score ≤ 10
-        end
     end
 
     # Reexpand merged data in powers of μ
@@ -257,7 +230,7 @@ function main()
     δz, δμ = CounterTerm.sigmaCT(max_order, μ, z; isfock=isFock, verbose=1)
 
     println("Computed δμ: ", δμ)
-    # δμ[2] = measurement("-0.08196(8)")  # Use benchmark dMu2 value
+    # δμ[2] = measurement("-0.08196(8)")  # Replace δμ[2] with benchmark dMu2 value
     occupation = UEG_MC.chemicalpotential_renormalization_green(
         merged_data,
         δμ;
@@ -329,6 +302,8 @@ function main()
     # Bare/Fock occupation on dense grid for plotting
     kgrid_fine = param.kF * np.linspace(0.0, 3.0; num=600)
     k_kf_grid_fine = np.linspace(0.0, 3.0; num=600)
+    ϵk_fine = @. kgrid_fine^2 / (2 * param.me) - param.μ
+    fe_fine = -Spectral.kernelFermiT.(-1e-8, ϵk_fine, param.β)  # f(ϵk)
 
     if param.isFock
         fock =
@@ -340,34 +315,38 @@ function main()
     end
     bare_occupation_fine = -Spectral.kernelFermiT.(-1e-8, ϵk, param.β)
 
-    if benchmark && isFock
-        # Get standard scores vs benchmark
-        stdscores = stdscore.(occupation_total[2], bm_occupation_2)
-        worst_score = argmax(abs, stdscores)
-        println(stdscores)
-        println(
-            "Worst standard score for N=2 with Fock renorm " *
-            "(measured vs benchmark mean): $worst_score",
-        )
-    end
-
     # Plot the occupation number for each aggregate order
     fig, ax = plt.subplots()
     ax.axvline(1.0; linestyle="--", linewidth=1, color="gray")
+
     # Shade the thermal broadening region of the Fermi function
     # NOTE: the FWHM of the Fermi distribution is ~ 3.53 kB T
     # fermi_hwhm = 3.53 / (2 * param.β * param.kF)  # HWHM in units of kF
-    fermi_hwhm = 3.53 / (2 * param.beta)  # HWHM in units of kF
-    ax.axvspan(
-        1 - fermi_hwhm,
-        1 + fermi_hwhm;
-        color="0.9",
-        label="\$\\mathrm{FWHM}(f_{k\\sigma}) \\approx 3.53 T / k_F\$",
-    )
+    # fermi_hwhm = 3.53 / (2 * param.beta)  # HWHM in units of kF
+
+    # fermi_hwhm = log((sqrt(2) + 1) / (sqrt(2) - 1)) / param.β  # HWHM of -f'(ϵ) = ln((√2 + 1) / (√2 - 1)) / β
+    # We obtain k_± via ϵ_± = ϵF ± Δ_HWHM = k^2_± / 2m
+    # k_minus = param.kF * sqrt(1 - fermi_hwhm / param.EF)  # k₋ = kF √(1 - Δ_HWHM / ϵF)
+    # k_plus = param.kF * sqrt(1 + fermi_hwhm / param.EF)   # k₊ = kF √(1 + Δ_HWHM / ϵF)
+    # TODO: Why is ~4 HWHM necessary here? Check for errors!
+    # k_minus = param.kF * sqrt(1 - 4fermi_hwhm / param.EF)  # k₋ = kF √(1 - Δ_HWHM / ϵF)  
+    # k_plus = param.kF * sqrt(1 + 4fermi_hwhm / param.EF)   # k₊ = kF √(1 + Δ_HWHM / ϵF)  
+    # ax.axvspan(
+    #     k_minus / param.kF,
+    #     k_plus / param.kF;
+    #     # 1 - fermi_hwhm,
+    #     # 1 + fermi_hwhm;
+    #     color="0.9",
+    #     label="\$\\mathrm{FWHM}_{k}(f_{k\\sigma})\$",
+    # )
+
     if min_order_plot == 0
         # Include bare occupation fₖ in plot
-        # ax.plot(k_kf_grid_fine, bare_occupation_fine, "k"; label="\$N=0\$ (exact)")
+        ax.plot(k_kf_grid_fine, bare_occupation_fine, "k"; label="\$N=0\$ (exact)")
     end
+
+    ikFplus = searchsortedfirst(k_kf_grid, 1.0)  # Index where k ⪆ kF
+    ikFminus = ikFplus - 1
     ic = 1
     colors = ["C0", "C1", "C2", "C3"]
     # colors = ["orchid", "cornflowerblue", "turquoise", "chartreuse"]
@@ -375,46 +354,55 @@ function main()
     for (i, N) in enumerate(min_order:max_order_plot)
         # N == 0 && continue
         isFock && N == 1 && continue
-        # Plot benchmark data
-        if benchmark && isFock && max_order_plot ≥ 0 && i == 1
-            ax.plot(
-                bm_k_kf_grid,
-                bm_occupation_0,
-                "--";
-                markersize=2,
-                color="C$ic",
-                label="\$N=0\$ (benchmark)",
-            )
-            ax.fill_between(
-                bm_k_kf_grid,
-                bm_occupation_0 - bm_occupation_0_err,
-                bm_occupation_0 + bm_occupation_0_err;
-                color="C$ic",
-                alpha=0.4,
-            )
-            ic += 1
-        end
-        if benchmark && isFock && max_order_plot ≥ 2 && i == 3
-            ax.plot(
-                bm_k_kf_grid,
-                bm_occupation_2,
-                "--";
-                markersize=2,
-                color="C$ic",
-                label="\$N=2\$ (benchmark)",
-            )
-            ax.fill_between(
-                bm_k_kf_grid,
-                bm_occupation_2 - bm_occupation_2_err,
-                bm_occupation_2 + bm_occupation_2_err;
-                color="C$ic",
-                alpha=0.4,
-            )
-            ic += 1
-        end
         # Plot measured data
         means = Measurements.value.(occupation_total[N])
         stdevs = Measurements.uncertainty.(occupation_total[N])
+
+        # c fixed to value at kF. if not on-grid, use midpoint of the nearest two points
+        # (linear interpolation, where the kgrid is assumed symmetrical about k = kF)
+        means_kF = (means[ikFplus] + means[ikFminus]) / 2.0  # n(kF) ≈ (n(kF⁻) + n(kF⁺)) / 2
+        # ξ⋆(k) & f(ξ⋆(k)) on-grid, ξk = ϵ⋆(k) - μ⋆
+        @. ξstar_k(k, p) = @. (k^2 - param.kF^2) / (2 * p[2])
+        @. fξstar_k(k, p) = @. -Spectral.kernelFermiT.(-1e-8, ξstar_k(k, p), param.β)
+        # n_qp(Z, m⋆) = hat(n)(kF) - Z/2 + Zf(k^2 / 2m⋆ - kF^2 / 2m⋆), and p = (Z, m⋆)
+        @. model_Z_mstar(k, p) = means_kF + p[1] * (fξstar_k(k, p) - 1 / 2)
+        # Fix m⋆ value to K.H. & K.C. data 
+        if rs == 1.0 || rs == 2.0
+            if rs == 1.0
+                mstar_khkc = 0.87
+            elseif rs == 2.0
+                mstar_khkc = 0.80
+            end
+            @. ξstar_khkc(k) = @. (k^2 - param.kF^2) / (2 * mstar_khkc)
+            @. fξstar_khkc(k) = @. -Spectral.kernelFermiT.(-1e-8, ξstar_khkc(k), param.β)
+            @. model_Z(k, p) = means_kF + p[1] * (fξstar_khkc(k) - 1 / 2)
+        end
+        # Initial parameters for curve fitting
+        p0_Z_mstar = [1.0, 1.0]  # E₀=0 and m=mₑ
+        p0_Z       = [1.0]        # m=mₑ
+
+        # Gridded data for k < kF
+        k_data = kgrid[kgrid .< param.kF]
+        Eqp_data = means_qp[kgrid .< param.kF] * eTF
+
+        # Least-squares quasiparticle fit
+        fit_N = curve_fit(quasiparticle_model_with_zexp, k_data, Eqp_data, p0)
+        qp_fit_N(k) = quasiparticle_model_with_zexp(k, fit_N.param)
+        # Coefficients of determination (r²)
+        r2 = rsquared(k_data, Eqp_data, qp_fit_N(k_data), fit_N)
+        # Fermi-liquid parameters (Z, m⋆) (on the Fermi surface k = kF) from quasiparticle fit
+        println("(N=$N): (Z, m⋆) ≈ $(fit_N.param), r2=$r2")
+
+        # Another LSQ fit, but using K.H. & K.C. data for m⋆/m at rs = 1, 2
+        if rs == 1.0 || rs == 2.0
+            fit_N = curve_fit(quasiparticle_model_with_zexp, k_data, Eqp_data, p0)
+            qp_fit_N(k) = quasiparticle_model_with_zexp(k, fit_N.param)
+            # Coefficients of determination (r²)
+            r2 = rsquared(k_data, Eqp_data, qp_fit_N(k_data), fit_N)
+            # Fermi-liquid parameters (Z, m⋆) (on the Fermi surface k = kF) from quasiparticle fit
+            println("(N=$N): m⋆ ≡ m⋆_KHKC = $mstar_khkc, Z ≈ $(fit_N.param), r2=$r2")
+        end
+
         marker = "o-"
         ax.plot(
             k_kf_grid,
@@ -435,51 +423,53 @@ function main()
             alpha=0.4,
         )
         # Extrapolate Z-factor to kF⁻ & kF⁺ at the maximum order
-        if N == max_order_plot
-            # Grid data outside of thermal broadening window
-            k_kf_grid_lower = k_kf_grid[k_kf_grid .≤ 1 - fermi_hwhm]
-            k_kf_grid_upper = k_kf_grid[k_kf_grid .≥ 1 + fermi_hwhm]
-            # k_kf_grid_lower_range = range
-            # k_kf_grid_upper_range = range
-            zfactor_lower = means[k_kf_grid .≤ 1 - fermi_hwhm]
-            zfactor_upper = means[k_kf_grid .≥ 1 + fermi_hwhm]
+        if N == max_order_plot || N == 0
 
-            # Interpolate Z-factor curves below and above kF
-            zfactor_lower_interp = linear_interpolation(
-                k_kf_grid_lower,
-                zfactor_lower;
-                extrapolation_bc=Line(),
-            )
-            zfactor_upper_interp = linear_interpolation(
-                k_kf_grid_upper,
-                zfactor_upper;
-                extrapolation_bc=Line(),
-            )
-            # TODO: need to do this the hard way for cubic interp :(
-            # zfactor_lower_interp = cubic_spline_interpolation(k_kf_grid_lower, zfactor_lower; extrapolation_bc=Line())
-            # zfactor_upper_interp = cubic_spline_interpolation(k_kf_grid_upper, zfactor_upper; extrapolation_bc=Line())
+            # # Grid data outside of thermal broadening window
+            # k_kf_grid_lower = k_kf_grid[k_kf_grid .≤ k_minus / param.kF]
+            # k_kf_grid_upper = k_kf_grid[k_kf_grid .≥ k_plus / param.kF]
+            # zfactor_lower = means[k_kf_grid .≤ k_minus / param.kF]
+            # zfactor_upper = means[k_kf_grid .≥ k_plus / param.kF]
 
-            # Plot the interpolated data with extrapolation to kF⁻ & kF⁺
-            k_kf_lower_fine = LinRange(0.0, 1.0, 200)
-            k_kf_upper_fine = LinRange(1.0, 2.0, 200)
-            zfactor_lower_fine = zfactor_lower_interp.(k_kf_lower_fine)
-            zfactor_upper_fine = zfactor_upper_interp.(k_kf_upper_fine)
-            zfactor_estimate = zfactor_lower_interp(1) - zfactor_upper_interp(1)  # n(kF⁻) - n(kF⁺)
-            println(zfactor_estimate)
-            ax.plot(k_kf_lower_fine, zfactor_lower_fine; linestyle="-", color="k")
-            ax.plot(
-                k_kf_upper_fine,
-                zfactor_upper_fine;
-                linestyle="-",
-                color="k",
-                label="\$N=$N\$ (\$T=0\$ extrapolation)",
-            )
-            ax.text(
-                0.25,
-                0.6,
-                "\$Z \\approx $(round(zfactor_estimate; digits=4))\$";
-                fontsize=14,
-            )
+            # # Interpolate Z-factor curves below and above kF
+            # zfactor_lower_interp = linear_interpolation(
+            #     k_kf_grid_lower,
+            #     zfactor_lower;
+            #     extrapolation_bc=Line(),
+            # )
+            # zfactor_upper_interp = linear_interpolation(
+            #     k_kf_grid_upper,
+            #     zfactor_upper;
+            #     extrapolation_bc=Line(),
+            # )
+            # # TODO: need to do this the hard way for cubic interp
+            # # zfactor_lower_interp = cubic_spline_interpolation(k_kf_grid_lower, zfactor_lower; extrapolation_bc=Line())
+            # # zfactor_upper_interp = cubic_spline_interpolation(k_kf_grid_upper, zfactor_upper; extrapolation_bc=Line())
+
+            # # Plot the interpolated data with T=0 extrapolation to kF⁻ & kF⁺
+            # k_kf_lower_fine = LinRange(0.0, 1.0, 200)
+            # k_kf_upper_fine = LinRange(1.0, 2.0, 200)
+            # zfactor_lower_fine = zfactor_lower_interp.(k_kf_lower_fine)
+            # zfactor_upper_fine = zfactor_upper_interp.(k_kf_upper_fine)
+            # zfactor_estimate = zfactor_lower_interp(1) - zfactor_upper_interp(1)  # n(kF⁻) - n(kF⁺)
+            # println("Z-factor estimate: $zfactor_estimate")
+            # ax.plot(k_kf_lower_fine, zfactor_lower_fine; linestyle="-", color="k")
+            # ax.plot(
+            #     k_kf_upper_fine,
+            #     zfactor_upper_fine;
+            #     linestyle="-",
+            #     color="k",
+            #     label="\$N=$N\$ (\$T=0\$ extrapolation)",
+            # )
+            # ax.text(
+            #     # 0.25,
+            #     0.125,
+            #     # 0.6,
+            #     0.6 - (N / 30.0),
+            #     # "\$Z \\approx $(round(zfactor_estimate; digits=4))\$";
+            #     "\$Z \\approx $(round(zfactor_estimate; digits=4))\$ (\$N=$N\$)";
+            #     fontsize=14,
+            # )
         end
         ic += 1
     end
@@ -526,13 +516,11 @@ function main()
         xloc,
         yloc + ydiv,
         "\$\\lambda = $(mass2)\\epsilon_{\\mathrm{Ry}},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)}\$";
-        # "\$\\lambda = \\frac{\\epsilon_{\\mathrm{Ry}}}{10},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)},\$";
         fontsize=14,
     )
     fig.tight_layout()
-    dirstring = isFock ? "results/occupation/benchmark/" : "results/occupation/"
     fig.savefig(
-        dirstring *
+        "results/occupation/" *
         "occupation_N=$(max_order_plot)_rs=$(param.rs)_" *
         "beta_ef=$(param.beta)_lambda=$(param.mass2)_neval=$(neval)_$(solver)_$(ct_string)$(fix_string).pdf",
     )
