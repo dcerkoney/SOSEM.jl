@@ -60,6 +60,10 @@ function eval(id::BareGreenId, K, _, varT, p::ParaMC)
         green *= Spectral.kernelFermiT_dω2(τ, ϵ, β)
     elseif order == 3
         green *= -Spectral.kernelFermiT_dω3(τ, ϵ, β)
+    elseif order == 4
+        return Spectral.kernelFermiT_dω4(τ, ϵ, β)
+    elseif order == 5
+        return -Spectral.kernelFermiT_dω5(τ, ϵ, β)
     else
         @todo
     end
