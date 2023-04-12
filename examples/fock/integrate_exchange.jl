@@ -273,7 +273,7 @@ function main()
 
     # Total loop order N (Fock self-energy is N = 1)
     # orders = [1, 2, 3]
-    orders = [4]
+    orders = [5]
     max_order = maximum(orders)
 
     # Settings
@@ -282,7 +282,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 5e10
+    neval = 1e6
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -291,9 +291,9 @@ function main()
     # UEG parameters for MC integration
     param = ParaMC(;
         order=max_order,
-        rs=5.0,
+        rs=1.0,
         beta=40.0,
-        mass2=0.1375,
+        mass2=1.0,
         isDynamic=false,
         isFock=false,
     )

@@ -26,16 +26,16 @@ function main()
         cd(ENV["SOSEM_HOME"])
     end
 
-    rs = 1.0
-    # rs = 2.0
+    # rs = 1.0
+    rs = 2.0
     beta = 40.0
-    mass2 = 1.0
-    # mass2 = 0.4
+    # mass2 = 1.0
+    mass2 = 0.4
     solver = :vegasmc
 
     # Number of evals
-    neval12 = 1e10
-    # neval12 = 5e10
+    # neval12 = 1e10
+    neval12 = 5e10
     neval3 = 5e10
     neval = max(neval12, neval3)
 
@@ -47,6 +47,9 @@ function main()
 
     # Save total results
     save = true
+
+    # Add a zoom-in inset to plot?
+    inset = false
 
     # Distinguish results with fixed vs re-expanded bare interactions
     intn_str = ""
@@ -60,6 +63,9 @@ function main()
 
     # Plot benchmark results?
     benchmark = false
+
+    # Compare with results from EFT_UEG?
+    compare_eft = false
 
     # Set green4 to zero for benchmarking?
     no_green4 = false
@@ -128,6 +134,17 @@ function main()
         println("done!")
     end
 
+    if compare_eft
+        # Load the EFT_UEG data (NOTE: EFT data is already in Dict format!)
+        savename = "results/occupation/data_K$(no_green4_str)"
+        param_eft, tgrid_eft, kgrid_eft, data_eft = jldopen("$savename.jld2", "a+") do f
+            key = "$(UEG.short(loadparam))"
+            return f[key]
+        end
+        println(param_eft)
+        println(data_eft)
+    end
+
     # Read in benchmark data
     benchmark_dfs = DataFrame[]
     for order in 2:3
@@ -162,6 +179,7 @@ function main()
         end
         merge!(data, data3)
     end
+    # data_eft = sort(data_eft)
 
     # Zero out partitions with mu renorm if present (fix mu)
     if renorm_mu == false || fix_mu
@@ -169,6 +187,14 @@ function main()
             if P[2] > 0
                 println("Fixing mu without lambda renorm, ignoring n_k partition $P")
                 data[P] = zero(data[P])
+            end
+        end
+        if compare_eft
+            for P in keys(data_eft)
+                if P[2] > 0
+                    println("Fixing mu without lambda renorm, ignoring n_k partition $P")
+                    data_eft[P] = zero(data_eft[P])
+                end
             end
         end
     end
@@ -180,20 +206,43 @@ function main()
                 data[P] = zero(data[P])
             end
         end
+        if compare_eft
+            for P in keys(data_eft)
+                if P[3] > 0
+                    println("No lambda renorm, ignoring n_k partition $P")
+                    data_eft[P] = zero(data_eft[P])
+                end
+            end
+        end
     end
 
     println(data)
+    # TODO: Fix minus sign bug in integration scripts, (-1) → (-1)^(n_g)
+    #       Here, we add back in the missing factor (-1)^(n_g - 1) in post-processing,
+    #       where n_g = 2 * n_loop + n_μ + 1 for a given partition P = (n_loop, n_μ, n_λ)
     for P in keys(data)
         # Undo extra minus sign factor
         data[P] = -data[P]
+        # n_g = 2P[1] + P[2] + 1
+        # data[P] = (-1)^(n_g - 1) * data[P]
+        # if sum(P) ≤ 1
+        #     println(P)
+        #     data[P] = -data[P]
+        # end
     end
+    # data[(0, 1, 0)] = -data[(0, 1, 0)]
+    # data[(0, 1, 0)] = -data[(0, 1, 0)]
 
     # Zero out double-counted (Fock renormalized) partitions
     if isFock && min_order ≤ 1
         data[(1, 0, 0)] = zero(data[(max_order, 0, 0)])
+        # data[(0, 1, 0)] = zero(data[(max_order, 0, 0)])  # Combines with dMu2, nonzero!
     end
 
     merged_data = CounterTerm.mergeInteraction(data)
+    if compare_eft
+        merged_data_eft = CounterTerm.mergeInteraction(data_eft)
+    end
 
     # Get exact bare/Fock occupation
     if param.isFock
@@ -210,6 +259,12 @@ function main()
     if haskey(merged_data, (0, 0)) == false
         # treat quadrature data as numerically exact
         merged_data[(0, 0)] = [measurement(bare_occupation_exact, 0.0)]
+    end
+    if compare_eft
+        if haskey(merged_data_eft, (0, 0)) == false
+            # treat quadrature data as numerically exact
+            merged_data_eft[(0, 0)] = [measurement(bare_occupation_exact, 0.0)]
+        end
     end
     if min_order == 0
         stdscores = stdscore.(merged_data[(0, 0)], bare_occupation_exact)
@@ -256,6 +311,13 @@ function main()
     end
     δz, δμ = CounterTerm.sigmaCT(max_order, μ, z; isfock=isFock, verbose=1)
 
+    if compare_eft
+        for (k, v) in merged_data_eft
+            println(v)
+            merged_data_eft[k] = vec(v)
+        end
+    end
+
     println("Computed δμ: ", δμ)
     # δμ[2] = measurement("-0.08196(8)")  # Use benchmark dMu2 value
     occupation = UEG_MC.chemicalpotential_renormalization_green(
@@ -264,6 +326,18 @@ function main()
         min_order=0,
         max_order=max_order,
     )
+    if compare_eft
+        occupation_eft = UEG_MC.chemicalpotential_renormalization_green(
+            merged_data_eft,
+            δμ;
+            min_order=0,
+            max_order=max_order,
+        )
+    end
+    # occupation = UEG_MC.RenormMeasType()
+    # occupation[0] = merged_data[(0, 0)]
+    # occupation[2] = merged_data[(2, 0)] + δμ[2] * merged_data[(0, 1)]
+    # occupation[3] = zero(occupation[2])
     occupation_2_manual =
         merged_data[(2, 0)] +
         δμ[1] * merged_data[(1, 1)] +
@@ -291,6 +365,9 @@ function main()
     end
     # Aggregate the full results for Σₓ up to order N
     occupation_total = UEG_MC.aggregate_orders(occupation)
+    if compare_eft
+        occupation_total_eft = UEG_MC.aggregate_orders(occupation_eft)
+    end
 
     println(UEG.paraid(param))
     println(partitions)
@@ -326,10 +403,130 @@ function main()
     plt.rc("text"; usetex=true)
     plt.rc("font"; family="serif")
 
+    # Bare occupation fₖ on dense grid for plotting
+    kgrid_fine = param.kF * LinRange(0.75, 1.25, 500)
+    k_kf_grid_fine = LinRange(0.75, 1.25, 500)
+    ϵk_fine = @. kgrid_fine^2 / (2 * param.me) - param.μ
+    fe_fine = -Spectral.kernelFermiT.(-1e-8, ϵk_fine, param.β)
+    # First derivative of the Fermi function f'(ϵₖ)
+    fpe_fine = -Spectral.kernelFermiT_dω.(-1e-8, ϵk_fine, param.β)
+    fpe_fine_exact = @. param.β * fe_fine * (fe_fine - 1)
+    fppe_fine_exact =
+        @. (param.β^2 / 4) * sech(param.β * ϵk_fine / 2)^2 * tanh.(param.β * ϵk_fine / 2)
+
+    # Fermi function
+    fe_fine = -Spectral.kernelFermiT.(-1e-8, ϵk_fine, param.β)
+    # First derivative of the Fermi function f'(ϵₖ)
+    fpe_fine = -Spectral.kernelFermiT_dω.(-1e-8, ϵk_fine, param.β)
+    # Second derivative of the Fermi function f''(ϵₖ)
+    fppe_fine = -Spectral.kernelFermiT_dω2.(-1e-8, ϵk_fine, param.β)
+    # Third derivative of the Fermi function f'''(ϵₖ)
+    fpppe_fine = -Spectral.kernelFermiT_dω3.(-1e-8, ϵk_fine, param.β)
+
+    # g₁(k, 0⁻) (= -δn₁(kσ)) = f'(ξₖ) (Σ^λ_F(k_F) - Σ^λ_F(k))
+    first_order_exact = @. fpe_fine * (
+        SelfEnergy.Fock0_ZeroTemp(param.kF, [param.basic]) -
+        SelfEnergy.Fock0_ZeroTemp(kgrid_fine, [param.basic])
+    )
+
+    # (1, 0, 0) = -f'(ξₖ) Σ^λ_F(k)
+    exact_gsigmag = @. -fpe_fine * SelfEnergy.Fock0_ZeroTemp(kgrid_fine, [param.basic])
+
+    if max_order_plot == 1
+        # Test gg diagram (0, 1, 0)
+        fig, ax = plt.subplots()
+        # ax.axhline(0.0; linewidth=1, color="k")
+        ax.plot(k_kf_grid_fine, fpe_fine, "-"; color="k", label="\$f'(\\xi_k)\$")
+        means = Measurements.value.(data[(0, 1, 0)])
+        stdevs = Measurements.uncertainty.(data[(0, 1, 0)])
+        ax.plot(
+            k_kf_grid,
+            means,
+            "o-";
+            markersize=2,
+            color="C0",
+            label="\$(0, 1, 0)\$ ($solver)",
+        )
+        ax.fill_between(
+            k_kf_grid,
+            (means - stdevs),
+            (means + stdevs);
+            color="C0",
+            alpha=0.4,
+        )
+        ax.set_xlabel("\$k / k_F\$")
+        ax.set_xlim(0.75, 1.25)
+        # ax.set_ylim(nothing, 4)
+        ax.legend(; loc="best")
+        fig.tight_layout()
+        fig.savefig("results/occupation/minus_nk_gg.pdf")
+
+        # Test g(-Σ)g diagram (1, 0, 0)
+        fig, ax = plt.subplots()
+        # ax.axhline(0.0; linewidth=1, color="k")
+        fpnes = [fpe_fine, fppe_fine, fpppe_fine]
+        ax.plot(
+            k_kf_grid_fine,
+            exact_gsigmag,
+            "-";
+            color="k",
+            label="\$-f'(\\xi_k) \\Sigma^\\lambda_F(k)\$",
+        )
+        means = Measurements.value.(data[(1, 0, 0)])
+        stdevs = Measurements.uncertainty.(data[(1, 0, 0)])
+        ax.plot(
+            k_kf_grid,
+            means,
+            "o-";
+            markersize=2,
+            color="C0",
+            label="\$(1, 0, 0)\$ ($solver)",
+        )
+        ax.fill_between(
+            k_kf_grid,
+            (means - stdevs),
+            (means + stdevs);
+            color="C0",
+            alpha=0.4,
+        )
+        ax.set_xlabel("\$k / k_F\$")
+        ax.set_xlim(0.75, 1.25)
+        # ax.set_ylim(nothing, 4)
+        ax.legend(; loc="best")
+        fig.tight_layout()
+        fig.savefig("results/occupation/minus_nk_gsigmag.pdf")
+
+        # Test first order result
+        fig, ax = plt.subplots()
+        ax.plot(
+            k_kf_grid_fine,
+            first_order_exact,
+            "-";
+            color="C0",
+            label="\$f'(\\xi_k) (\\Sigma^\\lambda_F(k_F) - \\Sigma^\\lambda_F(k))\$",
+        )
+        means = Measurements.value.(occupation[1])
+        stdevs = Measurements.uncertainty.(occupation[1])
+        ax.plot(k_kf_grid, means, "o-"; markersize=2, color="C1", label="\$N=1\$ ($solver)")
+        ax.fill_between(
+            k_kf_grid,
+            (means - stdevs),
+            (means + stdevs);
+            color="C1",
+            alpha=0.4,
+        )
+        ax.set_ylabel("\$g_1(k, \\tau=0^-) = -\\delta n^1_{k\\sigma}\$")
+        ax.set_xlabel("\$k / k_F\$")
+        ax.set_xlim(0.75, 1.25)
+        # ax.set_ylim(nothing, 4)
+        ax.legend(; loc="best")
+        fig.tight_layout()
+        fig.savefig("results/occupation/minus_delta_nk1.pdf")
+    end
+
     # Bare/Fock occupation on dense grid for plotting
     kgrid_fine = param.kF * np.linspace(0.0, 3.0; num=600)
     k_kf_grid_fine = np.linspace(0.0, 3.0; num=600)
-
     if param.isFock
         fock =
             SelfEnergy.Fock0_ZeroTemp.(kgrid_fine, [param.basic]) .-
@@ -434,13 +631,35 @@ function main()
             color="$(colors[ic])",
             alpha=0.4,
         )
+        if compare_eft
+            means = Measurements.value.(occupation_total_eft[N])
+            stdevs = Measurements.uncertainty.(occupation_total_eft[N])
+            marker = "o-"
+            ax.plot(
+                kgrid_eft / param.kF,
+                means,
+                marker;
+                markersize=2,
+                # color="C$ic",
+                color="$(colors2[ic])",
+                label="\$N=$N\$ ($solver, ElectronLiquid)",
+            )
+            ax.fill_between(
+                kgrid_eft / param.kF,
+                means - stdevs,
+                means + stdevs;
+                # color="C$ic",
+                color="$(colors2[ic])",
+                alpha=0.4,
+            )
+        end
         # Extrapolate Z-factor to kF⁻ & kF⁺ at the maximum order
         if N == max_order_plot
             # Grid data outside of thermal broadening window
             k_kf_grid_lower = k_kf_grid[k_kf_grid .≤ 1 - fermi_hwhm]
             k_kf_grid_upper = k_kf_grid[k_kf_grid .≥ 1 + fermi_hwhm]
-            # k_kf_grid_lower_range = range
-            # k_kf_grid_upper_range = range
+            k_kf_grid_lower_range = range
+            k_kf_grid_upper_range = range
             zfactor_lower = means[k_kf_grid .≤ 1 - fermi_hwhm]
             zfactor_upper = means[k_kf_grid .≥ 1 + fermi_hwhm]
 
@@ -530,6 +749,54 @@ function main()
         fontsize=14,
     )
     fig.tight_layout()
+    if inset
+        # Reset color index
+        ic = 1
+        # Plot inset
+        ax_inset =
+            il.inset_axes(ax; width="38%", height="28.5%", loc="lower left", borderpad=0)
+        # Compare result to bare occupation fₖ
+        ax_inset.plot(k_kf_grid_fine, bare_occupation_fine, "k"; label="\$N=0\$ (exact)")
+        ax_inset.axvline(1.0; linestyle="--", linewidth=1, color="gray")
+        # ax_inset.axhspan(0, 1; alpha=0.2, facecolor="k", edgecolor=nothing)
+        ax_inset.axhline(0.0; linestyle="-", linewidth=0.5, color="k")
+        ax_inset.axhline(1.0; linestyle="-", linewidth=0.5, color="k")
+        for (i, N) in enumerate(min_order:max_order_plot)
+            # for (i, N) in enumerate(min_order:1)
+            # N == 0 && continue
+            isFock && N == 1 && continue
+            # Get means and error bars from the result up to this order
+            means = Measurements.value.(occupation_total[N])
+            stdevs = Measurements.uncertainty.(occupation_total[N])
+            marker = "o-"
+            ax_inset.plot(
+                k_kf_grid,
+                means,
+                marker;
+                markersize=2,
+                color="$(colors[ic])",
+                label="\$N=$N\$ ($solver)",
+            )
+            ax_inset.fill_between(
+                k_kf_grid,
+                means - stdevs,
+                means + stdevs;
+                color="$(colors[ic])",
+                alpha=0.4,
+            )
+            ic += 1
+        end
+        xpad = 0.04
+        ypad = 0.2
+        ax_inset.set_xlim(0.95 - xpad, 1.05 + xpad)
+        ax_inset.set_ylim(-ypad, 1 + ypad)
+        ax_inset.set_xlabel("\$k / k_F\$"; labelpad=7)
+        ax_inset.set_ylabel("\$n_{k\\sigma}\$")
+        ax_inset.xaxis.set_label_position("top")
+        ax_inset.yaxis.set_label_position("right")
+        ax_inset.xaxis.tick_top()
+        ax_inset.yaxis.tick_right()
+    end
     dirstring = isFock ? "results/occupation/benchmark/" : "results/occupation/"
     fig.savefig(
         dirstring *

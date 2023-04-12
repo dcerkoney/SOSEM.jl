@@ -229,7 +229,7 @@ function main()
 
     # Total loop order N
     # orders = [0, 1, 2]
-    orders = [3]
+    orders = [5]
     max_order = maximum(orders)
     sort!(orders)
 
@@ -239,7 +239,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 5e10
+    neval = 1e6
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -251,16 +251,19 @@ function main()
     # UEG parameters for MC integration
     param = ParaMC(;
         order=max_order,
-        rs=2.0,
+        rs=1.0,
         beta=40.0,
-        mass2=0.4,
+        mass2=1.0,
         isDynamic=false,
         isFock=isFock,  # remove Fock insertions
     )
     @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)"
 
     # Dimensionless k-mesh for measurement
-    k_kf_grid = CompositeGrid.LogDensedGrid(:cheb, [0.0, 3.0], [1.0], 5, 0.02, 5)
+    k_kf_grid = CompositeGrid.LogDensedGrid(:cheb, [0.0, 3.0], [1.0], 5, 0.02, 5).grid
+    # Add point exactly at k = kF
+    ikF = searchsortedfirst(k_kf_grid, 1.0)
+    insert!(k_kf_grid, ikF, 1.0)
 
     # Dimensionful k-grid
     kgrid = k_kf_grid * param.kF
