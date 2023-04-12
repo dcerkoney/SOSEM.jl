@@ -21,7 +21,7 @@ function main()
     beta = [40.0]
 
     # Total number of MCMC evaluations
-    neval = 1e10
+    neval = 5e10
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -57,7 +57,7 @@ function main()
         # ngrid = [-1, 0]
 
         # Build diagrams
-        n_min, n_max = _order, _order
+        n_min, n_max = 1, _order
         partition = UEG_MC.counterterm_partitions(
             n_min,
             n_max;
