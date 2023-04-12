@@ -15,13 +15,13 @@ end
 
 function main()
     # Physical params matching data for SOSEM observables
-    order = [3]  # C^{(1)}_{N≤5} includes CTs up to 3rd order
+    order = [4]  # C^{(1)}_{N≤5} includes CTs up to 3rd order
     rs = [1.0]
     mass2 = [1.0]
     beta = [40.0]
 
     # Total number of MCMC evaluations
-    neval = 5e10
+    neval = 1e10
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -57,7 +57,7 @@ function main()
         # ngrid = [-1, 0]
 
         # Build diagrams
-        n_min, n_max = 1, _order
+        n_min, n_max = _order, _order
         partition = UEG_MC.counterterm_partitions(
             n_min,
             n_max;
