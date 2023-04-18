@@ -236,7 +236,7 @@ function main()
     end
 
     # Total loop order N
-    orders = [1, 2, 3]
+    orders = [1, 2, 3, 4]
     max_order = maximum(orders)
     sort!(orders)
 
@@ -268,12 +268,12 @@ function main()
 
     # K-mesh for measurement
     minK = 0.2 * param.kF
-    Nk, korder = 4, 7
+    Nk, korder = 4, 3
     kgrid =
         CompositeGrid.LogDensedGrid(
             :uniform,
             [0.0, 3 * param.kF],
-            [2 * param.kF],
+            [0.0, 2 * param.kF],
             Nk,
             minK,
             korder,
