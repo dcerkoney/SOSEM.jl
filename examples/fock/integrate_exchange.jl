@@ -309,7 +309,7 @@ function main()
 
     # K-mesh for measurement
     minK = 0.2 * param.kF
-    Nk, korder = 4, 7
+    Nk, korder = 4, 4
     kgrid =
         CompositeGrid.LogDensedGrid(
             :uniform,

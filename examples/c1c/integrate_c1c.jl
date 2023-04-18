@@ -22,7 +22,7 @@ function main()
 
     settings = DiagGen.Settings{DiagGen.Observable}(
         DiagGen.c1c;
-        min_order=5,
+        min_order=2,
         max_order=5,
         verbosity=DiagGen.quiet,
         expand_bare_interactions=false,
@@ -33,7 +33,7 @@ function main()
 
     # UEG parameters for MC integration
     param =
-        ParaMC(; order=settings.max_order, rs=5.0, beta=40.0, mass2=0.1375, isDynamic=false)
+        ParaMC(; order=settings.max_order, rs=1.0, beta=40.0, mass2=1.0, isDynamic=false)
     @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)"
 
     println("lambda = $(param.mass2)")
@@ -41,7 +41,7 @@ function main()
     # K-mesh for measurement
     # kgrid = [0.0]
     minK = 0.2 * param.kF
-    Nk, korder = 4, 7
+    Nk, korder = 4, 4
     kgrid =
         CompositeGrid.LogDensedGrid(
             :uniform,
