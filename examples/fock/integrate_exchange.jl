@@ -272,8 +272,8 @@ function main()
     end
 
     # Total loop order N (Fock self-energy is N = 1)
-    # orders = [1, 2, 3]
-    orders = [5]
+    orders = [1, 2, 3, 4]
+    # orders = [5]
     max_order = maximum(orders)
 
     # Settings
@@ -308,8 +308,8 @@ function main()
     # kgrid = k_kf_grid * param.kF
 
     # K-mesh for measurement
-    minK = 0.2 * param.kF
-    Nk, korder = 4, 4
+    minK = 0.225 * param.kF
+    Nk, korder = 4, 5
     kgrid =
         CompositeGrid.LogDensedGrid(
             :uniform,
