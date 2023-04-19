@@ -336,7 +336,7 @@ function main()
     )
     fig.tight_layout()
     fig.savefig(
-        "results/polarization/static_structure_factor_N=$(max_order_plot)_rs=$(param.rs)_" *
+        "results/polarization/instantaneous_polarization_N=$(max_order_plot)_rs=$(param.rs)_" *
         "beta_ef=$(param.beta)_lambda=$(param.mass2)_neval=$(neval)_$(solver)$(ct_string)$(fix_string).pdf",
     )
 
