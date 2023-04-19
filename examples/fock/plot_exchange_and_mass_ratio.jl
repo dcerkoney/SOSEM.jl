@@ -74,13 +74,13 @@ function main()
         cd(ENV["SOSEM_HOME"])
     end
 
-    rs = 5.0
+    rs = 1.0
     beta = 40.0
-    mass2 = 0.1375
+    mass2 = 1.0
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval123 = 5e10
+    neval123 = 1e10
     neval4 = 5e10
     neval = max(neval123, neval4)
 
@@ -279,14 +279,16 @@ function main()
     ax1.legend(; loc="lower right")
     ax1.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
     ax1.set_xlabel("\$k / k_F\$")
-    ax1.set_ylabel("\$C^{(0)}_\\sigma(k) \\,/\\, \\epsilon_{\\mathrm{TF}} = \\Sigma_{x}(k) \\,/\\, \\epsilon_{\\mathrm{TF}}\$")
+    ax1.set_ylabel(
+        "\$C^{(0)}_\\sigma(k) \\,/\\, \\epsilon_{\\mathrm{TF}} = \\Sigma_{x}(k) \\,/\\, \\epsilon_{\\mathrm{TF}}\$",
+    )
     # ax1.set_ylabel("\$\\Sigma_{x}(k) \\,/\\, \\epsilon_{\\mathrm{TF}}\$")
-    # xloc = 1.5
-    # yloc = -0.4
-    # ydiv = -0.095
     xloc = 1.5
-    yloc = -0.6
-    ydiv = -0.175
+    yloc = -0.4
+    ydiv = -0.095
+    # xloc = 1.5
+    # yloc = -0.6
+    # ydiv = -0.175
     ax1.text(
         xloc,
         yloc,
@@ -372,7 +374,14 @@ function main()
     E_fock_over_eTF_quad = E_fock_quad / eTF
 
     # No fixed point (zpe is a free parameter)
-    @. quasiparticle_model(k, p) = p[1] + k^2 / (2.0 * p[2])
+    @. quasiparticle_model(k, p; Z=1) = Z * (p[1] + k^2 / (2.0 * p[2]))
+    quasiparticle_model_with_z_rs1(k, p) = quasiparticle_model(k, p; Z=Z_rs1)
+    if rs == 1
+        # model = quasiparticle_model_with_z_rs1
+        model = quasiparticle_model
+    else
+        model = quasiparticle_model
+    end
 
     # Initial parameters for curve fitting procedure
     p0      = [-eTF, 1.0]  # E₀=0 and m=mₑ
@@ -441,8 +450,11 @@ function main()
     # )
     ic = 0
 
+    Z_rs1 = 0.9344
+
     m_test = [0.2, 0.3, 0.4, 0.5]
     e_test = [-1.0, -1.25, -1.5, -1.75]
+    local r4
     for (i, N) in enumerate(min_order:max_order_plot)
         # N == 1 && continue
 
@@ -459,8 +471,8 @@ function main()
         # Eqp_data = e_test[i] .+ k_data .^ 2 / (2 * m_test[i])
 
         # Least-squares quasiparticle fit
-        fit_N = curve_fit(quasiparticle_model, k_data, Eqp_data, p0)
-        qp_fit_N(k) = quasiparticle_model(k, fit_N.param)
+        fit_N = curve_fit(model, k_data, Eqp_data, p0)
+        qp_fit_N(k) = model(k, fit_N.param)
 
         # Coefficients of determination (r²)
         r2 = rsquared(k_data, Eqp_data, qp_fit_N(k_data), fit_N)
@@ -468,6 +480,9 @@ function main()
         # Low-energy effective mass ratio (mₑ/m⋆)(k≈0) from quasiparticle fit
         meff_N = fit_N.param[2]
         low_en_mass_ratio_N = param.me / meff_N
+        if N == 4
+            r4 = meff_N / param.me
+        end
         println(
             "(N=$N) Low-energy effective mass ratio from quadratic fit: " *
             "(mₑ/m⋆)(k=0) ≈ $low_en_mass_ratio_N, r2=$r2",
@@ -503,8 +518,8 @@ function main()
     ax2.legend(; loc="upper left")
     # ax2.set_xlim(minimum(k_kf_grid), 1)
     ax2.set_xlim(minimum(k_kf_grid), 1.5)
-    # ax2.set_ylim(-2.0, 3.0)
-    ax2.set_ylim(-2.0, 1.0)
+    ax2.set_ylim(-2.0, 3.0)
+    # ax2.set_ylim(-2.0, 1.0)
     ax2.set_xlabel("\$k / k_F\$")
     ax2.set_ylabel(
         "\$M^{(1)}_\\sigma(k) \\,/\\, \\epsilon_{\\mathrm{TF}} =  \\left(\\epsilon_{k} + \\Sigma_{x}(k)\\right) \\,/\\, \\epsilon_{\\mathrm{TF}} \$",
@@ -512,12 +527,12 @@ function main()
     # ax2.set_ylabel(
     #     "\$\\epsilon_{\\mathrm{momt.}}(k) \\,/\\, \\epsilon_{\\mathrm{TF}} =  \\left(\\epsilon_{k} + \\Sigma_{x}(k)\\right) \\,/\\, \\epsilon_{\\mathrm{TF}} \$",
     # )
-    # xloc = 0.8
-    # yloc = -0.5
-    # ydiv = -0.5
     xloc = 0.8
-    yloc = -1.25
-    ydiv = -0.25
+    yloc = -0.5
+    ydiv = -0.5
+    # xloc = 0.8
+    # yloc = -1.25
+    # ydiv = -0.25
     ax2.text(
         xloc,
         yloc,
@@ -537,6 +552,7 @@ function main()
         "\${\\epsilon}_{\\mathrm{TF}}\\equiv\\frac{\\hbar^2 q^2_{\\mathrm{TF}}}{2 m_e}=2\\pi\\mathcal{N}_F\$ (a.u.)";
         fontsize=12,
     )
+    ax2.text(0.15, 0.75, "\$(N=4)\$ \$m^\\star / m \\approx $(round(r4; digits=4))\$"; fontsize=12)
     fig2.tight_layout()
     fig2.savefig(
         "results/fock/moment_qp_energy_N=$(max_order_plot)_rs=$(param.rs)_" *

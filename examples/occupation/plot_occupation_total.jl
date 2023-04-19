@@ -18,6 +18,20 @@ using SOSEM
 @pyimport matplotlib.pyplot as plt
 @pyimport mpl_toolkits.axes_grid1.inset_locator as il
 
+"""Compute the coefficient of determination (r-squared) for a dataset."""
+function rsquared(xs, ys, yhats)
+    ybar = sum(yhats) / length(yhats)
+    ss_res = sum((ys .- yhats) .^ 2)
+    ss_tot = sum((ys .- ybar) .^ 2)
+    return 1 - ss_res / ss_tot
+end
+function rsquared(xs, ys, yhats, fit::LsqFit.LsqFitResult)
+    ybar = sum(yhats) / length(yhats)
+    ss_res = sum(fit.resid .^ 2)
+    ss_tot = sum((ys .- ybar) .^ 2)
+    return 1 - ss_res / ss_tot
+end
+
 function main()
     # Change to project directory
     if haskey(ENV, "SOSEM_CEPH")
@@ -34,16 +48,18 @@ function main()
     solver = :vegasmc
 
     # Number of evals
-    neval12 = 1e10
+    neval12 = rs == 1 ? 1e10 : 5e10  # neval12 for existing data has this discrepancy
+    # neval12 = 1e10
     # neval12 = 5e10
     neval3 = 5e10
-    neval = max(neval12, neval3)
+    neval4 = 5e10
+    neval = max(neval12, neval3, neval4)
 
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
     min_order = 0
-    max_order = 3
+    max_order = 4
     min_order_plot = 0
-    max_order_plot = 3
+    max_order_plot = 4
 
     # Save total results
     save = true
@@ -93,7 +109,7 @@ function main()
     )
 
     # Load the raw data
-    if max_order == 3
+    if max_order > 2
         max_together = 2
     else
         max_together = max_order
@@ -108,13 +124,25 @@ function main()
         return f[key]
     end
     println("done!")
-    if max_order == 3
+    if max_order >= 3
         # 3rd order 
         savename =
-            "results/data/occupation_n=$(max_order)_rs=$(rs)_beta_ef=$(beta)_" *
+            "results/data/occupation_n=3_rs=$(rs)_beta_ef=$(beta)_" *
             "lambda=$(mass2)_neval=$(neval3)_$(solver)_$(ct_string)"
         print("Loading 3rd order data from $savename...")
-        orders5, param5, kgrid5, partitions5, res5 = jldopen("$savename.jld2", "a+") do f
+        orders3, param3, kgrid3, partitions3, res3 = jldopen("$savename.jld2", "a+") do f
+            key = "$(UEG.short(loadparam))"
+            return f[key]
+        end
+        println("done!")
+    end
+    if max_order >= 4
+        # 4th order 
+        savename =
+            "results/data/occupation_n=4_rs=$(rs)_beta_ef=$(beta)_" *
+            "lambda=$(mass2)_neval=$(neval4)_$(solver)_$(ct_string)"
+        print("Loading 4th order data from $savename...")
+        orders4, param4, kgrid4, partitions4, res4 = jldopen("$savename.jld2", "a+") do f
             key = "$(UEG.short(loadparam))"
             return f[key]
         end
@@ -123,25 +151,43 @@ function main()
 
     # Get dimensionless k-grid (k / kF) and index corresponding to the Fermi energy
     k_kf_grid = kgrid / param.kF
-    if max_order == 3
-        k_kf_grid5 = kgrid5 / param.kF
+    if max_order >= 3
+        k_kf_grid3 = kgrid3 / param.kF
+    end
+    if max_order >= 4
+        k_kf_grid4 = kgrid4 / param.kF
     end
 
     # Convert results to a Dict of measurements at each order with interaction counterterms merged
     data = UEG_MC.restodict(res, partitions)
     # NOTE: Old data for orders 0, 1, and 2 at rs = 1 has Taylor factors already present in eval!
-    if loadparam.rs != 1.0
-        for (k, v) in data
-            data[k] = v / (factorial(k[2]) * factorial(k[3]))
-        end
-    end
-    # Add 5th order results to data dict
-    if max_order == 3
-        data3 = UEG_MC.restodict(res5, partitions5)
+    # if loadparam.rs != 1.0
+    #     for (k, v) in data
+    #         data[k] = v / (factorial(k[2]) * factorial(k[3]))
+    #     end
+    # end
+    # Add 3rd order results to data dict
+    if max_order >= 3
+        data3 = UEG_MC.restodict(res3, partitions3)
         for (k, v) in data3
             data3[k] = v / (factorial(k[2]) * factorial(k[3]))
         end
         merge!(data, data3)
+    end
+    # Add 4th order results to data dict
+    if max_order >= 4
+        data4 = UEG_MC.restodict(res4, partitions4)
+        for (k, v) in data4
+            data4[k] = v / (factorial(k[2]) * factorial(k[3]))
+            # NOTE: we delete the point at kF for consistency with old data
+            @assert length(data4[k]) == length(kgrid) + 1
+            deleteat!(data4[k], kgrid4 .== param.kF)
+            @assert length(data4[k]) == length(kgrid)
+        end
+        # NOTE: we delete the point at kF for consistency with old data
+        @assert length(kgrid4) == length(kgrid) + 1
+        deleteat!(kgrid4, kgrid4 .== param.kF)
+        merge!(data, data4)
     end
 
     # Zero out partitions with mu renorm if present (fix mu)
@@ -276,7 +322,13 @@ function main()
         f = jldopen("$savename.jld2", "a+"; compress=true)
         # NOTE: no bare result for c1b observable (accounted for in c1b0)
         for N in min_order_plot:max_order
-            num_eval = N == 3 ? neval3 : neval12
+            if N == 4
+                num_eval = neval4
+            elseif N == 3
+                num_eval = neval3
+            else
+                num_eval = neval12
+            end
             # num_eval = neval
             # Skip exact (N = 0) result
             N == 0 && continue
@@ -324,26 +376,28 @@ function main()
     # fermi_hwhm = 3.53 / (2 * param.β * param.kF)  # HWHM in units of kF
     # fermi_hwhm = 3.53 / (2 * param.beta)  # HWHM in units of kF
 
-    # fermi_hwhm = log((sqrt(2) + 1) / (sqrt(2) - 1)) / param.β  # HWHM of -f'(ϵ) = ln((√2 + 1) / (√2 - 1)) / β
+    fermi_hwhm = log((sqrt(2) + 1) / (sqrt(2) - 1)) / param.β  # HWHM of -f'(ϵ) = ln((√2 + 1) / (√2 - 1)) / β
     # We obtain k_± via ϵ_± = ϵF ± Δ_HWHM = k^2_± / 2m
-    # k_minus = param.kF * sqrt(1 - fermi_hwhm / param.EF)  # k₋ = kF √(1 - Δ_HWHM / ϵF)
-    # k_plus = param.kF * sqrt(1 + fermi_hwhm / param.EF)   # k₊ = kF √(1 + Δ_HWHM / ϵF)
+    k_minus = param.kF * sqrt(1 - fermi_hwhm / param.EF)  # k₋ = kF √(1 - Δ_HWHM / ϵF)
+    k_plus = param.kF * sqrt(1 + fermi_hwhm / param.EF)   # k₊ = kF √(1 + Δ_HWHM / ϵF)
     # TODO: Why is ~4 HWHM necessary here? Check for errors!
     # k_minus = param.kF * sqrt(1 - 4fermi_hwhm / param.EF)  # k₋ = kF √(1 - Δ_HWHM / ϵF)  
     # k_plus = param.kF * sqrt(1 + 4fermi_hwhm / param.EF)   # k₊ = kF √(1 + Δ_HWHM / ϵF)  
-    # ax.axvspan(
-    #     k_minus / param.kF,
-    #     k_plus / param.kF;
-    #     # 1 - fermi_hwhm,
-    #     # 1 + fermi_hwhm;
-    #     color="0.9",
-    #     label="\$\\mathrm{FWHM}_{k}(f_{k\\sigma})\$",
-    # )
+    lwindow = param.kF * sqrt(1 - fermi_hwhm / param.EF)
+    rwindow = param.kF * sqrt(1 + fermi_hwhm / param.EF)
+    ax.axvspan(
+        lwindow / param.kF,
+        rwindow / param.kF;
+        # 1 - fermi_hwhm,
+        # 1 + fermi_hwhm;
+        color="0.9",
+        label="\$\\mathrm{FWHM}_{k}(f_{k\\sigma})\$",
+    )
 
-    if min_order_plot == 0
-        # Include bare occupation fₖ in plot
-        ax.plot(k_kf_grid_fine, bare_occupation_fine, "k"; label="\$N=0\$ (exact)")
-    end
+    # if min_order_plot == 0
+    # Include bare occupation fₖ in plot
+    # ax.plot(k_kf_grid_fine, bare_occupation_fine, "k"; label="\$N=0\$ (exact)")
+    # end
 
     ikFplus = searchsortedfirst(k_kf_grid, 1.0)  # Index where k ⪆ kF
     ikFminus = ikFplus - 1
@@ -352,55 +406,110 @@ function main()
     # colors = ["orchid", "cornflowerblue", "turquoise", "chartreuse"]
     colors2 = ["purple", "blue", "green", "yellow"]
     for (i, N) in enumerate(min_order:max_order_plot)
+        N < max_order_plot && continue
         # N == 0 && continue
         isFock && N == 1 && continue
         # Plot measured data
         means = Measurements.value.(occupation_total[N])
         stdevs = Measurements.uncertainty.(occupation_total[N])
 
-        # c fixed to value at kF. if not on-grid, use midpoint of the nearest two points
-        # (linear interpolation, where the kgrid is assumed symmetrical about k = kF)
-        means_kF = (means[ikFplus] + means[ikFminus]) / 2.0  # n(kF) ≈ (n(kF⁻) + n(kF⁺)) / 2
-        # ξ⋆(k) & f(ξ⋆(k)) on-grid, ξk = ϵ⋆(k) - μ⋆
-        @. ξstar_k(k, p) = @. (k^2 - param.kF^2) / (2 * p[2])
-        @. fξstar_k(k, p) = @. -Spectral.kernelFermiT.(-1e-8, ξstar_k(k, p), param.β)
-        # n_qp(Z, m⋆) = hat(n)(kF) - Z/2 + Zf(k^2 / 2m⋆ - kF^2 / 2m⋆), and p = (Z, m⋆)
-        @. model_Z_mstar(k, p) = means_kF + p[1] * (fξstar_k(k, p) - 1 / 2)
-        # Fix m⋆ value to K.H. & K.C. data 
-        if rs == 1.0 || rs == 2.0
-            if rs == 1.0
-                mstar_khkc = 0.87
-            elseif rs == 2.0
-                mstar_khkc = 0.80
+        # qp fit at lowest and highest orders
+        if N == max_order_plot
+            lwindow = param.kF * sqrt(1 - 4 * fermi_hwhm / param.EF)
+            rwindow = param.kF * sqrt(1 + 4 * fermi_hwhm / param.EF)
+            # Fitting constant C fixed by value at kF, C ≈ n(kF) - Z/2. 
+            # Since k = kF is not on-grid, use the midpoint of the nearest two points
+            # (linear interpolation, where the kgrid is assumed symmetrical about k = kF)
+            means_kF = (means[ikFplus] + means[ikFminus]) / 2.0  # n(kF) ≈ (n(kF⁻) + n(kF⁺)) / 2
+            # ξ⋆(k) & f(ξ⋆(k)) on-grid, ξk = ϵ⋆(k) - μ⋆
+            # @. ξstar_k(k, p) = @. (k^2 - param.kF^2) / (2 * p[2])
+            # @. fξstar_k(k, p) = @. -Spectral.kernelFermiT.(-1e-8, ξstar_k(k, p), param.β)
+            # n_qp(Z, m⋆) = hat(n)(kF) - Z/2 + Zf(k^2 / 2m⋆ - kF^2 / 2m⋆), and p = (Z, m⋆)
+            # @. model_Z_mstar(k, p) = means_kF + p[1] * (fξstar_k(k, p) - 1 / 2)
+            @. function model_Z_mstar(k, p)
+                return means_kF +
+                       p[1] * (
+                    -Spectral.kernelFermiT.(
+                        -1e-8,
+                        (k^2 - param.kF^2) / (2 * p[2]),
+                        param.β,
+                    ) - 1 / 2
+                )
             end
-            @. ξstar_khkc(k) = @. (k^2 - param.kF^2) / (2 * mstar_khkc)
-            @. fξstar_khkc(k) = @. -Spectral.kernelFermiT.(-1e-8, ξstar_khkc(k), param.β)
-            @. model_Z(k, p) = means_kF + p[1] * (fξstar_khkc(k) - 1 / 2)
-        end
-        # Initial parameters for curve fitting
-        p0_Z_mstar = [1.0, 1.0]  # E₀=0 and m=mₑ
-        p0_Z       = [1.0]        # m=mₑ
+            # @. function model_Z_mstar_v2(k, p)
+            #     return (means_kF - p[1] / 2) / (1 + 1 / param.β^2) +
+            #            p[1] *
+            #            -Spectral.kernelFermiT.(
+            #         -1e-8,
+            #         (k^2 - param.kF^2) / (2 * p[2]),
+            #         param.β,
+            #     )
+            # end
+            # Fix m⋆ value to K.H. & K.C. data 
+            if rs == 1.0 || rs == 2.0
+                if rs == 1.0
+                    mstar_khkc = param.me * 0.955
+                elseif rs == 2.0
+                    mstar_khkc = param.me * 0.943
+                end
+                @. ξstar_khkc(k) = @. (k^2 - param.kF^2) / (2 * mstar_khkc)
+                @. function fξstar_khkc(k)
+                    @. -Spectral.kernelFermiT.(-1e-8, ξstar_khkc(k), param.β)
+                end
+                # @. model_Z(k, p) = means_kF + p[1] * (fξstar_khkc(k) - 1 / 2)
+                @. function model_Z(k, p)
+                    return means_kF +
+                           p[1] * (
+                        -Spectral.kernelFermiT.(
+                            -1e-8,
+                            (k^2 - param.kF^2) / (2 * mstar_khkc),
+                            param.β,
+                        ) - 1 / 2
+                    )
+                end
+            end
+            # Initial parameters for curve fitting
+            p0_Z_mstar = [1.0, 0.5]  # Z=1 and m=mₑ (in Rydbergs)
+            p0_Z       = [1.0]        # m=mₑ
 
-        # Gridded data for k < kF
-        k_data = kgrid[kgrid .< param.kF]
-        Eqp_data = means_qp[kgrid .< param.kF] * eTF
+            # Gridded data for k in window near kF
+            k_data = kgrid[lwindow .≤ kgrid .≤ rwindow]
+            means_data = means[lwindow .≤ kgrid .≤ rwindow]
 
-        # Least-squares quasiparticle fit
-        fit_N = curve_fit(quasiparticle_model_with_zexp, k_data, Eqp_data, p0)
-        qp_fit_N(k) = quasiparticle_model_with_zexp(k, fit_N.param)
-        # Coefficients of determination (r²)
-        r2 = rsquared(k_data, Eqp_data, qp_fit_N(k_data), fit_N)
-        # Fermi-liquid parameters (Z, m⋆) (on the Fermi surface k = kF) from quasiparticle fit
-        println("(N=$N): (Z, m⋆) ≈ $(fit_N.param), r2=$r2")
-
-        # Another LSQ fit, but using K.H. & K.C. data for m⋆/m at rs = 1, 2
-        if rs == 1.0 || rs == 2.0
-            fit_N = curve_fit(quasiparticle_model_with_zexp, k_data, Eqp_data, p0)
-            qp_fit_N(k) = quasiparticle_model_with_zexp(k, fit_N.param)
+            # Least-squares quasiparticle fit
+            fit_N = curve_fit(model_Z_mstar, k_data, means_data, p0_Z_mstar)
+            qp_fit_N(k) = model_Z_mstar(k, fit_N.param)
+            # fit_N = curve_fit(model_Z_mstar_v2, k_data, means_data, p0_Z_mstar)
+            # qp_fit_N(k) = model_Z_mstar_v2(k, fit_N.param)
             # Coefficients of determination (r²)
-            r2 = rsquared(k_data, Eqp_data, qp_fit_N(k_data), fit_N)
+            r2 = rsquared(k_data, means_data, qp_fit_N(k_data), fit_N)
             # Fermi-liquid parameters (Z, m⋆) (on the Fermi surface k = kF) from quasiparticle fit
-            println("(N=$N): m⋆ ≡ m⋆_KHKC = $mstar_khkc, Z ≈ $(fit_N.param), r2=$r2")
+            println("(N=$N): (Z, m⋆) ≈ $(fit_N.param), r2=$r2")
+            zfactor_estimate, mstar_estimate = fit_N.param
+            # Estimate errors and covariance matrix for fit params Z and m⋆
+            errors_est = estimate_errors(fit_N)
+            covariance_est = estimate_covar(fit_N)
+            println(
+                "(N=$N) Estimated errors and covariance matrix for fit parameters (Z, m⋆):",
+            )
+            println(errors_est)
+            println(covariance_est)
+            # Another LSQ fit, but using K.H. & K.C. data for m⋆/m at rs = 1, 2
+            if rs == 1.0 || rs == 2.0
+                fit_N_khkc = curve_fit(model_Z, k_data, means_data, p0_Z)
+                qp_fit_N_khkc(k) = model_Z(k, fit_N_khkc.param)
+                # Coefficients of determination (r²)
+                r2 = rsquared(k_data, means_data, qp_fit_N_khkc(k_data), fit_N_khkc)
+                # Fermi-liquid parameters (Z, m⋆) (on the Fermi surface k = kF) from quasiparticle fit
+                println(
+                    "(N=$N): m⋆ ≡ m⋆_KHKC = $mstar_khkc, Z ≈ $(fit_N_khkc.param), r2=$r2",
+                )
+                zfactor_estimate_khkc = fit_N_khkc.param[1]
+                # Estimate error for fit param Z
+                error_est = estimate_errors(fit_N_khkc)
+                println("(N=$N) Estimated error for fit parameter Z:")
+                println(error_est)
+            end
         end
 
         marker = "o-"
@@ -422,55 +531,103 @@ function main()
             color="$(colors[ic])",
             alpha=0.4,
         )
-        # Extrapolate Z-factor to kF⁻ & kF⁺ at the maximum order
-        if N == max_order_plot || N == 0
-
-            # # Grid data outside of thermal broadening window
-            # k_kf_grid_lower = k_kf_grid[k_kf_grid .≤ k_minus / param.kF]
-            # k_kf_grid_upper = k_kf_grid[k_kf_grid .≥ k_plus / param.kF]
-            # zfactor_lower = means[k_kf_grid .≤ k_minus / param.kF]
-            # zfactor_upper = means[k_kf_grid .≥ k_plus / param.kF]
-
-            # # Interpolate Z-factor curves below and above kF
-            # zfactor_lower_interp = linear_interpolation(
-            #     k_kf_grid_lower,
-            #     zfactor_lower;
-            #     extrapolation_bc=Line(),
-            # )
-            # zfactor_upper_interp = linear_interpolation(
-            #     k_kf_grid_upper,
-            #     zfactor_upper;
-            #     extrapolation_bc=Line(),
-            # )
-            # # TODO: need to do this the hard way for cubic interp
-            # # zfactor_lower_interp = cubic_spline_interpolation(k_kf_grid_lower, zfactor_lower; extrapolation_bc=Line())
-            # # zfactor_upper_interp = cubic_spline_interpolation(k_kf_grid_upper, zfactor_upper; extrapolation_bc=Line())
-
-            # # Plot the interpolated data with T=0 extrapolation to kF⁻ & kF⁺
-            # k_kf_lower_fine = LinRange(0.0, 1.0, 200)
-            # k_kf_upper_fine = LinRange(1.0, 2.0, 200)
-            # zfactor_lower_fine = zfactor_lower_interp.(k_kf_lower_fine)
-            # zfactor_upper_fine = zfactor_upper_interp.(k_kf_upper_fine)
-            # zfactor_estimate = zfactor_lower_interp(1) - zfactor_upper_interp(1)  # n(kF⁻) - n(kF⁺)
-            # println("Z-factor estimate: $zfactor_estimate")
-            # ax.plot(k_kf_lower_fine, zfactor_lower_fine; linestyle="-", color="k")
-            # ax.plot(
-            #     k_kf_upper_fine,
-            #     zfactor_upper_fine;
-            #     linestyle="-",
-            #     color="k",
-            #     label="\$N=$N\$ (\$T=0\$ extrapolation)",
-            # )
-            # ax.text(
-            #     # 0.25,
-            #     0.125,
-            #     # 0.6,
-            #     0.6 - (N / 30.0),
-            #     # "\$Z \\approx $(round(zfactor_estimate; digits=4))\$";
-            #     "\$Z \\approx $(round(zfactor_estimate; digits=4))\$ (\$N=$N\$)";
-            #     fontsize=14,
-            # )
+        # Plot Fqp(Z, m⋆) best fit to fk and Z fk (lowest and max orders)
+        if N == max_order_plot
+            ax.plot(
+                k_kf_grid_fine,
+                # qp_fit_N_khkc(kgrid),
+                qp_fit_N(kgrid_fine);
+                # color="C$ic",
+                # color="$(colors[ic])",
+                color="k",
+                # label="\$N=$N\$ (LSQ fit to \$F(Z, m^\\star = $mstar_khkc})\$)",
+                label="\$N=$N\$ (LSQ fit to \$F(Z, m^\\star)\$)",
+                # label="\$N=$N\$ ($solver, SOSEM)",
+            )
+            ax.text(
+                0.25,
+                0.8,
+                # "(\$N=$N\$) \$Z \\approx $(round(zfactor_estimate; digits=4))\$";
+                "\$Z \\approx $(round(zfactor_estimate; digits=4))\$";
+                fontsize=14,
+            )
+            ax.text(
+                0.25,
+                # 0.6 - (N / 30.0),
+                0.7,
+                # "(\$N=$N\$) \$m^\\star \\approx $(round(mstar_estimate; digits=4))\$";
+                "\$m^\\star / m \\approx $(round(mstar_estimate / param.me; digits=4))\$";
+                fontsize=14,
+            )
+            ax.plot(
+                k_kf_grid_fine,
+                qp_fit_N_khkc(kgrid_fine);
+                markersize=2,
+                color="gray",
+                label="\$N=$N\$ (LSQ fit to \$F_{KHKC}(Z)\$)",
+            )
+            ax.text(
+                0.25,
+                0.6,
+                "\$Z_{KHKC} \\approx $(round(zfactor_estimate_khkc; digits=4))\$";
+                fontsize=14,
+            )
+            ax.text(
+                0.25,
+                0.5,
+                "\$m^\\star_{KHKC} / m = $(round(mstar_khkc / param.me; digits=4))\$";
+                fontsize=14,
+            )
         end
+
+        # Extrapolate Z-factor to kF⁻ & kF⁺ at the maximum order
+        # if N == max_order_plot || N == 0
+        # # Grid data outside of thermal broadening window
+        # k_kf_grid_lower = k_kf_grid[k_kf_grid .≤ k_minus / param.kF]
+        # k_kf_grid_upper = k_kf_grid[k_kf_grid .≥ k_plus / param.kF]
+        # zfactor_lower = means[k_kf_grid .≤ k_minus / param.kF]
+        # zfactor_upper = means[k_kf_grid .≥ k_plus / param.kF]
+
+        # # Interpolate Z-factor curves below and above kF
+        # zfactor_lower_interp = linear_interpolation(
+        #     k_kf_grid_lower,
+        #     zfactor_lower;
+        #     extrapolation_bc=Line(),
+        # )
+        # zfactor_upper_interp = linear_interpolation(
+        #     k_kf_grid_upper,
+        #     zfactor_upper;
+        #     extrapolation_bc=Line(),
+        # )
+        # # TODO: need to do this the hard way for cubic interp
+        # # zfactor_lower_interp = cubic_spline_interpolation(k_kf_grid_lower, zfactor_lower; extrapolation_bc=Line())
+        # # zfactor_upper_interp = cubic_spline_interpolation(k_kf_grid_upper, zfactor_upper; extrapolation_bc=Line())
+
+        # # Plot the interpolated data with T=0 extrapolation to kF⁻ & kF⁺
+        # k_kf_lower_fine = LinRange(0.0, 1.0, 200)
+        # k_kf_upper_fine = LinRange(1.0, 2.0, 200)
+        # zfactor_lower_fine = zfactor_lower_interp.(k_kf_lower_fine)
+        # zfactor_upper_fine = zfactor_upper_interp.(k_kf_upper_fine)
+        # zfactor_estimate = zfactor_lower_interp(1) - zfactor_upper_interp(1)  # n(kF⁻) - n(kF⁺)
+        # println("Z-factor estimate: $zfactor_estimate")
+        # ax.plot(k_kf_lower_fine, zfactor_lower_fine; linestyle="-", color="k")
+        # ax.plot(
+        #     k_kf_upper_fine,
+        #     zfactor_upper_fine;
+        #     linestyle="-",
+        #     color="k",
+        #     label="\$N=$N\$ (\$T=0\$ extrapolation)",
+        # )
+        # ax.text(
+        #     # 0.25,
+        #     0.125,
+        #     # 0.6,
+        #     0.6 - (N / 30.0),
+        #     # "\$Z \\approx $(round(zfactor_estimate; digits=4))\$";
+        #     "\$Z \\approx $(round(zfactor_estimate; digits=4))\$ (\$N=$N\$)";
+        #     fontsize=14,
+        # )
+        # end
         ic += 1
     end
     ax.legend(; loc="upper right")
@@ -522,7 +679,8 @@ function main()
     fig.savefig(
         "results/occupation/" *
         "occupation_N=$(max_order_plot)_rs=$(param.rs)_" *
-        "beta_ef=$(param.beta)_lambda=$(param.mass2)_neval=$(neval)_$(solver)_$(ct_string)$(fix_string).pdf",
+        "beta_ef=$(param.beta)_lambda=$(param.mass2)_neval=$(neval)_$(solver)_$(ct_string)$(fix_string)_fit.pdf",
+        # "beta_ef=$(param.beta)_lambda=$(param.mass2)_neval=$(neval)_$(solver)_$(ct_string)$(fix_string).pdf",
     )
 
     plt.close("all")

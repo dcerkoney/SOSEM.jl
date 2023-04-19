@@ -64,15 +64,25 @@ function chemicalpotential_renormalization_sigma(data, δμ; min_order=1, max_or
         #        (δμ[1])^3 * d[(1, 3)] + 2 * δμ[1] * δμ[2] * d[(1, 2)] + δμ[3] * d[(1, 1)]
         #! format: on
     end
+    # Requires orders 2, 3, 4, and 5
+    if min_order ≤ 5 ≤ max_order
+        # G4 = G40 + G31*δμ1 + G22*δμ1^2 + G13*δμ1^3 + G21*δμ2 + G12*(2*δμ1*δμ2) 
+        #          + G04*δμ1^4 + G03*(2*δμ2*δμ1^2) + G02*(2*δμ3*δμ1) + G01*δμ4
+        #! format: off
+        z[5] = d[(5, 0)] + δμ[1] * d[(4, 1)] + δμ[1]^2 * d[(3, 2)] + δμ[1]^3 * d[(2, 3)] +
+               δμ[2] * d[(3, 1)] + 2 * δμ[1] * δμ[2] * d[(2, 2)] + δμ[1]^4 * d[(1, 4)] +
+               2 * δμ[2] * δμ[1]^2 * d[(1, 3)] + 2 * δμ[3] * δμ[1] * d[(2, 2)] + δμ[4] * d[(1, 1)]
+        #! format: on
+    end
     return z
 end
 
 function chemicalpotential_renormalization_green(data, δμ; min_order=0, max_order)
-    @assert max_order ≤ 3 "Order $max_order hasn't been implemented!"
+    @assert max_order ≤ 4 "Order $max_order hasn't been implemented!"
     println(δμ)
     @assert length(δμ) ≥ max_order
     d = CounterTerm.mergeInteraction(data)
-    # To maximum supported counterterm order, z = [O1, O2, O3, O4]
+    # To maximum supported counterterm order, z = [𝓞_0, 𝓞_1, 𝓞_2, 𝓞_3, 𝓞_4]
     T = valtype(d)
     z = RenormMeasType{T}()
     # Requires order 0
@@ -94,7 +104,17 @@ function chemicalpotential_renormalization_green(data, δμ; min_order=0, max_or
         # G3 = G30 + G21*δμ1 + G12*δμ1^2 + G11*δμ2 + G03*δμ1^3 + G02*(2*δμ1*δμ2) + G01*δμ3
         #! format: off
         z[3] = d[(3, 0)] + δμ[1] * d[(2, 1)] + δμ[1]^2 * d[(1, 2)] + δμ[2] * d[(1, 1)] +
-               (δμ[1])^3 * d[(0, 3)] + 2 * δμ[1] * δμ[2] * d[(0, 2)] + δμ[3] * d[(0, 1)]
+               δμ[1]^3 * d[(0, 3)] + 2 * δμ[1] * δμ[2] * d[(0, 2)] + δμ[3] * d[(0, 1)]
+        #! format: on
+    end
+    # Requires orders 1, 2, 3, and 4
+    if min_order ≤ 4 ≤ max_order
+        # G4 = G40 + G31*δμ1 + G22*δμ1^2 + G13*δμ1^3 + G21*δμ2 + G12*(2*δμ1*δμ2) 
+        #          + G04*δμ1^4 + G03*(2*δμ2*δμ1^2) + G02*(2*δμ3*δμ1) + G01*δμ4
+        #! format: off
+        z[4] = d[(4, 0)] + δμ[1] * d[(3, 1)] + δμ[1]^2 * d[(2, 2)] + δμ[1]^3 * d[(1, 3)] +
+               + δμ[2] * d[(2, 1)] + 2 * δμ[1] * δμ[2] * d[(1, 2)] + δμ[1]^4 * d[(0, 4)] +
+               2 * δμ[2] * δμ[1]^2 * d[(0, 3)] + 2 * δμ[3] * δμ[1] * d[(0, 2)] + δμ[4] * d[(0, 1)]
         #! format: on
     end
     return z

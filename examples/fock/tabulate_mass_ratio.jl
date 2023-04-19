@@ -299,8 +299,8 @@ function main()
         Eqp_data = means_qp[kgrid .< param.kF] * eTF
 
         # Least-squares quasiparticle fit
-        fit_N = curve_fit(quasiparticle_model_with_zexp, k_data, Eqp_data, p0)
-        qp_fit_N(k) = quasiparticle_model_with_zexp(k, fit_N.param)
+        fit_N = curve_fit(quasiparticle_model, k_data, Eqp_data, p0)
+        qp_fit_N(k) = quasiparticle_model(k, fit_N.param)
 
         # Coefficients of determination (r²)
         r2 = rsquared(k_data, Eqp_data, qp_fit_N(k_data), fit_N)

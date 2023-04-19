@@ -83,7 +83,7 @@ end
 
 """Build variable pools for the exchange self-energy integration."""
 function polarization_mc_variables(
-    mcparam::UEG.ParaMC,
+    mcparam::ParaMC,
     n_kgrid::Int,
     n_Tgrid::Int,
     alpha::Float64,
@@ -113,7 +113,7 @@ function measure(vars, obs, weights, config)
 end
 
 function integrate_poln_with_ct(
-    mcparam::UEG.ParaMC,
+    mcparam::ParaMC,
     diagparams::Vector{DiagParaF64},
     exprtrees::Vector{ExprTreeF64};
     kgrid=[0.0],
