@@ -4,7 +4,7 @@ Hard-coded counterterm partitions in the form (nloop, nμ, nλ).
 function partition(order::Int)
     #! format: off
     # normal order, G order, W order
-    par = [
+    partitions = [
         # order 0
         (0, 0, 0),
         # order 1
@@ -22,7 +22,7 @@ function partition(order::Int)
         (2, 1, 2), (2, 0, 3), (1, 4, 0), (1, 3, 1), (1, 2, 2), (1, 1, 3), (1, 0, 4), (0, 5, 0),
     ]
     #! format: on
-    return sort([p for p in par if sum(p) <= order])
+    return sort([p for p in partitions if sum(p) <= order])
 end
 
 """
