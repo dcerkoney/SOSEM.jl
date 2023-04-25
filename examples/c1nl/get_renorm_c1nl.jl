@@ -18,6 +18,7 @@ using PyCall
 function renorm_measurement(
     class="c1bL0";
     jldformat="old",
+    n_min=2,
     min_order=2,
     max_order,
     rs,
@@ -91,7 +92,7 @@ function renorm_measurement(
     println([k for (k, _) in merged_data])
 
     # Non-dimensionalize bare non-local moment
-    rs_lo = 1.0
+    rs_lo = rs
     sosem_lo = np.load("results/data/soms_rs=$(rs_lo)_beta_ef=40.0.npz")
     # Non-dimensionalize quadrature results by Thomas-Fermi energy
     param_lo = Parameter.atomicUnit(0, rs_lo)    # (dimensionless T, rs)
@@ -126,7 +127,7 @@ function renorm_measurement(
         lowest_order = class == "c1bL" ? 3 : 2
         # Reexpand merged data in powers of μ
         z, μ = UEG_MC.load_z_mu(param)
-        δz, δμ = CounterTerm.sigmaCT(max_order - 2, μ, z; verbose=1)
+        δz, δμ = CounterTerm.sigmaCT(max_order - n_min, μ, z; verbose=1)
         println("Computed δμ: ", δμ)
         c1class = UEG_MC.chemicalpotential_renormalization_sosem(
             merged_data,
@@ -206,6 +207,7 @@ function main()
     for lambda in lambdas
         renorm_measurement(
             "c1bL0";
+            n_min=2,
             min_order=2,
             max_order=max_order,
             rs=rs,
@@ -216,6 +218,7 @@ function main()
         )
         renorm_measurement(
             "c1bL";
+            n_min=3,
             min_order=3,
             max_order=max_order,
             rs=rs,
@@ -226,6 +229,7 @@ function main()
         )
         renorm_measurement(
             "c1c";
+            n_min=2,
             min_order=2,
             max_order=max_order,
             rs=rs,
@@ -237,6 +241,7 @@ function main()
         renorm_measurement(
             "c1d";
             jldformat="new",
+            n_min=2,
             min_order=2,
             max_order=max_order,
             rs=rs,

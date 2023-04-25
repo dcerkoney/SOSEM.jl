@@ -27,6 +27,7 @@ function main()
     expand_bare_interactions = false
 
     neval = 1e10
+    n_min = 2  # True minimal loop order for this observable
     max_order = 4
     min_order_plot = 4
     max_order_plot = 4
@@ -86,7 +87,7 @@ function main()
     fig, ax = plt.subplots()
 
     # Non-dimensionalize bare and RPA+FL non-local moments
-    rs_quad = 1.0
+    rs_quad = rs
     sosem_quad = np.load("results/data/soms_rs=$(rs_quad)_beta_ef=40.0.npz")
     # np.load("results/data/soms_rs=$(Float64(param.rs))_beta_ef=$(param.beta).npz")
     k_kf_grid_quad = np.linspace(0.0, 3.0; num=600)
@@ -150,7 +151,7 @@ function main()
 
     # Reexpand merged data in powers of μ
     z, μ = UEG_MC.load_z_mu(param)
-    δz, δμ = CounterTerm.sigmaCT(max_order - 2, μ, z; verbose=1)
+    δz, δμ = CounterTerm.sigmaCT(max_order - n_min, μ, z; verbose=1)
     println("Computed δμ: ", δμ)
     c1c = UEG_MC.chemicalpotential_renormalization_sosem(
         merged_data,

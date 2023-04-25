@@ -129,7 +129,7 @@ function main()
     println([k for (k, _) in merged_data])
 
     # Load C⁽¹ᵈ⁾₂ quadrature results and interpolate on k_kf_grid
-    rs_quad = 1.0
+    rs_quad = rs
     # Non-dimensionalize rs = 2 quadrature results by Thomas-Fermi energy
     param_quad = Parameter.atomicUnit(0, rs_quad)    # (dimensionless T, rs)
     eTF_quad = param_quad.qTF^2 / (2 * param_quad.me)
@@ -140,7 +140,7 @@ function main()
     c1c_bare_quad = sosem_quad.get("bare_c") / eTF_quad^2
 
     # Non-dimensionalize bare and RPA+FL non-local moments
-    rs_lo = 1.0
+    rs_lo = rs
     sosem_lo = np.load("results/data/soms_rs=$(rs_lo)_beta_ef=40.0.npz")
     # Non-dimensionalize rs = 2 quadrature results by Thomas-Fermi energy
     param_lo = Parameter.atomicUnit(0, rs_lo)    # (dimensionless T, rs)
@@ -180,7 +180,7 @@ function main()
                 μ[p] = v / (factorial(p[2]) * factorial(p[3]))
             end
             # δz, δμ = CounterTerm.sigmaCT(2, μ, z; verbose=1)  # TODO: Debug 3rd order CTs
-            δz, δμ = CounterTerm.sigmaCT(max_order - 2, μ, z; verbose=1)
+            δz, δμ = CounterTerm.sigmaCT(max_order - n_min, μ, z; verbose=1)
             println("Computed δμ: ", δμ)
             c1c = UEG_MC.chemicalpotential_renormalization_sosem(
                 merged_data,

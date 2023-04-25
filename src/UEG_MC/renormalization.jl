@@ -1,6 +1,6 @@
 function chemicalpotential_renormalization(data, δμ; n_min, min_order=n_min, max_order)
     @assert max_order ≤ n_min + 4 "Order $order hasn't been implemented!"
-    println(δμ)
+    # println(δμ)
     @assert length(δμ) ≥ max_order - n_min
     d = CounterTerm.mergeInteraction(data)  # interaction-merged data
     T = valtype(d)

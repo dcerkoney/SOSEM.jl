@@ -196,7 +196,7 @@ function main()
                 μ[p] = v / (factorial(p[2]) * factorial(p[3]))
             end
             # δz, δμ = CounterTerm.sigmaCT(2, μ, z; verbose=1)  # TODO: Debug 3rd order CTs
-            δz, δμ = CounterTerm.sigmaCT(max_order - 2, μ, z; verbose=1)
+            δz, δμ = CounterTerm.sigmaCT(max_order - n_min, μ, z; verbose=1)
             println("Computed δμ: ", δμ)
             c1bL = UEG_MC.chemicalpotential_renormalization_sosem(
                 merged_data,

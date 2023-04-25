@@ -193,7 +193,7 @@ function main()
         μ[p] = v / (factorial(p[2]) * factorial(p[3]))
     end
     # δz, δμ = CounterTerm.sigmaCT(2, μ, z; verbose=1)  # TODO: Fix order 3
-    δz, δμ = CounterTerm.sigmaCT(max_order - 1, μ, z; verbose=1)
+    δz, δμ = CounterTerm.sigmaCT(max_order - n_min, μ, z; verbose=1)
     println("Computed δμ: ", δμ)
     sigma_x =
         UEG_MC.chemicalpotential_renormalization_sigma(merged_data, δμ; max_order=max_order)

@@ -27,17 +27,14 @@ function main()
     solver = :vegasmc
     expand_bare_interactions = false
 
-    neval34 = 5e10
-    neval5 = 5e10
-    neval = max(neval34, neval5)
+    neval = 5e10
 
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
     n_min = 2  # True minimal loop order for this observable
-    min_order = 2
-    max_order = 2
-    min_order_plot = 2
-    max_order_plot = 2
-    # @assert max_order ≥ 3
+    min_order = n_min
+    max_order = 5
+    min_order_plot = n_min
+    max_order_plot = 5
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -73,50 +70,47 @@ function main()
     plt.rc("text"; usetex=true)
     plt.rc("font"; family="serif")
 
-    # colors = ["orchid", "cornflowerblue", "turquoise", "chartreuse", "greenyellow"]
-    # markers = ["-", "-", "-", "-", "-"]
-
-    # # Load the results from JLD2
-    # filename =
-    #     "results/data/c1d_n=$(max_order)_rs=$(rs)_" *
-    #     "beta_ef=$(beta)_lambda=$(mass2)_" *
-    #     "neval=$(neval)_$(intn_str)$(solver)$(ct_string)"
-    # settings, param, kgrid, partitions, res = jldopen("$filename.jld2", "a+") do f
-    #     key = "$(UEG.short(plotparam))"
-    #     return f[key]
-    # end
-
-    # Load the results using new JLD2 format
-    if max_order == 5
-        max_together = 4
-    else
-        max_together = max_order
-    end
+    # Load the results from JLD2
     filename =
-        "results/data/rs=$(rs)_beta_ef=$(beta)_" *
-        "lambda=$(mass2)_$(intn_str)$(solver)$(ct_string)"
-    f = jldopen("$filename.jld2", "a+"; compress=true)
-    key = "c1d_n_min=$(min_order)_n_max=$(max_together)_neval=$(neval34)"
-    res = f["$key/res"]
-    settings = f["$key/settings"]
-    param = f["$key/param"]
-    kgrid = f["$key/kgrid"]
-    partitions = f["$key/partitions"]
-    if max_order == 5
-        # 5th order 
-        filename =
-            "results/data/rs=$(rs)_beta_ef=$(beta)_" *
-            "lambda=$(mass2)_$(intn_str)$(solver)$(ct_string)"
-        f5 = jldopen("$filename.jld2", "a+"; compress=true)
-        key5 = "c1d_n_min=$(max_order)_n_max=$(max_order)_neval=$(neval5)"
-        res5 = f5["$(key5)/res"]
-        settings5 = f5["$(key5)/settings"]
-        param5 = f5["$(key5)/param"]
-        kgrid5 = f5["$(key5)/kgrid"]
-        partitions5 = f5["$(key5)/partitions"]
+        "results/data/c1d_n=$(max_order)_rs=$(rs)_" *
+        "beta_ef=$(beta)_lambda=$(mass2)_" *
+        "neval=$(neval)_$(intn_str)$(solver)$(ct_string)"
+    settings, param, kgrid, partitions, res = jldopen("$filename.jld2", "a+") do f
+        key = "$(UEG.short(plotparam))"
+        return f[key]
     end
-    # Close the JLD2 file
-    close(f)
+
+    # # Load the results using new JLD2 format
+    # if max_order == 5
+    #     max_together = 4
+    # else
+    #     max_together = max_order
+    # end
+    # filename =
+    #     "results/data/rs=$(rs)_beta_ef=$(beta)_" *
+    #     "lambda=$(mass2)_$(intn_str)$(solver)$(ct_string)"
+    # f = jldopen("$filename.jld2", "a+"; compress=true)
+    # key = "c1d_n_min=$(min_order)_n_max=$(max_together)_neval=$(neval34)"
+    # res = f["$key/res"]
+    # settings = f["$key/settings"]
+    # param = f["$key/param"]
+    # kgrid = f["$key/kgrid"]
+    # partitions = f["$key/partitions"]
+    # if max_order == 5
+    #     # 5th order 
+    #     filename =
+    #         "results/data/rs=$(rs)_beta_ef=$(beta)_" *
+    #         "lambda=$(mass2)_$(intn_str)$(solver)$(ct_string)"
+    #     f5 = jldopen("$filename.jld2", "a+"; compress=true)
+    #     key5 = "c1d_n_min=$(max_order)_n_max=$(max_order)_neval=$(neval5)"
+    #     res5 = f5["$(key5)/res"]
+    #     settings5 = f5["$(key5)/settings"]
+    #     param5 = f5["$(key5)/param"]
+    #     kgrid5 = f5["$(key5)/kgrid"]
+    #     partitions5 = f5["$(key5)/partitions"]
+    # end
+    # # Close the JLD2 file
+    # close(f)
 
     print(settings)
     print(param)
@@ -126,12 +120,9 @@ function main()
 
     # Get dimensionless k-grid (k / kF)
     k_kf_grid = kgrid / param.kF
-    if max_order == 5
-        k_kf_grid5 = kgrid5 / param.kF
-    end
 
     # Load C⁽¹ᵈ⁾₂ quadrature results and interpolate on k_kf_grid
-    rs_quad = 1.0
+    rs_quad = rs
     # Non-dimensionalize rs = 2 quadrature results by Thomas-Fermi energy
     param_quad = Parameter.atomicUnit(0, rs_quad)    # (dimensionless T, rs)
     eTF_quad = param_quad.qTF^2 / (2 * param_quad.me)
@@ -151,19 +142,10 @@ function main()
     for (k, v) in data
         data[k] = v / (factorial(k[2]) * factorial(k[3]))
     end
-
-    # Add 5th order results to data dict
-    if max_order == 5
-        data5 = UEG_MC.restodict(res5, partitions5)
-        for (k, v) in data5
-            data5[k] = v / (factorial(k[2]) * factorial(k[3]))
-        end
-        merge!(data, data5)
-    end
     merged_data = CounterTerm.mergeInteraction(data)
     println([k for (k, _) in merged_data])
 
-    if min_order_plot == 2
+    if min_order_plot == 2 && min_order > 2
         # Set bare result manually using exact data to avoid systematic error in (2,0,0) calculation
         merged_data[(2, 0)] = measurement.(c1d2_exact, 0.0)  # treat quadrature data as numerically exact
     end
@@ -181,7 +163,7 @@ function main()
             μ[p] = v / (factorial(p[2]) * factorial(p[3]))
         end
         # δz, δμ = CounterTerm.sigmaCT(2, μ, z; verbose=1)  # TODO: Debug 3rd order CTs
-        δz, δμ = CounterTerm.sigmaCT(max_order - 2, μ, z; verbose=1)
+        δz, δμ = CounterTerm.sigmaCT(max_order - n_min, μ, z; verbose=1)
         println("Computed δμ: ", δμ)
         δμ1_exact = UEG_MC.delta_mu1(param)  # = ReΣ₁[λ](kF, 0)
         if renorm_mu_lo_ex && max_order_plot ≥ 3
@@ -258,7 +240,7 @@ function main()
 
     if min_order_plot == 2
         # Plot the bare (LO) result; there are no RPA(+FL) corrections for the class (d) moment
-        ax.plot(k_kf_grid_quad, c1d_bare_quad, "C0"; label="\$N=2\$ (quad)")
+        ax.plot(k_kf_grid_quad, c1d_bare_quad, "--"; color="C0", label="\$N=2\$ (quad)")
     end
 
     if save
@@ -268,17 +250,16 @@ function main()
         f = jldopen("$savename.jld2", "a+"; compress=true)
         # NOTE: no bare result for c1b observable (accounted for in c1b0)
         for N in min_order_plot:max_order
-            num_eval = N == 5 ? neval5 : neval34
             if haskey(f, "c1d") &&
                haskey(f["c1d"], "N=$N") &&
-               haskey(f["c1d/N=$N"], "neval=$(num_eval)")
-                @warn("replacing existing data for N=$N, neval=$(num_eval)")
-                delete!(f["c1d/N=$N"], "neval=$(num_eval)")
+               haskey(f["c1d/N=$N"], "neval=$(neval)")
+                @warn("replacing existing data for N=$N, neval=$(neval)")
+                delete!(f["c1d/N=$N"], "neval=$(neval)")
             end
-            f["c1d/N=$N/neval=$num_eval/meas"] = c1d_total[N]
-            f["c1d/N=$N/neval=$num_eval/settings"] = settings
-            f["c1d/N=$N/neval=$num_eval/param"] = param
-            f["c1d/N=$N/neval=$num_eval/kgrid"] = kgrid
+            f["c1d/N=$N/neval=$neval/meas"] = c1d_total[N]
+            f["c1d/N=$N/neval=$neval/settings"] = settings
+            f["c1d/N=$N/neval=$neval/param"] = param
+            f["c1d/N=$N/neval=$neval/kgrid"] = kgrid
         end
     end
 
@@ -296,10 +277,16 @@ function main()
             means,
             marker;
             markersize=2,
-            color="C$i",
+            color="C$(i-1)",
             label="\$N=$(N)\$ ($solver)",
         )
-        ax.fill_between(k_kf_grid, means - stdevs, means + stdevs; color="C$i", alpha=0.4)
+        ax.fill_between(
+            k_kf_grid,
+            means - stdevs,
+            means + stdevs;
+            color="C$(i-1)",
+            alpha=0.4,
+        )
         if !renorm_mu_lo_ex && max_order <= 3 && N == 3
             ax.plot(
                 k_kf_grid,
@@ -325,8 +312,8 @@ function main()
     # yloc = 2.0
     # ydiv = -0.3
     xloc = 1.6
-    yloc = 0.9
-    ydiv = -0.095
+    yloc = 0.8
+    ydiv = -0.1
     ax.text(
         xloc,
         yloc,

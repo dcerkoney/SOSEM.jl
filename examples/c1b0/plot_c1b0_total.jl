@@ -23,27 +23,21 @@ function main()
         cd(ENV["SOSEM_HOME"])
     end
 
-    rs = 2.0
+    rs = 1.0
     beta = 40.0
-    mass2 = 0.4
+    mass2 = 1.0
     solver = :vegasmc
-    expand_bare_interactions = true
+    expand_bare_interactions = false
 
-    neval34 = 5e10
-    neval5 = 5e10
-    neval = max(neval34, neval5)
-    # neval = neval34
+    neval = 5e10
 
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
     n_min = 2  # True minimal loop order for this observable
-    min_order = 2
-    max_order = 4
-    min_order_plot = 2
-    max_order_plot = 4
-    # @assert max_order ≥ 3
-
-    # Load data from multiple fixed-order runs
-    # fixed_orders = collect(min_order:max_order)
+    # TODO: Add this to properties.jl!
+    min_order = n_min
+    max_order = 5
+    min_order_plot = n_min
+    max_order_plot = 5
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -82,62 +76,29 @@ function main()
     plt.rc("text"; usetex=true)
     plt.rc("font"; family="serif")
 
-    # colors = ["orchid", "cornflowerblue", "turquoise", "chartreuse", "greenyellow"]
-    # markers = ["-", "-", "-", "-", "-"]
-
-    # Load the order 3-4 results from JLD2 (and μ data from csv, if applicable)
-    if max_order == 5
-        max_together = 4
-    else
-        max_together = max_order
-    end
+    # Load the results from JLD2 (and μ data from csv, if applicable)
     savename =
-        "results/data/c1bL0_n=$(max_together)_rs=$(rs)_" *
+        "results/data/c1bL0_n=$(max_order)_rs=$(rs)_" *
         "beta_ef=$(beta)_lambda=$(mass2)_" *
-        "neval=$(neval34)_$(intn_str)$(solver)$(ct_string)"
+        "neval=$(neval)_$(intn_str)$(solver)$(ct_string)"
     settings, param, kgrid, partitions, res = jldopen("$savename.jld2", "a+") do f
         key = "$(UEG.short(plotparam))"
         return f[key]
     end
 
-    # Load the fixed order 5 result from JLD2
-    local kgrid5, res5, partitions5
-    if max_order == 5
-        savename5 =
-            "results/data/c1bL0_n=$(max_order)_rs=$(rs)_" *
-            "beta_ef=$(beta)_lambda=$(mass2)_" *
-            "neval=$(neval5)_$(intn_str)$(solver)$(ct_string)"
-        settings5, param5, kgrid5, partitions5, res5 = jldopen("$savename5.jld2", "a+") do f
-            key = "$(UEG.short(plotparam))"
-            return f[key]
-        end
-    end
-
     # Get dimensionless k-grid (k / kF)
     k_kf_grid = kgrid / param.kF
-    if max_order == 5
-        k_kf_grid5 = kgrid5 / param.kF
-    end
 
     # Convert results to a Dict of measurements at each order with interaction counterterms merged
     data = UEG_MC.restodict(res, partitions)
     for (k, v) in data
         data[k] = v / (factorial(k[2]) * factorial(k[3]))
     end
-
-    # Add 5th order results to data dict
-    if max_order == 5
-        data5 = UEG_MC.restodict(res5, partitions5)
-        for (k, v) in data5
-            data5[k] = v / (factorial(k[2]) * factorial(k[3]))
-        end
-        merge!(data, data5)
-    end
     merged_data = CounterTerm.mergeInteraction(data)
     println([k for (k, _) in merged_data])
 
     # Non-dimensionalize bare and RPA+FL non-local moments
-    rs_lo = 1.0
+    rs_lo = rs
     sosem_lo = np.load("results/data/soms_rs=$(rs_lo)_beta_ef=40.0.npz")
     # Non-dimensionalize rs = 2 quadrature results by Thomas-Fermi energy
     param_lo = Parameter.atomicUnit(0, rs_lo)    # (dimensionless T, rs)
@@ -180,57 +141,57 @@ function main()
 
     # Get total data
     if renorm_mu
-        if renorm_mu_lo_ex && max_order_plot == 4
-            δμ1 = UEG_MC.delta_mu1(param)  # = ReΣ₁[λ](kF, 0)
-            # C⁽¹ᵇ⁾₄ = C⁽¹ᵇ⁾_{4,0} + δμ₁ C⁽¹ᵇ⁾_{3,1}
-            c1b3L0 = merged_data[(3, 0)]
-            c1b4L0 = merged_data[(4, 0)] + δμ1 * merged_data[(3, 1)]
-            c1bL0 = SortedDict(3 => c1b3L0, 4 => c1b4L0)
-            if min_order_plot == 2
-                c1bL0[2] = c1b2_exact
-            end
-        else
-            # Reexpand merged data in powers of μ
-            ct_filename = "examples/counterterms/data_Z$(ct_string).jld2"
-            z, μ = UEG_MC.load_z_mu(param; ct_filename=ct_filename)
-            # Add Taylor factors to CT data
-            for (p, v) in z
-                z[p] = v / (factorial(p[2]) * factorial(p[3]))
-            end
-            for (p, v) in μ
-                μ[p] = v / (factorial(p[2]) * factorial(p[3]))
-            end
-            # δz, δμ = CounterTerm.sigmaCT(2, μ, z; verbose=1)  # TODO: Debug 3rd order CTs
-            δz, δμ = CounterTerm.sigmaCT(max_order - 2, μ, z; verbose=1)
-            println("Computed δμ: ", δμ)
-            c1bL0 = UEG_MC.chemicalpotential_renormalization_sosem(
-                merged_data,
-                δμ;
-                min_order=min(min_order, min_order_plot),
-                max_order=max(max_order, max_order_plot),
-            )
-            # Test manual renormalization with exact lowest-order chemical potential
-            if !renorm_mu_lo_ex && max_order >= 4
-                # NOTE: For this observable, there is no second-order
-                δμ1_exact = UEG_MC.delta_mu1(param)  # = ReΣ₁[λ](kF, 0)
-                # C⁽¹ᵇ⁾₄ = 2(C⁽¹ᵇ⁾ᴸ_{4,0} + δμ₁ C⁽¹ᵇ⁾ᴸ_{3,1})
-                c1b04_manual =
-                    2 * (
-                        merged_data[(3, 0)] +
-                        merged_data[(4, 0)] +
-                        δμ1_exact * merged_data[(3, 1)]
-                    )
-                c1b4L0 = 2 * (c1bL0[3] + c1bL0[4])
-                stdscores = stdscore.(c1b4L0, c1b04_manual)
-                worst_score = argmax(abs, stdscores)
-                println("Exact δμ₁: ", δμ1_exact)
-                println("Computed δμ₁: ", δμ[1])
-                println(
-                    "Worst standard score for total result to 4th " *
-                    "order (auto vs exact+manual): $worst_score",
-                )
-            end
+        # if renorm_mu_lo_ex && max_order_plot == 4
+        #     δμ1 = UEG_MC.delta_mu1(param)  # = ReΣ₁[λ](kF, 0)
+        #     # C⁽¹ᵇ⁾₄ = C⁽¹ᵇ⁾_{4,0} + δμ₁ C⁽¹ᵇ⁾_{3,1}
+        #     c1b3L0 = merged_data[(3, 0)]
+        #     c1b4L0 = merged_data[(4, 0)] + δμ1 * merged_data[(3, 1)]
+        #     c1bL0 = SortedDict(3 => c1b3L0, 4 => c1b4L0)
+        #     if min_order_plot == 2
+        #         c1bL0[2] = c1b2_exact
+        #     end
+        # else
+        # Reexpand merged data in powers of μ
+        ct_filename = "examples/counterterms/data_Z$(ct_string).jld2"
+        z, μ = UEG_MC.load_z_mu(param; ct_filename=ct_filename)
+        # Add Taylor factors to CT data
+        for (p, v) in z
+            z[p] = v / (factorial(p[2]) * factorial(p[3]))
         end
+        for (p, v) in μ
+            μ[p] = v / (factorial(p[2]) * factorial(p[3]))
+        end
+        # δz, δμ = CounterTerm.sigmaCT(2, μ, z; verbose=1)  # TODO: Debug 3rd order CTs
+        δz, δμ = CounterTerm.sigmaCT(max_order - n_min, μ, z; verbose=1)
+        println("Computed δμ: ", δμ)
+        c1bL0 = UEG_MC.chemicalpotential_renormalization_sosem(
+            merged_data,
+            δμ;
+            min_order=min(min_order, min_order_plot),
+            max_order=max(max_order, max_order_plot),
+        )
+        # Test manual renormalization with exact lowest-order chemical potential
+        if !renorm_mu_lo_ex && max_order >= 4
+            # NOTE: For this observable, there is no second-order
+            δμ1_exact = UEG_MC.delta_mu1(param)  # = ReΣ₁[λ](kF, 0)
+            # C⁽¹ᵇ⁾₄ = 2(C⁽¹ᵇ⁾ᴸ_{4,0} + δμ₁ C⁽¹ᵇ⁾ᴸ_{3,1})
+            c1b04_manual =
+                2 * (
+                    merged_data[(3, 0)] +
+                    merged_data[(4, 0)] +
+                    δμ1_exact * merged_data[(3, 1)]
+                )
+            c1b4L0 = 2 * (c1bL0[3] + c1bL0[4])
+            stdscores = stdscore.(c1b4L0, c1b04_manual)
+            worst_score = argmax(abs, stdscores)
+            println("Exact δμ₁: ", δμ1_exact)
+            println("Computed δμ₁: ", δμ[1])
+            println(
+                "Worst standard score for total result to 4th " *
+                "order (auto vs exact+manual): $worst_score",
+            )
+        end
+        # end
     else
         c1bL0 = merged_data
     end
@@ -296,20 +257,18 @@ function main()
         f = jldopen("$savename.jld2", "a+"; compress=true)
         # NOTE: no bare result for c1b observable (accounted for in c1b0)
         for N in min_order_plot:max_order
-            num_eval = N == 5 ? neval5 : neval34
-            # num_eval = neval34
             if haskey(f, "c1b0") &&
                haskey(f["c1b0"], "N=$N") &&
-               haskey(f["c1b0/N=$N"], "neval=$num_eval")
-                @warn("replacing existing data for N=$N, neval=$num_eval")
-                delete!(f["c1b0/N=$N"], "neval=$num_eval")
+               haskey(f["c1b0/N=$N"], "neval=$neval")
+                @warn("replacing existing data for N=$N, neval=$neval")
+                delete!(f["c1b0/N=$N"], "neval=$neval")
             end
             # NOTE: Since C⁽¹ᵇ⁾ᴸ = C⁽¹ᵇ⁾ᴿ for the UEG, the
             #       full class (b) moment is C⁽¹ᵇ⁾ = 2C⁽¹ᵇ⁾ᴸ.
-            f["c1b0/N=$N/neval=$num_eval/meas"] = 2 * c1bL0_total[N]
-            f["c1b0/N=$N/neval=$num_eval/settings"] = settings
-            f["c1b0/N=$N/neval=$num_eval/param"] = param
-            f["c1b0/N=$N/neval=$num_eval/kgrid"] = kgrid
+            f["c1b0/N=$N/neval=$neval/meas"] = 2 * c1bL0_total[N]
+            f["c1b0/N=$N/neval=$neval/settings"] = settings
+            f["c1b0/N=$N/neval=$neval/param"] = param
+            f["c1b0/N=$N/neval=$neval/kgrid"] = kgrid
         end
     end
 
@@ -318,9 +277,6 @@ function main()
         # if N == 2
         #     continue
         # end
-        # NOTE: Currently using a different kgrid at order 5
-        k_over_kfs = N == 5 ? k_kf_grid5 : k_kf_grid
-        # k_over_kfs = k_kf_grid
         # Get means and error bars from the result up to this order
         # NOTE: Since C⁽¹ᵇ⁾ᴸ = C⁽¹ᵇ⁾ᴿ for the UEG, the
         #       full class (b) moment is C⁽¹ᵇ⁾ = 2C⁽¹ᵇ⁾ᴸ.
@@ -331,17 +287,23 @@ function main()
         # marker = "-"
         # marker = N > 3 ? "o-" : "-"
         ax.plot(
-            k_over_kfs,
+            k_kf_grid,
             means,
             marker;
             markersize=2,
             color="C$(i-1)",
             label="\$N=$(N)\$ ($solver)",
         )
-        ax.fill_between(k_over_kfs, means - stdevs, means + stdevs; color="C$(i-1)", alpha=0.3)
+        ax.fill_between(
+            k_kf_grid,
+            means - stdevs,
+            means + stdevs;
+            color="C$(i-1)",
+            alpha=0.3,
+        )
         if !renorm_mu_lo_ex && max_order <= 3 && N == 3
             ax.plot(
-                k_over_kfs,
+                k_kf_grid,
                 Measurements.value.(c1b03_manual);
                 color="r",
                 linestyle="--",
@@ -363,12 +325,12 @@ function main()
     # xloc = 1.5
     # yloc = -1.25
     # ydiv = -0.25
+    xloc = 0.25
+    yloc = -0.525
+    ydiv = -0.06
     # xloc = 0.2
-    # yloc = -0.525
-    # ydiv = -0.075
-    xloc = 0.2
-    yloc = -0.375
-    ydiv = -0.04
+    # yloc = -0.375
+    # ydiv = -0.04
     ax.text(
         xloc,
         yloc,

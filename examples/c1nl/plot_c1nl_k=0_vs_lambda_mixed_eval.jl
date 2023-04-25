@@ -53,7 +53,7 @@ function main()
     # markers = ["-", "-", "-", "-", "-"]
 
     # Non-dimensionalize bare and RPA+FL non-local moments
-    rs_lo = 1.0
+    rs_lo = rs
     sosem_lo = np.load("results/data/soms_rs=$(rs_lo)_beta_ef=40.0.npz")
     # Non-dimensionalize rs = 2 quadrature results by Thomas-Fermi energy
     param_lo = Parameter.atomicUnit(0, rs_lo)    # (dimensionless T, rs)

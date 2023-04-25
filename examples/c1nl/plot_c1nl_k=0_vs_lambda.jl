@@ -66,7 +66,7 @@ function main()
         lambda_star = 0.1375  # estimate at midpoint
     end
 
-    n_min = 2  # lowest possible loop order for this observable
+    n_min = 2  # True minimal loop order for this observable
     min_order = 2
     max_order = 4
 

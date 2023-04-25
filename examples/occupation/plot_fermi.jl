@@ -13,15 +13,15 @@ p3 = ParaMC(; rs=3.0, beta=100.0)
 
 for param in [p1, p2, p3]
     # HWHM of -f'(ϵ) = ln((√2 + 1) / (√2 - 1)) / β (in units of EF; beta = β EF)
-    fermi_fwhm_over_ef = log((sqrt(2) + 1) / (sqrt(2) - 1)) / param.beta
+    fermi_hwhm_over_ef = log((sqrt(2) + 1) / (sqrt(2) - 1)) / param.beta
 
     # ϵ_± = ϵF ± Δ_HWHM
-    e_ef_minus = 1 - fermi_fwhm_over_ef
-    e_ef_plus  = 1 + fermi_fwhm_over_ef
+    e_ef_minus = 1 - fermi_hwhm_over_ef
+    e_ef_plus  = 1 + fermi_hwhm_over_ef
 
     # k_± = √(2 m ϵ_±) = kF √(1 ± Δ_HWHM / ϵF)
-    # k_kf_minus = 1 - fermi_fwhm_over_ef / 2  # ≈ √(1 - Δ_HWHM / ϵF)    (to linear order in Δ)
-    # k_kf_plus  = 1 + fermi_fwhm_over_ef / 2  # ≈ √(1 + Δ_HWHM / ϵF)  (to linear order in Δ)
+    # k_kf_minus = 1 - fermi_hwhm_over_ef / 2  # ≈ √(1 - Δ_HWHM / ϵF)    (to linear order in Δ)
+    # k_kf_plus  = 1 + fermi_hwhm_over_ef / 2  # ≈ √(1 + Δ_HWHM / ϵF)  (to linear order in Δ)
     k_kf_minus = sqrt(e_ef_minus)  # = √(1 - Δ_HWHM / ϵF)
     k_kf_plus  = sqrt(e_ef_plus)   # = √(1 + Δ_HWHM / ϵF)
 

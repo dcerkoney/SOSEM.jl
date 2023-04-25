@@ -82,7 +82,7 @@ function main()
     fig, ax = plt.subplots()
 
     # Non-dimensionalize bare and RPA+FL non-local moments
-    rs_quad = 1.0
+    rs_quad = rs
     sosem_quad = np.load("results/data/soms_rs=$(rs_quad)_beta_ef=40.0.npz")
     # np.load("results/data/soms_rs=$(Float64(param.rs))_beta_ef=$(param.beta).npz")
     k_kf_grid_quad = np.linspace(0.0, 3.0; num=600)

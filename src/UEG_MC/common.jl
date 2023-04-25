@@ -41,23 +41,49 @@ Merge interaction order and the main order
 (normal_order, G_order, W_order) --> (normal+W_order, G_order)
 """
 function mergeInteraction(data)
-    if data isa Dict && all(x -> length(x) == 3, keys(data))
-        T = valtype(data)
-        res = MergedMeasType{T}()
-        for (p, val) in data
-            @assert length(p) == 3
-            # println(p)
-            mp = (p[1] + p[3], p[2])
-            if haskey(res, mp)
-                res[mp] += val
-            else
-                res[mp] = val
-            end
-        end
-        return res
-    else # nothing to merge
+    # nothing to merge
+    if (data isa Dict && all(x -> length(x) == 3, keys(data))) == false
         return data
     end
+    T = valtype(data)
+    res = MergedMeasType{T}()
+    for (p, val) in data
+        @assert length(p) == 3
+        mp = (p[1] + p[3], p[2])
+        if haskey(res, mp)
+            res[mp] += val
+        else
+            res[mp] = val
+        end
+    end
+    return res
+end
+
+"""
+Aggregate measurement partitions up to order N for nmin ≤ N ≤ nmax.
+Assumes the input data has been merged by interaction order and no
+chemical potential renormalization is being performed.
+"""
+function aggregate_orders(data::MergedMeasType; nmax, nmin=2)
+    # merged data is a Dict of interaction-merged partitions P; sort by keys
+    for n in nmin:nmax
+        total_data[n] = zero(data[(n, 0)])
+        println(n)
+        for (p, meas) in data
+            if sum(p) <= n
+                println("adding partition $p to $n-order aggregate")
+                total_data[n] += meas
+            end
+        end
+    end
+end
+
+"""
+Aggregate measurement partitions up to order N for nmin ≤ N ≤ nmax.
+Assumes the input data has been merged by interaction order and reexpanded in μ.
+"""
+function aggregate_orders(data::RenormMeasType{T}) where {T}
+    return TotalMeasType{T}(zip(keys(data), accumulate(+, values(data))))
 end
 
 """Load JLD2 data from multiple fixed orders."""
@@ -131,42 +157,3 @@ end
 function load_fixed_order_data_jld2(filename, plotsettings::Settings, plotparam::UEG.ParaMC)
     return load_fixed_order_data_jld2([filename], plotsettings, [plotparam])
 end
-
-"""
-Aggregate the measurements for C⁽¹ᶜ⁾ up to order N for nmin ≤ N ≤ nmax.
-Assumes the input data has been merged by interaction order and no
-chemical potential renormalization is being performed.
-"""
-function aggregate_orders(data::MergedMeasType; nmax, nmin=2)
-    # merged data is a Dict of interaction-merged partitions P; sort by keys
-    for n in nmin:nmax
-        total_data[n] = zero(data[(n, 0)])
-        println(n)
-        for (p, meas) in data
-            if sum(p) <= n
-                println("adding partition $p to $n-order aggregate")
-                total_data[n] += meas
-            end
-        end
-    end
-end
-
-"""
-Aggregate the measurements for C⁽¹ᶜ⁾ up to order N for nmin ≤ N ≤ nmax.
-Assumes the input data has been merged by interaction order and
-reexpanded in μ.
-"""
-function aggregate_orders(data::RenormMeasType{T}) where {T}
-    return TotalMeasType{T}(zip(keys(data), accumulate(+, values(data))))
-end
-
-# function aggregate_orders(renorm_data::Vector{Vector{Measurement}}; nmax, nmin=2)
-#     # TODO: deprecate this method (chemicalpotential_renormalization_sosem return type updated)
-#     @todo
-#     # merged data is an ordered vector of data at each order nmin ≤ n ≤ nmax
-#     imin = nmin - 1
-#     imax = nmax - 1
-#     return TotalMeasType(
-#         zip(nmin:nmax, accumulate(+, renorm_data[i] for i in collect(imin:imax))),
-#     )
-# end

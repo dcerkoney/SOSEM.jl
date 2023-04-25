@@ -21,10 +21,6 @@ const MeasType       = Dict{PartitionType,T} where {T}
 const MergedMeasType = Dict{MergedPartitionType,T} where {T}
 const RenormMeasType = SortedDict{Int,T} where {T}
 const TotalMeasType  = Dict{Int,T} where {T}
-# const MeasType = Dict{PartitionType,Vector{Measurement}}
-# const MergedMeasType = Dict{MergedPartitionType,Vector{Measurement}}
-# const RenormMeasType = SortedDict{Int,Vector{Measurement}}
-# const TotalMeasType = Dict{Int,Vector{Measurement}}
 
 include("common.jl")
 export restodict, load_fixed_order_data_jld2, aggregate_orders

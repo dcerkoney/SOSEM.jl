@@ -74,22 +74,23 @@ function main()
         cd(ENV["SOSEM_HOME"])
     end
 
-    rs = 5.0
+    rs = 1.0
     beta = 40.0
-    mass2 = 0.1375
+    mass2 = 1.0
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval123 = 5e10
+    neval123 = 1e10
     neval4 = 5e10
-    neval = max(neval123, neval4)
+    neval5 = 5e10
+    neval = max(neval123, neval4, neval5)
 
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
     n_min = 1  # True minimal loop order for this observable
     min_order = 1
-    max_order = 4
+    max_order = 5
     min_order_plot = 1
-    max_order_plot = 4
+    max_order_plot = 5
 
     # Save total results
     save = true
@@ -114,23 +115,35 @@ function main()
     loadparam = ParaMC(; order=max_order, rs=rs, beta=beta, mass2=mass2, isDynamic=false)
 
     # Load raw data
-    if max_order == 4
+    # if max_order >= 5
+    #     max_together = 4
+    if max_order >= 4
         max_together = 3
     else
         max_together = max_order
     end
     savename =
         "results/data/sigma_x_n=$(max_together)_rs=$(rs)_" *
+        # "beta_ef=$(beta)_lambda=$(mass2)_neval=$(neval4)_$(solver)$(ct_string)"
         "beta_ef=$(beta)_lambda=$(mass2)_neval=$(neval123)_$(solver)$(ct_string)"
     orders, param, kgrid, partitions, res = jldopen("$savename.jld2", "a+") do f
         key = "$(UEG.short(loadparam))"
         return f[key]
     end
-    if max_order == 4
+    if max_order >= 4
         savename =
-            "results/data/sigma_x_n=$(max_order)_rs=$(rs)_" *
+            "results/data/sigma_x_n=4_rs=$(rs)_" *
             "beta_ef=$(beta)_lambda=$(mass2)_neval=$(neval4)_$(solver)$(ct_string)"
         orders4, param4, kgrid4, partitions4, res4 = jldopen("$savename.jld2", "a+") do f
+            key = "$(UEG.short(loadparam))"
+            return f[key]
+        end
+    end
+    if max_order >= 5
+        savename =
+            "results/data/sigma_x_n=5_rs=$(rs)_" *
+            "beta_ef=$(beta)_lambda=$(mass2)_neval=$(neval5)_$(solver)$(ct_string)"
+        orders5, param5, kgrid5, partitions5, res5 = jldopen("$savename.jld2", "a+") do f
             key = "$(UEG.short(loadparam))"
             return f[key]
         end
@@ -138,8 +151,11 @@ function main()
 
     # Get dimensionless k-grid (k / kF) and index corresponding to the Fermi energy
     k_kf_grid = kgrid / param.kF
-    if max_order == 4
+    if max_order >= 4
         k_kf_grid4 = kgrid4 / param.kF
+    end
+    if max_order >= 5
+        k_kf_grid5 = kgrid5 / param.kF
     end
     ikF = findfirst(x -> x == 1.0, k_kf_grid)
 
@@ -149,12 +165,20 @@ function main()
         data[k] = v / (factorial(k[2]) * factorial(k[3]))
     end
     # Add 4th order results to data dict
-    if max_order == 4
+    if max_order >= 4
         data4 = UEG_MC.restodict(res4, partitions4)
         for (k, v) in data4
             data4[k] = v / (factorial(k[2]) * factorial(k[3]))
         end
         merge!(data, data4)
+    end
+    # Add 5th order results to data dict
+    if max_order >= 5
+        data5 = UEG_MC.restodict(res5, partitions5)
+        for (k, v) in data5
+            data5[k] = v / (factorial(k[2]) * factorial(k[3]))
+        end
+        merge!(data, data5)
     end
 
     merged_data = CounterTerm.mergeInteraction(data)
@@ -227,7 +251,17 @@ function main()
         f = jldopen("$savename.jld2", "a+"; compress=true)
         # NOTE: no bare result for c1b observable (accounted for in c1b0)
         for N in min_order_plot:max_order
-            num_eval = N == 4 ? neval4 : neval123
+            if N < 4
+                num_eval = neval123
+            elseif N == 4
+                num_eval = neval4
+            elseif N == 5
+                num_eval = neval5
+            else
+                error("An unexpected error occurred!")
+            end
+            # num_eval = N == 4 ? neval4 : neval123
+            # num_eval = N == 5 ? neval5 : neval4
             # Skip exact Fock (N = 1) result
             N == 1 && continue
             if haskey(f, "sigma_x") &&
@@ -279,14 +313,16 @@ function main()
     ax1.legend(; loc="lower right")
     ax1.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
     ax1.set_xlabel("\$k / k_F\$")
-    ax1.set_ylabel("\$C^{(0)}_\\sigma(k) \\,/\\, \\epsilon_{\\mathrm{TF}} = \\Sigma_{x}(k) \\,/\\, \\epsilon_{\\mathrm{TF}}\$")
+    ax1.set_ylabel(
+        "\$C^{(0)}_\\sigma(k) \\,/\\, \\epsilon_{\\mathrm{TF}} = \\Sigma_{x}(k) \\,/\\, \\epsilon_{\\mathrm{TF}}\$",
+    )
     # ax1.set_ylabel("\$\\Sigma_{x}(k) \\,/\\, \\epsilon_{\\mathrm{TF}}\$")
-    # xloc = 1.5
-    # yloc = -0.4
-    # ydiv = -0.095
     xloc = 1.5
-    yloc = -0.6
-    ydiv = -0.175
+    yloc = -0.4
+    ydiv = -0.095
+    # xloc = 1.5
+    # yloc = -0.6
+    # ydiv = -0.175
     ax1.text(
         xloc,
         yloc,
@@ -472,6 +508,14 @@ function main()
             "(N=$N) Low-energy effective mass ratio from quadratic fit: " *
             "(mₑ/m⋆)(k=0) ≈ $low_en_mass_ratio_N, r2=$r2",
         )
+        if N == max_order_plot
+            ax2.text(
+                0.175,
+                0.5,
+                "\$(N=$N) \\; m^\\star / m \\approx $(round(meff_N / param.me; digits=5))\$";
+                fontsize=12,
+            )
+        end
 
         # Data gets noisy above 3rd loop order
         # marker = N > 2 ? "o-" : "-"
@@ -503,8 +547,8 @@ function main()
     ax2.legend(; loc="upper left")
     # ax2.set_xlim(minimum(k_kf_grid), 1)
     ax2.set_xlim(minimum(k_kf_grid), 1.5)
-    # ax2.set_ylim(-2.0, 3.0)
-    ax2.set_ylim(-2.0, 1.0)
+    ax2.set_ylim(-2.0, 3.0)
+    # ax2.set_ylim(-2.0, 1.0)
     ax2.set_xlabel("\$k / k_F\$")
     ax2.set_ylabel(
         "\$M^{(1)}_\\sigma(k) \\,/\\, \\epsilon_{\\mathrm{TF}} =  \\left(\\epsilon_{k} + \\Sigma_{x}(k)\\right) \\,/\\, \\epsilon_{\\mathrm{TF}} \$",
@@ -512,12 +556,12 @@ function main()
     # ax2.set_ylabel(
     #     "\$\\epsilon_{\\mathrm{momt.}}(k) \\,/\\, \\epsilon_{\\mathrm{TF}} =  \\left(\\epsilon_{k} + \\Sigma_{x}(k)\\right) \\,/\\, \\epsilon_{\\mathrm{TF}} \$",
     # )
-    # xloc = 0.8
-    # yloc = -0.5
-    # ydiv = -0.5
     xloc = 0.8
-    yloc = -1.25
-    ydiv = -0.25
+    yloc = -0.5
+    ydiv = -0.5
+    # xloc = 0.8
+    # yloc = -1.25
+    # ydiv = -0.25
     ax2.text(
         xloc,
         yloc,

@@ -30,6 +30,7 @@ function main()
     expand_bare_interactions = false
 
     neval = 1e10
+    n_min = 2  # True minimal loop order for this observable
     min_order = 3
     max_order = 4
     min_order_plot = 4
@@ -109,7 +110,7 @@ function main()
     fig, ax = plt.subplots()
 
     # Load C⁽¹ᵈ⁾₂ quadrature results and interpolate on k_kf_grid
-    rs_quad = 1.0
+    rs_quad = rs
     # Non-dimensionalize rs = 2 quadrature results by Thomas-Fermi energy
     param_quad = Parameter.atomicUnit(0, rs_quad)    # (dimensionless T, rs)
     eTF_quad = param_quad.qTF^2 / (2 * param_quad.me)
@@ -185,7 +186,7 @@ function main()
 
     # Reexpand merged data in powers of μ
     z, μ = UEG_MC.load_z_mu(param)
-    δz, δμ = CounterTerm.sigmaCT(max_order - 2, μ, z; verbose=1)
+    δz, δμ = CounterTerm.sigmaCT(max_order - n_min, μ, z; verbose=1)
     println("Computed δμ: ", δμ)
     c1d = UEG_MC.chemicalpotential_renormalization_sosem(
         merged_data,
