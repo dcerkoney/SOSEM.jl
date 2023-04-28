@@ -16,8 +16,8 @@ end
 function main()
     # Physical params matching data for SOSEM observables
     order = [4]  # C^{(1)}_{N≤5} includes CTs up to 3rd order
-    rs = [2.0]
-    mass2 = [0.4]
+    rs = [1.0]
+    mass2 = [1.0]
     beta = [40.0]
 
     # Momentum spacing for finite-difference derivative of Sigma (in units of kF)
