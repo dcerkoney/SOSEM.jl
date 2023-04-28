@@ -1,4 +1,4 @@
-module Compositions
+module IntegerCompositions
 
 using Combinatorics:
     partitions,
@@ -101,4 +101,4 @@ function Base.iterate(c::RPaddedWeakIntegerCompositions, s=Stateful(c.it))
     return (weak_comp, s)
 end
 
-end  # module Compositions
+end  # module IntegerCompositions
