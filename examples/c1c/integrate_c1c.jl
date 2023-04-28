@@ -22,8 +22,8 @@ function main()
 
     settings = DiagGen.Settings{DiagGen.Observable}(
         DiagGen.c1c;
-        min_order=2,
-        max_order=5,
+        min_order=6,
+        max_order=6,
         verbosity=DiagGen.quiet,
         expand_bare_interactions=false,
         filter=[NoHartree],

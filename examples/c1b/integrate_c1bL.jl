@@ -22,8 +22,8 @@ function main()
 
     settings = DiagGen.Settings{DiagGen.Observable}(
         DiagGen.c1bL;
-        min_order=3,  # no (2,0,0) partition for this observable (Γⁱ₃ > Γ₀),
-        max_order=5,
+        min_order=6,  # no (2,0,0) partition for this observable (Γⁱ₃ > Γ₀),
+        max_order=6,
         verbosity=DiagGen.quiet,
         expand_bare_interactions=false,
         filter=[NoHartree],

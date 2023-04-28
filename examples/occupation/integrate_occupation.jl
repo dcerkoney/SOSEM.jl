@@ -228,8 +228,8 @@ function main()
     end
 
     # Total loop order N
-    # orders = [0, 1, 2]
-    orders = [4]
+    orders = [0, 1, 2, 3]
+    # orders = [4]
     max_order = maximum(orders)
     sort!(orders)
 
@@ -239,7 +239,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 5e10
+    neval = 1e10
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -251,9 +251,9 @@ function main()
     # UEG parameters for MC integration
     param = ParaMC(;
         order=max_order,
-        rs=1.0,
+        rs=2.0,
         beta=40.0,
-        mass2=1.0,
+        mass2=0.4,
         isDynamic=false,
         isFock=isFock,  # remove Fock insertions
     )
