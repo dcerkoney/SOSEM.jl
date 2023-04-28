@@ -58,8 +58,7 @@ function main()
         ######### calcualte Z factor and mass ratio ######################
 	δK *= kF
         kgrid = [kF, kF + δK, kF + 2δK, kF + 4δK, kF + 8δK]
-	ngrid = [0, 1]
-        # ngrid = [-1, 0]
+	ngrid = [0]
 
         # Build diagrams
         n_min, n_max = 1, _order
@@ -94,8 +93,7 @@ function main()
         if isnothing(sigma) == false
             println("Current working directory: $(pwd())")
             println("Saving data to JLD2...")
-            jldopen("data_mass_ratio_and_Z$(ct_string).jld2", "a+"; compress=true) do f
-                # jldopen("data_Z.jld2", "a+") do f
+            jldopen("data_mass_ratio$(ct_string).jld2", "a+"; compress=true) do f
                 key = "$(UEG.short(para))"
                 if haskey(f, key)
                     @warn("replacing existing data for $key")
