@@ -2,6 +2,7 @@
 module DiagGen
 
 using AbstractTrees
+using Combinatorics: integer_partitions
 using ..ElectronLiquid
 using ..FeynmanDiagram
 using ..Logging
@@ -39,7 +40,10 @@ export partition,
 # Non-local moment
 include("build_nonlocal.jl")
 export build_nonlocal,
-    build_nonlocal_fixed_order, build_nonlocal_with_ct, build_sigma2_nonlocal, build_diagtree
+    build_nonlocal_fixed_order,
+    build_nonlocal_with_ct,
+    build_sigma2_nonlocal,
+    build_diagtree
 
 # # Local moment
 # include("build_local.jl")

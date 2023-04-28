@@ -26,6 +26,18 @@ function partition(order::Int)
 end
 
 """
+Generate all compositions of an integer `n`.
+For example, 3 ↦ {3}, {2, 1}, {1, 2}, {1, 1, 1}.
+"""
+function integer_compositions(n::Integer)
+    compositions = Vector{Int64}[]
+    for p in integer_partitions(n)
+        append!(compositions, multiset_permutations(p, length(p)))
+    end
+    return compositions
+end
+
+"""
 Get all (μ and/or λ) counterterm partitions (n1, n2, n3) satisfying the following constraints:
 
     (1) n1 ≥ n_lowest

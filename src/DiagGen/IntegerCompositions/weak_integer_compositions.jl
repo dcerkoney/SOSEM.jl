@@ -1,11 +1,49 @@
-module IntegerCompositions
+module Compositions
 
 using Combinatorics:
-    partitions, permutations, WithReplacementCombinations, with_replacement_combinations
+    partitions,
+    permutations,
+    # IntegerPartitions,
+    # integer_partitions,
+    # multiset_permutations,
+    WithReplacementCombinations,
+    with_replacement_combinations
 using IterTools: Iterators.popfirst!, Iterators.Stateful
 
 # TODO: profile against a greedy algorithm for weak compositions
 export weak_integer_compositions, rpadded_weak_integer_compositions
+# export integer_compositions, weak_integer_compositions, rpadded_weak_integer_compositions
+
+# struct IntegerCompositions
+#     it::IntegerPartitions
+# end
+
+# Base.eltype(::Type{IntegerCompositions}) = Vector{Int}
+# Base.length(c::IntegerCompositions) = length(c.it)
+
+# """
+# Generate all compositions of an integer `n`.
+# """
+# function integer_compositions(n::Integer)
+#     return IntegerCompositions(IntegerPartitions(n))
+# end
+
+# function Base.iterate(
+#     c::IntegerCompositions,
+#     s=Stateful(c.it),
+#     p=popfirst!(s),
+#     t=Stateful(multiset_permutations(p, length(p))),
+# )
+#     # Advance stateful version of member iterator
+#     isempty(s) && isempty(t) && return
+#     # if done with iterator t, advance s and rebuild t
+#     if isempty(t)
+#         p = popfirst!(s)
+#         t = Stateful(multiset_permutations(p, length(p)))
+#     end
+#     c = popfirst!(t)
+#     return (c, s, p, t)
+# end
 
 struct WeakIntegerCompositions{T}
     it::WithReplacementCombinations{T}
@@ -63,4 +101,4 @@ function Base.iterate(c::RPaddedWeakIntegerCompositions, s=Stateful(c.it))
     return (weak_comp, s)
 end
 
-end  # module IntegerCompositions
+end  # module Compositions
