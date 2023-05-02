@@ -86,64 +86,183 @@ function aggregate_orders(data::RenormMeasType{T}) where {T}
     return TotalMeasType{T}(zip(keys(data), accumulate(+, values(data))))
 end
 
-"""Load JLD2 data from multiple fixed orders."""
-function load_fixed_order_data_jld2(
+"""Load non-SOSEM JLD2 data from multiple calculations of varying orders."""
+function load_fixed_order_jld2_data(
     filenames,
-    plotsettings::Settings,
-    plotparams::Vector{UEG.ParaMC},
+    loadparams::Vector{UEG.ParaMC};
+    # merge_orders=true,  # merge data by orders where applicable?
+    has_kgrid=true,     # Obs(K, ...)
+    has_tgrid=false,    # Obs(..., T)
 )
     # TODO: Refactor---what is the cleanest way to merge the data? 
     #       Should we compose the MCIntegration.Result structs?
-    @assert length(filenames) == length(plotparams)
+    @assert length(filenames) == length(loadparams)
 
     # ParaMC fields for which we require equality between the different JLD2 data
-    required_param = [:rs, :beta, :mass2, :isDynamic]
+    required_param = [:rs, :beta, :mass2, :isFock, :isDynamic]
+
+    # Load JDL2 data from different order calculations
+    data_list = []
+    for (i, f) in enumerate(filenames)
+        data = jldopen("$f.jld2", "a+") do f
+            key = "$(UEG.short(loadparams[i]))"
+            return f[key]
+        end
+        # Validate required parameters for all data
+        valid = true
+        # NOTE: All JLD2 measurement data have this prefix
+        _, _param, _ = data
+        for field in required_param
+            data_param = getfield(_param, field)
+            plot_param = getfield(loadparams[i], field)
+            if data_param != plot_param
+                @warn (
+                    "Skipping file '$f': MC params " * "differ from current plot params:"
+                ) maxlog = 1
+                @warn (" • Data param: $data_param" * "\n • Plot param: $plot_param")
+                valid = false
+                break
+            end
+        end
+        valid == false && continue  # skip invalid data
+        push!(data_list, data)
+    end
+    return data_list
+end
+
+"""Load non-SOSEM JLD2 data from multiple calculations of varying orders."""
+function load_fixed_order_jld2_data(
+    filename,
+    plotparam::UEG.ParaMC;
+    has_kgrid=true,     # Obs(K, ...)
+    has_tgrid=false,    # Obs(..., T)
+)
+    return load_fixed_order_jld2_data(
+        [filename],
+        [plotparam];
+        has_kgrid=has_kgrid,
+        has_tgrid=has_tgrid,
+    )
+end
+
+"""Load non-SOSEM JLD2 data from multiple calculations of varying orders."""
+function merge_jld2_data(
+    data_list;
+    has_kgrid=true,     # Obs(K, ...)
+    has_tgrid=false,    # Obs(..., T)
+)
+    # Load JDL2 data from different fixed-order calculations
+    orders_list = []
+    params = UEG.ParaMC[]
+    kgrids = []
+    tgrids = []
+    partitions_list = Vector{PartitionType}[]
+    res_list = Result[]
+    for (i, data) in enumerate(data_list)
+        # Unpack data depending on observable type
+        if has_kgrid && has_tgrid
+            _orders, _param, _grid1, _grid2, _partitions, _res = data
+        elseif has_kgrid || has_tgrid
+            _orders, _param, _grid1, _partitions, _res = data
+        else
+            _orders, _param, _partitions, _res = data
+        end
+        # Merge data with equivalent MC params & kgrids
+        @todo
+        # Add current data to lists
+        push!(orders_list, _orders)
+        push!(params, _param)
+        if has_kgrid && has_tgrid
+            push!(kgrids, _grid1)
+            push!(tgrids, _grid2)
+        elseif has_kgrid
+            push!(kgrids, _grid1)
+        elseif has_tgrid
+            push!(tgrids, _grid1)
+        end
+        push!(partitions_list, _partitions)
+        push!(res_list, _res)
+    end
+    # Return results
+    if has_kgrid && has_tgrid
+        return (orders_list, params, kgrids, tgrids, partitions_list, res_list)
+    elseif has_kgrid
+        return (orders_list, params, kgrids, partitions_list, res_list)
+    elseif has_tgrid
+        return (orders_list, params, tgrids, partitions_list, res_list)
+    else
+        return (orders_list, params, partitions_list, res_list)
+    end
+end
+
+"""Load SOSEM JLD2 data from multiple fixed orders."""
+function load_fixed_order_sosem_jld2_data(
+    filenames,
+    loadsettings::Settings,
+    loadparams::Vector{UEG.ParaMC},
+)
+    # TODO: Refactor---what is the cleanest way to merge the data? 
+    #       Should we compose the MCIntegration.Result structs?
+    @assert length(filenames) == length(loadparams)
+
+    # ParaMC fields for which we require equality between the different JLD2 data
+    required_param = [:rs, :beta, :mass2, :isFock, :isDynamic]
 
     # Settings fields for which we require equality between the different JLD2 data
     required_settings = [:filter, :interaction, :expand_bare_interactions]
 
     # Merge JDL2 data from different fixed-order calculations
-    local settings, params, kgrid
+    local settings, param, kgrid
     res_list = Vector{Result}()
     partitions_list = Vector{Vector{PartitionType}}()
     for (i, f) in enumerate(filenames)
-        _settings, _params, _kgrid, _partitions, _res = jldopen("$f.jld2", "a+") do f
-            key = "$(UEG.short(plotparams[i]))"
+        _settings, _param, _kgrid, _partitions, _res = jldopen("$f.jld2", "a+") do f
+            key = "$(UEG.short(loadparams[i]))"
             return f[key]
         end
-        # TODO: relax requirement that kgrid is the same for all data
+        # NOTE: should this requirement be relaxed?
         if i == 1
             kgrid = _kgrid
         else
             @assert kgrid ≈ _kgrid
         end
+        # Validate the data
+        valid = true
         # Make sure that required settings are the same for all data
         for field in required_settings
             data_setting = getfield(_settings, field)
-            plot_setting = getfield(plotsettings, field)
+            plot_setting = getfield(loadsettings, field)
             if data_setting != plot_setting
                 @warn (
-                    "Skipping file '$f': DiagGen settings" *
-                    " differ from current plot settings:"
+                    "Skipping file '$f': DiagGen settings differ from current plot settings:"
                 ) maxlog = 1
                 @warn (
                     " • Data setting: $data_setting" * "\n • Plot setting: $plot_setting"
                 )
+                valid = false
+                break
             end
         end
+        # Skip the current file if it is invalid
+        valid == false && continue
         # Make sure that required parameters are the same for all data
         for field in required_param
-            data_param = getfield(_params, field)
-            plot_param = getfield(plotparams[i], field)
+            data_param = getfield(_param, field)
+            plot_param = getfield(loadparams[i], field)
             if data_param != plot_param
-                @warn ("Skipping file '$f': MC params differ from current plot params:") maxlog =
-                    1
+                @warn (
+                    "Skipping file '$f': MC params " * "differ from current plot params:"
+                ) maxlog = 1
                 @warn (" • Data param: $data_param" * "\n • Plot param: $plot_param")
+                valid = false
+                break
             end
         end
+        # Skip the current file if it is invalid
+        valid == false && continue
         # Pick param & settings from max order
         if i == length(filenames)
-            params = _params
+            param = _param
             settings = _settings
         end
         # Add the current results and partitions to the lists
@@ -153,7 +272,11 @@ function load_fixed_order_data_jld2(
     return (settings, params, kgrid, partitions_list, res_list)
 end
 
-"""Load JLD2 data from a single fixed order."""
-function load_fixed_order_data_jld2(filename, plotsettings::Settings, plotparam::UEG.ParaMC)
-    return load_fixed_order_data_jld2([filename], plotsettings, [plotparam])
+"""Load SOSEM JLD2 data from a single fixed order."""
+function load_fixed_order_sosem_jld2_data(
+    filename,
+    loadsettings::Settings,
+    plotparam::UEG.ParaMC,
+)
+    return load_fixed_order_sosem_jld2_data([filename], loadsettings, [plotparam])
 end

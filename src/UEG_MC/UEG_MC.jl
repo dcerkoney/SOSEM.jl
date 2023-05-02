@@ -23,7 +23,7 @@ const RenormMeasType = SortedDict{Int,T} where {T}
 const TotalMeasType  = Dict{Int,T} where {T}
 
 include("common.jl")
-export restodict, load_fixed_order_data_jld2, aggregate_orders
+export restodict, load_fixed_order_jld2_data, aggregate_orders
 
 # Chemical potential renormalization for Monte-Carlo with counterterms
 include("renormalization.jl")

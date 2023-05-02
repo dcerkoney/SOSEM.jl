@@ -110,7 +110,7 @@ function main()
     #     order in data_fixed_orders
     # ]
     # settings, param, kgrid, partitions_list, res_list =
-    #     UEG_MC.load_fixed_order_data_jld2(filenames, plotsettings, plotparams)
+    #     UEG_MC.load_fixed_order_jld2_data(filenames, plotsettings, plotparams)
 
     # Convert fixed-order data to dictionary
     # data = UEG_MC.restodict(res_list, partitions_list)

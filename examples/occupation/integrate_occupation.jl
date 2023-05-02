@@ -260,39 +260,25 @@ function main()
     @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)"
 
     # Dimensionless k-mesh for measurement
-    k_kf_grid = CompositeGrid.LogDensedGrid(:cheb, [0.0, 3.0], [1.0], 5, 0.02, 5).grid
-    # Add point exactly at k = kF
+    minK = 0.01
+    Nk, korder = 5, 4
+    k_kf_grid = CompositeGrid.LogDensedGrid(:cheb, [0.0, 2.0], [1.0], Nk, minK, korder).grid
+
+    # Replace points just above and below kF with one point exactly at k = kF
     ikF = searchsortedfirst(k_kf_grid, 1.0)
     insert!(k_kf_grid, ikF, 1.0)
+    deleteat!(k_kf_grid, ikF - 1)  # remove kF⁻
+    ikF -= 1                       # update index where k = kF
+    deleteat!(k_kf_grid, ikF + 1)  # remove kF⁺
+    println(k_kf_grid)
+    kgrid = k_kf_grid * param.kF
+
+    # # Add point exactly at k = kF
+    # ikF = searchsortedfirst(k_kf_grid, 1.0)
+    # insert!(k_kf_grid, ikF, 1.0)
 
     # Dimensionful k-grid
     kgrid = k_kf_grid * param.kF
-
-    # # K-mesh for measurement
-    # minK = 0.1 * param.kF
-    # Nk, korder = 4, 7
-    # kleft =
-    #     CompositeGrid.LogDensedGrid(
-    #         :uniform,
-    #         [0.0, param.kF - 1e-8],
-    #         [param.kF - 1e-8],
-    #         Nk,
-    #         minK,
-    #         korder,
-    #     ).grid
-    # kright =
-    #     CompositeGrid.LogDensedGrid(
-    #         :uniform,
-    #         [param.kF + 1e-8, 2 * param.kF],
-    #         [param.kF + 1e-8],
-    #         Nk,
-    #         minK,
-    #         korder,
-    #     ).grid
-    # kgrid = [kleft; kright]
-
-    # # Dimensionless k-grid
-    # k_kf_grid = kgrid / param.kF
 
     # Build diagram/expression trees for the occupation number to order
     # ξᴺ in the renormalized perturbation theory (includes CTs in μ and λ)
