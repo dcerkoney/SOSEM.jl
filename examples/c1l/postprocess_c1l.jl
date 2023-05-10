@@ -5,6 +5,7 @@ using ElectronGas
 using ElectronLiquid
 using ElectronLiquid.UEG
 using FeynmanDiagram
+using Interpolations
 using JLD2
 using Measurements
 using MCIntegration
@@ -16,6 +17,7 @@ using SOSEM
 
 # For saving/loading numpy data
 @pyimport numpy as np
+@pyimport scipy.integrate as integ
 
 function c1l2_over_eTF_vlambda_vlambda(l)
     m = sqrt(l)
@@ -31,7 +33,7 @@ function c1l2_over_eTF_v_vlambda(l)
 end
 
 """Returns the static structure factor S₀(q) of the UEG in the HF approximation."""
-function static_structure_factor(q, param::ParaMC)
+function static_structure_factor_hf_exact(q, param::ParaMC)
     x = q / param.kF
     if x < 2
         return 3x / 4.0 - x^3 / 16.0
@@ -42,7 +44,7 @@ end
 """Π₀(q, τ=0) = χ₀(q, τ=0) = -n₀ S₀(q)"""
 function bare_polarization_exact_t0(q, param::ParaMC)
     n0 = param.kF^3 / 3π^2
-    return -n0 * static_structure_factor(q, param)
+    return -n0 * static_structure_factor_hf_exact(q, param)
 end
 
 # Post-process integrations for c1l given binned P(q, tau)
@@ -54,16 +56,16 @@ function main()
         cd(ENV["SOSEM_HOME"])
     end
 
-    rs = 2.0
+    rs = 1.0
     beta = 40.0
-    mass2 = 0.4
+    mass2 = 1.0
     solver = :vegasmc
 
     # Number of evals
     neval = 1e10
 
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
-    min_order = 2
+    min_order = 1
     max_order = 3
     min_order_plot = 1
     max_order_plot = 3
@@ -74,17 +76,6 @@ function main()
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
     renorm_lambda = true
-
-    # Ignore measured mu/lambda partitions?
-    fix_mu = false
-    fix_lambda = false
-    fix_string = fix_mu || fix_lambda ? "_fix" : ""
-    if fix_mu
-        fix_string *= "_mu"
-    end
-    if fix_lambda
-        fix_string *= "_lambda"
-    end
 
     # Distinguish results with different counterterm schemes
     ct_string = (renorm_mu || renorm_lambda) ? "_with_ct" : ""
@@ -126,24 +117,6 @@ function main()
     for (k, v) in data
         data[k] = v / (factorial(k[2]) * factorial(k[3]))
     end
-    # Zero out partitions with mu renorm if present (fix mu)
-    if renorm_mu == false || fix_mu
-        for P in keys(data)
-            if P[2] > 0
-                println("Fixing mu without lambda renorm, ignoring n_k partition $P")
-                data[P] = zero(data[P])
-            end
-        end
-    end
-    # Zero out partitions with lambda renorm if present (fix lambda)
-    if renorm_lambda == false || fix_lambda
-        for P in keys(data)
-            if P[3] > 0
-                println("No lambda renorm, ignoring n_k partition $P")
-                data[P] = zero(data[P])
-            end
-        end
-    end
 
     println(typeof(data))
     for P in keys(data)
@@ -163,7 +136,7 @@ function main()
         # treat quadrature data as numerically exact
         merged_data[(1, 0)] = measurement.(-pi0_t0 / n0, 0.0)
     elseif min_order == 1
-        stdscores = stdscore.(merged_data[(1, 0)], pi0_t0)
+        stdscores = stdscore.(merged_data[(1, 0)], -pi0_t0 / n0)
         worst_score = argmax(abs, stdscores)
         println("Worst standard score for N=1 (measured): $worst_score")
         # @assert worst_score ≤ 10
@@ -179,47 +152,51 @@ function main()
     for (p, v) in μ
         μ[p] = v / (factorial(p[2]) * factorial(p[3]))
     end
-    # Zero out partitions with mu renorm if present (fix mu)
-    if renorm_mu == false || fix_mu
-        for P in keys(μ)
-            if P[2] > 0
-                println("Fixing mu without lambda renorm, ignoring μ partition $P")
-                μ[P] = zero(μ[P])
-            end
-        end
-    end
-    # Zero out partitions with lambda renorm if present (fix lambda)
-    if renorm_lambda == false || fix_lambda
-        for P in keys(μ)
-            if P[3] > 0
-                println("No lambda renorm, ignoring μ partition $P")
-                μ[P] = zero(μ[P])
-            end
-        end
-    end
     δz, δμ = CounterTerm.sigmaCT(max_order, μ, z; isfock=false, verbose=1)
 
     println("Computed δμ: ", δμ)
-    inst_poln = UEG_MC.chemicalpotential_renormalization_poln(
+    static_structure = UEG_MC.chemicalpotential_renormalization_poln(
         merged_data,
         δμ;
         min_order=1,
         max_order=max_order,
     )
     δμ1_exact = UEG_MC.delta_mu1(param)  # = ReΣ₁[λ](kF, 0)
-    inst_poln_2_manual = merged_data[(2, 0)] + δμ1_exact * merged_data[(1, 1)]
-    scores_2 = stdscore.(inst_poln[2] - inst_poln_2_manual, 0.0)
+    static_structure_2_manual = merged_data[(2, 0)] + δμ1_exact * merged_data[(1, 1)]
+    scores_2 = stdscore.(static_structure[2] - static_structure_2_manual, 0.0)
     worst_score_2 = argmax(abs, scores_2)
     println("2nd order renorm vs manual worst score: $worst_score_2")
 
     println(UEG.paraid(param))
     println(partitions)
-    println(typeof(inst_poln))
+    println(typeof(static_structure))
 
     # Aggregate the full results for Σₓ up to order N
-    inst_poln_total = UEG_MC.aggregate_orders(inst_poln)
+    static_structure_total = UEG_MC.aggregate_orders(static_structure)
 
-    
+    static_structure_hf_meas = static_structure_total[1]
+
+    static_structure_hf_interp =
+        linear_interpolation(k_kf_grid, static_structure_hf_meas; extrapolation_bc=Line())
+
+    # k_kf_grid_fine = range(0.0; stop=3.0, length=1000)
+    # static_structure_hf_fine = static_structure_hf_interp(k_kf_grid_fine)
+
+    # Integrand for C⁽¹⁾ˡ₂ (measured S₀(q))
+    # k_kf_lower, k_kf_upper = minimum(k_kf_grid), maximum(k_kf_grid)
+    # integrand(q) = 16n0 * param.e0^4 * static_structure_hf_interp(q) / (q^2 + param.mass2)
+    # res = integ.quad(integrand, k_kf_lower, k_kf_upper)
+    # println(res)
+
+    # Integrand for C⁽¹⁾ˡ₂ (exact S₀(q))
+    k_kf_lower, k_kf_upper = minimum(k_kf_grid), maximum(k_kf_grid)
+    function integrand_v2(q)
+        return 16n0 * param.e0^4 * static_structure_factor_hf_exact(q, param) /
+               (q^2 + param.mass2)
+    end
+    res_v2 = integ.quad(integrand_v2, 0.0, Inf)
+    println(res_v2)
+
     return
 end
 
