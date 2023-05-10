@@ -31,7 +31,8 @@ function main()
 
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
     n_min = 2  # True minimal loop order for this observable
-    min_order = n_min
+    # min_order = n_min
+    min_order = 3
     max_order = 5
     min_order_plot = n_min
     max_order_plot = 5

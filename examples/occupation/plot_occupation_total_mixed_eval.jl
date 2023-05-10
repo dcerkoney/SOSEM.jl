@@ -32,9 +32,6 @@ function rsquared(xs, ys, yhats, fit::LsqFit.LsqFitResult)
     return 1 - ss_res / ss_tot
 end
 
-# TODO: Switch to scipy curve_fit / least_squares with bounds on (Z, m⋆).
-#       Consider using Optim or scipy equivalent for LSQ fit to data with
-#       error bars (see notes).
 function main()
     # Change to project directory
     if haskey(ENV, "SOSEM_CEPH")
@@ -54,8 +51,8 @@ function main()
     # neval12 = rs == 1 ? 1e10 : 5e10  # neval12 for existing data has this discrepancy
     # neval12 = 1e10
     # neval12 = 5e10
-    neval3 = 5e10
-    neval4 = 5e10
+    neval3 = 1e10
+    neval4 = 1e10
     # neval = max(neval12, neval3, neval4)
     neval = max(neval3, neval4)
 
@@ -69,7 +66,7 @@ function main()
     save = true
 
     # Include the LQS quasiparticle fit for (Z, m⋆) in the plot?
-    plot_fit = false
+    plot_fit = true
 
     # Distinguish results with fixed vs re-expanded bare interactions
     intn_str = ""
@@ -129,8 +126,8 @@ function main()
     savename =
         "results/data/occupation_n=$(max_together)_rs=$(rs)_beta_ef=$(beta)_" *
         # "results/data/occupation_n=$(max_order)_rs=$(rs)_beta_ef=$(beta)_" *
+        "lambda=$(mass2)_neval=$(neval)_$(solver)_$(ct_string)"
         # "lambda=$(mass2)_neval=$(neval12)_$(solver)_$(ct_string)"
-        "lambda=$(mass2)_neval=$(neval3)_$(solver)_$(ct_string)"
     print("Loading data from $savename...")
     orders, param, kgrid, partitions, res = jldopen("$savename.jld2", "a+") do f
         key = "$(UEG.short(loadparam))"
@@ -195,16 +192,16 @@ function main()
         data4 = UEG_MC.restodict(res4, partitions4)
         for (k, v) in data4
             data4[k] = v / (factorial(k[2]) * factorial(k[3]))
-            # NOTE: we delete the point at kF for consistency with old data
+            # # NOTE: we delete the point at kF for consistency with old data
             # @assert length(data4[k]) == length(kgrid) + 1
             # deleteat!(data4[k], kgrid4 .== param.kF)
             @assert length(data4[k]) == length(kgrid)
         end
-        # NOTE: we delete the point at kF for consistency with old data
+        # # NOTE: we delete the point at kF for consistency with old data
         # @assert length(kgrid4) == length(kgrid) + 1
         # deleteat!(kgrid4, kgrid4 .== param.kF)
-        merge!(data, data4)
         @assert length(kgrid4) == length(kgrid)
+        merge!(data, data4)
     end
 
     # Zero out partitions with mu renorm if present (fix mu)
@@ -408,7 +405,7 @@ function main()
     k_kf_plus  = sqrt(e_ef_plus)   # = √(1 + Δ_HWHM / ϵF)
 
     # Use maximum broadening (sqrt is a non-linear transformation, so abs(k - k_+) ≠ abs(k - k_-)!)
-    dk_max = max(abs(1 - k_kf_minus), abs(k_kf_plus - 1))
+    dk_max       = max(abs(1 - k_kf_minus), abs(k_kf_plus - 1))
     # k_kf_lesser  = 1 - dk_max
     # k_kf_greater = 1 + dk_max
 

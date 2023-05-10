@@ -27,17 +27,19 @@ function main()
     solver = :vegasmc
     expand_bare_interactions = false
 
-    neval34 = 5e10
-    neval5 = 5e10
-    neval = max(neval34, neval5)
+    # neval34 = 5e10
+    # neval5 = 5e10
+    # neval = max(neval34, neval5)
+    neval = 5e10
     # neval = neval34
 
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
     n_min = 2  # True minimal loop order for this observable
-    min_order = 2
-    max_order = 2
+    # min_order = 2
+    min_order = 3
+    max_order = 5
     min_order_plot = 2
-    max_order_plot = 2
+    max_order_plot = 5
     # @assert max_order ≥ 3
 
     # Enable/disable interaction and chemical potential counterterms
@@ -78,53 +80,52 @@ function main()
     # markers = ["-", "-", "-", "-", "-"]
 
     # Load the order 3-4 results from JLD2 (and μ data from csv, if applicable)
-    if max_order == 5
-        max_together = 4
-    else
-        max_together = max_order
-    end
+    # if max_order == 5
+    #     max_together = 4
+    # else
+    #     max_together = max_order
+    # end
     savename =
-        "results/data/c1c_n=$(max_together)_rs=$(rs)_" *
+        "results/data/c1c_n=$(max_order)_rs=$(rs)_" *
         "beta_ef=$(beta)_lambda=$(mass2)_" *
-        "neval=$(neval34)_$(intn_str)$(solver)$(ct_string)"
+        "neval=$(neval)_$(intn_str)$(solver)$(ct_string)"
     settings, param, kgrid, partitions, res = jldopen("$savename.jld2", "a+") do f
         key = "$(UEG.short(plotparam))"
         return f[key]
     end
 
-    # Load the fixed order 5 result from JLD2
-    local kgrid5, res5, partitions5
-    if max_order == 5
-        savename5 =
-            "results/data/c1c_n=$(max_order)_rs=$(rs)_" *
-            "beta_ef=$(beta)_lambda=$(mass2)_" *
-            "neval=$(neval5)_$(intn_str)$(solver)$(ct_string)"
-        settings5, param5, kgrid5, partitions5, res5 = jldopen("$savename5.jld2", "a+") do f
-            key = "$(UEG.short(plotparam))"
-            return f[key]
-        end
-    end
+    # # Load the fixed order 5 result from JLD2
+    # local kgrid5, res5, partitions5
+    # if max_order == 5
+    #     savename5 =
+    #         "results/data/c1c_n=$(max_order)_rs=$(rs)_" *
+    #         "beta_ef=$(beta)_lambda=$(mass2)_" *
+    #         "neval=$(neval5)_$(intn_str)$(solver)$(ct_string)"
+    #     settings5, param5, kgrid5, partitions5, res5 = jldopen("$savename5.jld2", "a+") do f
+    #         key = "$(UEG.short(plotparam))"
+    #         return f[key]
+    #     end
+    # end
 
     # Get dimensionless k-grid (k / kF)
     k_kf_grid = kgrid / param.kF
-    if max_order == 5
-        k_kf_grid5 = kgrid5 / param.kF
-    end
+    # if max_order == 5
+    #     k_kf_grid5 = kgrid5 / param.kF
+    # end
 
     # Convert results to a Dict of measurements at each order with interaction counterterms merged
     data = UEG_MC.restodict(res, partitions)
     for (k, v) in data
         data[k] = v / (factorial(k[2]) * factorial(k[3]))
     end
-
-    # Add 5th order results to data dict
-    if max_order == 5
-        data5 = UEG_MC.restodict(res5, partitions5)
-        for (k, v) in data5
-            data5[k] = v / (factorial(k[2]) * factorial(k[3]))
-        end
-        merge!(data, data5)
-    end
+    # # Add 5th order results to data dict
+    # if max_order == 5
+    #     data5 = UEG_MC.restodict(res5, partitions5)
+    #     for (k, v) in data5
+    #         data5[k] = v / (factorial(k[2]) * factorial(k[3]))
+    #     end
+    #     merge!(data, data5)
+    # end
     merged_data = CounterTerm.mergeInteraction(data)
     println([k for (k, _) in merged_data])
 
@@ -239,8 +240,8 @@ function main()
         f = jldopen("$savename.jld2", "a+"; compress=true)
         # NOTE: no bare result for c1b observable (accounted for in c1b0)
         for N in min_order_plot:max_order
-            num_eval = N == 5 ? neval5 : neval34
-            # num_eval = neval
+            # num_eval = N == 5 ? neval5 : neval34
+            num_eval = neval
             if haskey(f, "c1c") &&
                haskey(f["c1c"], "N=$N") &&
                haskey(f["c1c/N=$N"], "neval=$(num_eval)")
@@ -260,7 +261,8 @@ function main()
         #     continue
         # end
         # NOTE: Currently using a different kgrid at order 5
-        k_over_kfs = N == 5 ? k_kf_grid5 : k_kf_grid
+        # k_over_kfs = N == 5 ? k_kf_grid5 : k_kf_grid
+        k_over_kfs = k_kf_grid
         # Get means and error bars from the result up to this order
         means = Measurements.value.(c1c_total[N])
         stdevs = Measurements.uncertainty.(c1c_total[N])

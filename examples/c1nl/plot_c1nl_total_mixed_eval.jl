@@ -1,4 +1,5 @@
 using CodecZlib
+using DelimitedFiles
 using ElectronLiquid
 using ElectronGas
 using Interpolations
@@ -13,6 +14,25 @@ using SOSEM
 
 # NOTE: Call from main project directory as: julia examples/c1d/plot_c1d_total.jl
 
+const vzn_dir = "results/vzn_paper"
+
+function load_csv(filename)
+    # assumes csv format: (x, y)
+    d = readdlm(filename, ',')
+    @assert ndims(d) == 2
+    xdata = d[:, 1]
+    ydata = d[:, 2]
+    return xdata, ydata
+end
+
+function average(filename)
+    # assumes csv format: (x, y)
+    d = readdlm(filename, ',')
+    @assert ndims(d) == 2
+    ydata = d[:, 2]
+    return sum(ydata) / length(ydata)
+end
+
 function main()
     # Change to project directory
     if haskey(ENV, "SOSEM_CEPH")
@@ -21,7 +41,7 @@ function main()
         cd(ENV["SOSEM_HOME"])
     end
 
-    rs = 5.0
+    rs = 1.0
     beta = 40.0
     mass2 = 1.0
     solver = :vegasmc
@@ -29,7 +49,7 @@ function main()
 
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
     n_min = 2  # True minimal loop order for this observable
-    min_order_plot = 3
+    min_order_plot = 2
     # max_order_plot = 3
     max_order_plot = 5
 
@@ -85,6 +105,34 @@ function main()
         "results/data/rs=$(rs)_beta_ef=$(beta)_" *
         "lambda=$(mass2)_$(intn_str)$(solver)_with_ct_mu_lambda"
     linestyles = ["--", "-"]
+
+    # UEG param at rs = 5 for VZN SOSEM plots
+    rs_vzn = 5.0
+    vzn_param = UEG.ParaMC(; rs=5.0, beta=40.0, isDynamic=false)
+
+    # Load QMC local moment
+    c1l_qmc_over_EF2 = average("$vzn_dir/c1_local_qmc.csv")
+    println("C⁽¹⁾ˡ (QMC): $c1l_qmc_over_EF2")
+
+    # Load full SOSEM data in HF and OB-QMC approximations
+    k_kf_grid_hf, c1_hf_over_EF2 = load_csv("$vzn_dir/c1_hf.csv")
+    k_kf_grid_qmc, c1_qmc_over_EF2 = load_csv("$vzn_dir/c1_ob-qmc.csv")
+    println("C⁽¹⁾ (HF)\n: $c1_hf_over_EF2")
+    println("C⁽¹⁾ (QMC)\n: $c1_qmc_over_EF2")
+
+    # Subtract local contribution to obtain HF/QMC non-local moments
+    # NOTE: VZN define C⁽¹⁾(HF) as the sum of the HF non-local moment,
+    #       and the OB-QMC local moment (since C⁽¹⁾ˡ(HF) is divergent)
+    c1nl_qmc_over_EF2 = c1_qmc_over_EF2 .- c1l_qmc_over_EF2
+    c1nl_hf_over_EF2 = c1_hf_over_EF2 .- c1l_qmc_over_EF2
+
+    println("C⁽¹⁾ⁿˡ (HF)\n: $c1nl_hf_over_EF2")
+    println("C⁽¹⁾ⁿˡ (QMC)\n: $c1nl_qmc_over_EF2")
+
+    # Change from units of eF^2 to eTF^2
+    eTF = vzn_param.qTF^2 / (2 * vzn_param.me)
+    c1nl_qmc_over_eTF2 = c1nl_qmc_over_EF2 * (vzn_param.EF / eTF)^2
+    c1nl_hf_over_eTF2 = c1nl_hf_over_EF2 * (vzn_param.EF / eTF)^2
 
     # Plot the results for each order ξ and compare to RPA(+FL)
     fig, ax = plt.subplots()
@@ -150,13 +198,7 @@ function main()
             )
         end
         # ax.plot(k_kf_grid, c1nl_N_means, "o-"; color="C$i", markersize=2, label="\$N=$N\$ ($solver)")
-        ax.plot(
-            k_kf_grid,
-            c1nl_N_means,
-            "C$i";
-            linestyle="-",
-            label="\$N=$(N)\$ ($solver)",
-        )
+        ax.plot(k_kf_grid, c1nl_N_means, "C$i"; linestyle="-", label="\$N=$(N)\$ ($solver)")
         ax.fill_between(
             k_kf_grid,
             (c1nl_N_means - c1nl_N_stdevs),
@@ -166,7 +208,23 @@ function main()
         )
         ax.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
     end
-
+    # Compare with VZN data at rs = 5
+    ax.plot(
+        k_kf_grid_hf,
+        c1nl_hf_over_eTF2,
+        "--";
+        color="r",
+        markersize=2,
+        label="HF (\$r_s = 5\$)",
+    )
+    ax.plot(
+        k_kf_grid_qmc,
+        c1nl_qmc_over_eTF2,
+        "-";
+        color="r",
+        markersize=2,
+        label="QMC (\$r_s = 5\$)",
+    )
     # ax.set_xlim(minimum(k_kf_grid), 2.0)
     ax.set_ylim(; top=-0.195)
     ax.legend(; loc="best")

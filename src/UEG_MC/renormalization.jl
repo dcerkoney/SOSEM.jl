@@ -57,6 +57,7 @@ end
 Same as chemicalpotential_renormalization, but allow for lowest_order >= n_min
 (one SOSEM observable starts at 3rd loop order (n_min + 1)).
 """
+# TODO: data could be merged or unmerged => merge it here instead of chemicalpotential_renormalization?
 function chemicalpotential_renormalization_sosem(
     data,
     δμ;
@@ -71,7 +72,14 @@ function chemicalpotential_renormalization_sosem(
     data_with_missing_partns = deepcopy(data)
     if lowest_order > 2
         for n in 1:lowest_order
-            data_with_missing_partns[(2, n, 0)] = zero(valtype(data))
+            # data_with_missing_partns[(2, n, 0)] = zero(valtype(data))
+            if length(collect(keys(data))[1]) == 2
+                data_with_missing_partns[(2, n)] =
+                    zero(data[(max_order, 0)])
+            else
+                data_with_missing_partns[(2, n, 0)] =
+                    zero(data[(max_order - lowest_order, 0, 0)])
+            end
         end
     end
     return chemicalpotential_renormalization(

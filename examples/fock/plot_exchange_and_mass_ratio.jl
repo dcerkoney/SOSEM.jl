@@ -74,9 +74,9 @@ function main()
         cd(ENV["SOSEM_HOME"])
     end
 
-    rs = 1.0
+    rs = 2.0
     beta = 40.0
-    mass2 = 1.0
+    mass2 = 0.4
     solver = :vegasmc
 
     # Number of evals below and above kF

@@ -12,12 +12,11 @@ using Parameters
 using PyCall
 using SOSEM
 
-const vzn_dir = "results/vzn_paper"
-
 # For saving/loading numpy data
 @pyimport numpy as np
 @pyimport matplotlib.pyplot as plt
-@pyimport mpl_toolkits.axes_grid1.inset_locator as il
+
+const vzn_dir = "results/vzn_paper"
 
 function load_csv(filename)
     # assumes csv format: (x, y)
@@ -36,10 +35,10 @@ function average(filename)
     return sum(ydata) / length(ydata)
 end
 
-function load_c1_hf(filename="$vzn_dir/c1_hf.csv")
-function load_c1_obqmc(filename="$vzn_dir/c1_ob-qmc.csv")
-function get_c1l_qmc(filename="$vzn_dir/c1_local_qmc.csv")
-function get_c1l_vs(filename="$vzn_dir/c1_local_vs.csv")
+# get_c1l_qmc() = load_csv(filename="$vzn_dir/c1_local_qmc.csv")
+# load_c1_hf() = load_csv(filename="$vzn_dir/c1_hf.csv")
+# load_c1_obqmc() = load_csv(filename="$vzn_dir/c1_ob-qmc.csv")
+# function get_c1l_vs(filename="$vzn_dir/c1_local_vs.csv")
 
 # function get_c1l_hf(filename="$vzn_dir/c1l_over_rs2_rpa.csv")
 #     # Grab local value at rs = 5 from plot vs rs
@@ -60,34 +59,54 @@ function main()
         cd(ENV["SOSEM_HOME"])
     end
 
+    # Plot the results?
+    plot = true
+
     # rs = 5 for VZN SOSEM plots
     rs_vzn = 5.0
 
-    # Load full SOSEM data in HF and OB-QMC approximations
-    c1_hf    = load_csv("$vzn_dir/c1_hf.csv")
-    c1_obqmc = load_csv("$vzn_dir/c1_ob-qmc.csv")
-    println("C⁽¹⁾ (HF)\n: $c1_hf")
-    println("C⁽¹⁾ (OB-QMC)\n: $c1_obqmc")
+    param = UEG.ParaMC(; rs=5.0, beta=40.0, isDynamic=false)
 
     # Load QMC local moment
-    c1l_qmc = average("$vzn_dir/c1_local_qmc.csv")
-    # Estimate HF local moment using linear interpolation on data vs rs
-    c1l_over_rs2_hf = load_csv("$vzn_dir/c1l_over_rs2_rpa.csv")
-    c1l_hf = rs_vzn^2 * c1l_over_rs2_hf[:, end]
-    println("C⁽¹⁾ˡ (HF): $c1l_hf")
-    println("C⁽¹⁾ˡ (QMC): $c1l_qmc")
+    c1l_qmc_over_EF2 = average("$vzn_dir/c1_local_qmc.csv")
+    println("C⁽¹⁾ˡ (QMC): $c1l_qmc_over_EF2")
 
-    # Subtract local contribution to obtain non-local moment
-    # TODO: verify that this is the correct local term;
-    #       do we need to extract it from c1l vs rs data instead?
-    c1nl_qmc = c1_obqmc .- c1l_qmc
+    # Load full SOSEM data in HF and OB-QMC approximations
+    k_kf_grid_hf, c1_hf_over_EF2 = load_csv("$vzn_dir/c1_hf.csv")
+    k_kf_grid_qmc, c1_qmc_over_EF2 = load_csv("$vzn_dir/c1_ob-qmc.csv")
+    println("C⁽¹⁾ (HF)\n: $c1_hf_over_EF2")
+    println("C⁽¹⁾ (QMC)\n: $c1_qmc_over_EF2")
 
-    # Same as above for HF result; use exact HF value at k = 0 to deduce the local moment measured by VZN in the HF approximation
-    c1nl_hf = c1_hf .- c1l_hf
+    # Subtract local contribution to obtain HF/QMC non-local moments
+    # NOTE: VZN define C⁽¹⁾(HF) as the sum of the HF non-local moment,
+    #       and the OB-QMC local moment (since C⁽¹⁾ˡ(HF) is divergent)
+    c1nl_qmc_over_EF2 = c1_qmc_over_EF2 .- c1l_qmc_over_EF2
+    c1nl_hf_over_EF2 = c1_hf_over_EF2 .- c1l_qmc_over_EF2
 
-    println("C⁽¹⁾ⁿˡ (HF)\n: $c1nl_hf")
-    println("C⁽¹⁾ⁿˡ (QMC)\n: $c1nl_qmc")
+    println("C⁽¹⁾ⁿˡ (HF)\n: $c1nl_hf_over_EF2")
+    println("C⁽¹⁾ⁿˡ (QMC)\n: $c1nl_qmc_over_EF2")
 
+    # Change from units of eF^2 to eTF^2
+    eTF = param.qTF^2 / (2 * param.me)
+    c1nl_qmc_over_eTF2 = c1nl_qmc_over_EF2 * (param.EF / eTF)^2
+    c1nl_hf_over_eTF2 = c1nl_hf_over_EF2 * (param.EF / eTF)^2
+
+    if plot
+        # Use LaTex fonts for plots
+        plt.rc("text"; usetex=true)
+        plt.rc("font"; family="serif")
+        # Plot the results in units of eTF2 using matplotlib
+        fig, ax = plt.subplots()
+        ax.plot(k_kf_grid_hf, c1nl_hf_over_eTF2, "o-"; markersize=2, label="HF")
+        ax.plot(k_kf_grid_qmc, c1nl_qmc_over_eTF2, "o-"; markersize=2, label="QMC")
+        ax.set_xlim(0, 3)
+        ax.set_xlabel("\$k / k_F\$")
+        ax.set_ylabel("\$C^{(1)nl} / \\epsilon^2_{\\mathrm{TF}}\$")
+        ax.legend(; loc="best")
+        plt.tight_layout()
+        plt.show()
+        fig.savefig("$vzn_dir/c1nl_vzn.pdf")
+    end
     return
 end
 

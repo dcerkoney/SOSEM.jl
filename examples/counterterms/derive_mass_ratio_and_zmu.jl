@@ -19,7 +19,13 @@ mass2 = [1.0]
 beta = [40.0]
 
 # Momentum spacing for finite-difference derivative of Sigma (in units of kF)
-δK = 5e-6
+# δK = 5e-6
+δK = 0.025
+
+# kgrid indices & spacings
+idks = 1:4
+dks = [1, 2, 4, 8] * δK
+dkscales = [1, 2, 4, 8]
 
 # Enable/disable interaction and chemical potential counterterms
 renorm_mu = true
@@ -37,8 +43,10 @@ if renorm_lambda
     ct_string *= "_lambda"
 end
 
-const filename = "data_mass_ratio_and_Z$(ct_string).jld2"
-const parafilename = "para_mass_ratio_and_Z.csv"
+# const filename = "data_mass_ratio_and_Z$(ct_string).jld2"
+# const parafilename = "para_mass_ratio_and_Z.csv"
+const filename = "data_mass_ratio$(ct_string).jld2"
+const parafilename = "para_mass_ratio.csv"
 # const parafilename = "para.csv"
 
 function zfactor(data, β)
@@ -66,22 +74,39 @@ end
 #     return mass_ratio
 # end
 
-function process_mass_ratio(datatuple, δz, δμ, isSave)
+# function process_mass_ratio(datatuple, δz, δμ, isSave)
+function process_mass_ratio(datatuple, isSave)
     print("Processing mass ratio...")
     # df = UEG_MC.fromFile(parafilename)
     para, ngrid, kgrid, data = datatuple
     printstyled(UEG.short(para); color=:yellow)
     println()
 
-    # Total Z to order max_order
+    # Max order in RPT calculation
     max_order = para.order
+
+    # Reexpand merged data in powers of μ
+    ct_filename = "data_Z$(ct_string).jld2"
+    z, μ = UEG_MC.load_z_mu(para; ct_filename=ct_filename)
+    # Add Taylor factors to CT data
+    for (p, v) in z
+        z[p] = v / (factorial(p[2]) * factorial(p[3]))
+    end
+    for (p, v) in μ
+        μ[p] = v / (factorial(p[2]) * factorial(p[3]))
+    end
+    δz, δμ = CounterTerm.sigmaCT(max_order - 1, μ, z; verbose=1)
+    # δz, δμ = CounterTerm.sigmaCT(max_order, μ, z; verbose=1)
+    println("Computed δμ: ", δμ)
+
+    # Total Z to order max_order
     z = 1 - sum(δz)
     println("δz:\n", δz, "\n", "z = ", z)
 
     # println(data)
 
     # Convert data to a Dict of measurements with interaction counterterms merged
-    _data = Dict{keytype(data), valtype(data)}()
+    _data = Dict{keytype(data),valtype(data)}()
     for (k, v) in data
         _data[k] = v / (factorial(k[2]) * factorial(k[3]))
         # data[k] = v / (factorial(k[2]) * factorial(k[3]))
@@ -106,19 +131,24 @@ function process_mass_ratio(datatuple, δz, δμ, isSave)
     for N in 1:max_order
         # Σ and Z to order N in RPT
         Σ_N = sigma_N_total[N]
-        z_N = 1 - sum(δz[1:N])
-        println("\n(N=$N)")
-        println("Z = $z_N")
-        println("ReΣ(kF, 0) = $(real(Σ_N[1, 1]))")
-        println("ReΣ(kF + kF * δK, 0) = $(real(Σ_N[1, 2]))")
+        z_N = 1 / (1 + sum(δz[1:(N - 1)]))
+        # z_N = 1 / (1 - sum(δz[1:(N - 1)]))
+        @assert size(Σ_N) == (1, 5)
 
         # ∂ₖReΣ(k, ikₙ = 0) at the Fermi surface k = kF
         # NOTE: n1 = 0, k1 = kF, k2 = kF * (1 + δK), k2 - k1 = kF * δK
+        idk = 1
+        # ds_dk = (real(Σ_N[1, 1]) - real(Σ_N[1, 1 + idk])) / (kgrid[1] - kgrid[1 + idk])
+        ds_dk = (real(Σ_N[1, 1 + idk]) - real(Σ_N[1, 1])) / (kgrid[1 + idk] - kgrid[1])
+        @assert idk ∈ 1:4
         @assert kgrid[1] ≈ para.kF
         @assert kgrid[2] ≈ para.kF + para.kF * δK
-        @assert kgrid[2] - kgrid[1] ≈ para.kF * δK
-        ds_dk = (real(Σ_N[1, 2]) - real(Σ_N[1, 1])) / (kgrid[2] - kgrid[1])
+        @assert kgrid[1 + idk] - kgrid[1] ≈ para.kF * dks[idk]
 
+        println("\n(N=$N)")
+        println("Z = $z_N")
+        println("ReΣ(kF, 0) = $(real(Σ_N[1, 1]))")
+        println("ReΣ(kF + $(dkscales[idk])δK * kF, 0) = $(real(Σ_N[1, 1 + idk]))")
         println("ds_dk = $ds_dk")
 
         # Compute m⋆/m
@@ -143,59 +173,59 @@ function process_mass_ratio(datatuple, δz, δμ, isSave)
     return mass_ratios
 end
 
-function process_zmu(datatuple, isSave)
-    print("Processing Z and μ...")
-    df = UEG_MC.fromFile(parafilename)
-    para, _, _, data = datatuple
-    printstyled(UEG.short(para); color=:yellow)
-    println()
+# function process_zmu(datatuple, isSave)
+#     print("Processing Z and μ...")
+#     df = UEG_MC.fromFile(parafilename)
+#     para, _, _, data = datatuple
+#     printstyled(UEG.short(para); color=:yellow)
+#     println()
 
-    _mu = Dict()
-    for (p, val) in data
-        _mu[p] = mu(val) / (factorial(p[2]) * factorial(p[3]))
-    end
-    _z = Dict()
-    for (p, val) in data
-        _z[p] = zfactor(val, para.β) / (factorial(p[2]) * factorial(p[3]))
-    end
+#     _mu = Dict()
+#     for (p, val) in data
+#         _mu[p] = mu(val) / (factorial(p[2]) * factorial(p[3]))
+#     end
+#     _z = Dict()
+#     for (p, val) in data
+#         _z[p] = zfactor(val, para.β) / (factorial(p[2]) * factorial(p[3]))
+#     end
 
-    for p in sort([k for k in keys(data)])
-        println("$p: μ = $(mu(data[p]))   z = $(zfactor(data[p], para.β))")
-    end
+#     for p in sort([k for k in keys(data)])
+#         println("$p: μ = $(mu(data[p]))   z = $(zfactor(data[p], para.β))")
+#     end
 
-    δz, δμ = CounterTerm.sigmaCT(para.order, _mu, _z; isfock=isFock, verbose=1)
-    println("zfactor: ", δz)
-    println("mu: ", δμ)
+#     δz, δμ = CounterTerm.sigmaCT(para.order, _mu, _z; isfock=isFock, verbose=1)
+#     println("zfactor: ", δz)
+#     println("mu: ", δμ)
 
-    ############# save to csv  #################
-    # println(df)
-    for o in keys(data)
-        println("Adding order $o")
-        # global df
-        paraid = UEG.paraid(para)
-        df = CounterTerm.appendDict(
-            df,
-            paraid,
-            Dict(
-                "order" => o,
-                "μ" => _mu[o].val,
-                "μ.err" => _mu[o].err,
-                "Σw" => _z[o].val,
-                "Σw.err" => _z[o].err,
-            );
-            replace=true,
-        )
-    end
+#     ############# save to csv  #################
+#     # println(df)
+#     for o in keys(data)
+#         println("Adding order $o")
+#         # global df
+#         paraid = UEG.paraid(para)
+#         df = CounterTerm.appendDict(
+#             df,
+#             paraid,
+#             Dict(
+#                 "order" => o,
+#                 "μ" => _mu[o].val,
+#                 "μ.err" => _mu[o].err,
+#                 "Σw" => _z[o].val,
+#                 "Σw.err" => _z[o].err,
+#             );
+#             replace=true,
+#         )
+#     end
 
-    # println("new dataframe\n$df")
-    if isSave
-        println("Current working directory: $(pwd())")
-        println("Saving results...")
-        UEG_MC.toFile(df, parafilename)
-    end
-    println("Done!")
-    return δz, δμ
-end
+#     # println("new dataframe\n$df")
+#     if isSave
+#         println("Current working directory: $(pwd())")
+#         println("Saving results...")
+#         UEG_MC.toFile(df, parafilename)
+#     end
+#     println("Done!")
+#     return δz, δμ
+# end
 
 if abspath(PROGRAM_FILE) == @__FILE__
 
@@ -223,8 +253,9 @@ if abspath(PROGRAM_FILE) == @__FILE__
         for key in keys(f)
             if UEG.paraid(f[key][1]) == UEG.paraid(para)
                 println("Found matching key, processing...")
-                δz, δμ = process_zmu(f[key], isSave)
-                process_mass_ratio(f[key], δz, δμ, isSave)
+                # δz, δμ = process_zmu(f[key], isSave)
+                # process_mass_ratio(f[key], δz, δμ, isSave)
+                process_mass_ratio(f[key], isSave)
             end
         end
     end
