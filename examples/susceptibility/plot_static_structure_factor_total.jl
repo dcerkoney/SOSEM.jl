@@ -19,7 +19,7 @@ using SOSEM
 @pyimport mpl_toolkits.axes_grid1.inset_locator as il
 
 """Returns the static structure factor S₀(q) of the UEG in the HF approximation."""
-function static_structure_factor(q, param::ParaMC)
+function static_structure_factor_hf(q, param::ParaMC)
     x = q / param.kF
     if x < 2
         return 3x / 4.0 - x^3 / 16.0
@@ -28,9 +28,9 @@ function static_structure_factor(q, param::ParaMC)
 end
 
 """Π₀(q, τ=0) = χ₀(q, τ=0) = -n₀ S₀(q)"""
-function bare_polarization_exact_t0(q, param::ParaMC)
+function bare_susceptibility_exact_t0(q, param::ParaMC)
     n0 = param.kF^3 / 3π^2
-    return -n0 * static_structure_factor(q, param)
+    return -n0 * static_structure_factor_hf(q, param)
 end
 
 function main()
@@ -41,16 +41,16 @@ function main()
         cd(ENV["SOSEM_HOME"])
     end
 
-    rs = 2.0
+    rs = 1.0
     beta = 40.0
-    mass2 = 0.4
+    mass2 = 1.0
     solver = :vegasmc
 
     # Number of evals
-    neval = 1e10
+    neval = 1e7
 
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
-    min_order = 2
+    min_order = 1
     max_order = 3
     min_order_plot = 1
     max_order_plot = 3
@@ -94,8 +94,8 @@ function main()
 
     # Load the raw data
     savename =
-        "results/data/static_structure_factor_n=$(max_order)_rs=$(rs)_beta_ef=$(beta)_" *
-        "lambda=$(mass2)_neval=$(neval)_$(solver)$(ct_string)"
+        "results/data/static_structure_factor_n=$(max_order)_rs=$(rs)_" *
+        "beta_ef=$(beta)_lambda=$(mass2)_neval=$(neval)_$(solver)$(ct_string)"
     # TODO: Rerun with new format,
     #   orders, param, kgrid, tgrid, partitions, res = jldopen("$savename.jld2", "a+") do f
     orders, param, kgrid, partitions, res = jldopen("$savename.jld2", "a+") do f
@@ -106,6 +106,7 @@ function main()
     # Get dimensionless k-grid (k / kF)
     k_kf_grid = kgrid / param.kF
 
+    # Non-interacting density
     n0 = param.kF^3 / 3π^2
 
     # Convert results to a Dict of measurements at each order with interaction counterterms merged
@@ -134,23 +135,23 @@ function main()
 
     println(typeof(data))
     for P in keys(data)
-        # Extra overall sign due to N&O definition of Π
+        # Convert back to Mahan convention: χ_N&O = -χ_Mahan
         data[P] *= -1
     end
 
     merged_data = UEG_MC.mergeInteraction(data)
     println(typeof(merged_data))
 
-    # Get exact instantaneous bare polarization Π₀(q, τ=0)
-    pi0_t0 = bare_polarization_exact_t0.(kgrid, [param])
+    # Get exact Hartree-Fock static structure factor S₀(q) = -Π₀(q, τ=0) / n₀
+    static_structure_hf_exact = static_structure_factor_hf.(kgrid, [param])
 
     # Set bare result manually using exact function
     # if haskey(merged_data, (1, 0)) == false
     if min_order > 1
         # treat quadrature data as numerically exact
-        merged_data[(1, 0)] = measurement.(-pi0_t0 / n0, 0.0)
+        merged_data[(1, 0)] = measurement.(static_structure_hf_exact, 0.0)
     elseif min_order == 1
-        stdscores = stdscore.(merged_data[(1, 0)], pi0_t0)
+        stdscores = stdscore.(merged_data[(1, 0)], static_structure_hf_exact)
         worst_score = argmax(abs, stdscores)
         println("Worst standard score for N=1 (measured): $worst_score")
         # @assert worst_score ≤ 10
@@ -187,7 +188,7 @@ function main()
     δz, δμ = CounterTerm.sigmaCT(max_order, μ, z; isfock=false, verbose=1)
 
     println("Computed δμ: ", δμ)
-    inst_poln = UEG_MC.chemicalpotential_renormalization_poln(
+    static_structure = UEG_MC.chemicalpotential_renormalization_susceptibility(
         merged_data,
         δμ;
         min_order=1,
@@ -195,16 +196,16 @@ function main()
     )
     δμ1_exact = UEG_MC.delta_mu1(param)  # = ReΣ₁[λ](kF, 0)
     inst_poln_2_manual = merged_data[(2, 0)] + δμ1_exact * merged_data[(1, 1)]
-    scores_2 = stdscore.(inst_poln[2] - inst_poln_2_manual, 0.0)
+    scores_2 = stdscore.(static_structure[2] - inst_poln_2_manual, 0.0)
     worst_score_2 = argmax(abs, scores_2)
     println("2nd order renorm vs manual worst score: $worst_score_2")
 
     println(UEG.paraid(param))
     println(partitions)
-    println(typeof(inst_poln))
+    println(typeof(static_structure))
 
     # Aggregate the full results for Σₓ up to order N
-    inst_poln_total = UEG_MC.aggregate_orders(inst_poln)
+    static_structure_total = UEG_MC.aggregate_orders(static_structure)
 
     # Use LaTex fonts for plots
     plt.rc("text"; usetex=true)
@@ -212,24 +213,24 @@ function main()
 
     qgrid_fine = param.kF * np.linspace(0.0, 3.0; num=600)
     q_kf_grid_fine = np.linspace(0.0, 3.0; num=600)
-    pi0_t0_fine = bare_polarization_exact_t0.(qgrid_fine, [param])
+    static_structure_hf_exact_fine = static_structure_factor_hf.(qgrid_fine, [param])
 
-    # Plot the instantaneous polarization for each aggregate order
+    # Plot the static structure factor for each aggregate order
     fig, ax = plt.subplots()
     ax.axvline(2.0; linestyle="--", linewidth=1, color="gray")
     ax.axhline(1.0; linestyle="--", linewidth=1, color="gray")
     # ax.axhline(n0; linestyle="--", linewidth=1, color="k", label="\$n_0\$")
     if min_order_plot == 1
-        # Include exact instantaneous bare polarization in plot
-        ax.plot(q_kf_grid_fine, -pi0_t0_fine / n0, "k"; label="\$N=1\$ (exact)")
+        # Include exact Hartree-Fock static structure factor in plot
+        ax.plot(q_kf_grid_fine, static_structure_hf_exact_fine, "k"; label="\$N=1\$ (exact)")
     end
     ic = 1
     colors = ["C0", "C1", "C2", "C3", "C4", "C5"]
     # colors = ["orchid", "cornflowerblue", "turquoise", "chartreuse"]
     for (i, N) in enumerate(min_order:max_order_plot)
         # S(q) = -Π(q, τ=0) / n₀
-        static_structure_means = Measurements.value.(inst_poln_total[N])
-        static_structure_stdevs = Measurements.uncertainty.(inst_poln_total[N])
+        static_structure_means = Measurements.value.(static_structure_total[N])
+        static_structure_stdevs = Measurements.uncertainty.(static_structure_total[N])
         marker = "o-"
         ax.plot(
             k_kf_grid,
@@ -252,9 +253,10 @@ function main()
     ax.set_xlim(0, 3.0)
     # ax.set_ylim(nothing, 2)
     ax.set_xlabel("\$q / k_F\$")
-    ax.set_ylabel("\$-\\Pi(q, \\tau=0) / n_0\$")
+    ax.set_ylabel("\$S(q) = -\\chi(q, \\tau=0) / n_0\$")
+    # ax.set_ylabel("\$S(q)\$")
     # xloc = 1.5
-    xloc = 0.45
+    xloc = 0.65
     yloc = 0.2
     ydiv = -0.125
     ax.text(
@@ -272,7 +274,7 @@ function main()
     )
     fig.tight_layout()
     fig.savefig(
-        "results/polarization/instantaneous_polarization_N=$(max_order_plot)_rs=$(param.rs)_" *
+        "results/static_structure_factor/static_structure_factor_N=$(max_order_plot)_rs=$(param.rs)_" *
         "beta_ef=$(param.beta)_lambda=$(param.mass2)_neval=$(neval)_$(solver)$(ct_string)$(fix_string).pdf",
     )
 

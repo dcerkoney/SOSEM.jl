@@ -36,6 +36,7 @@ function integer_compositions(n::Integer)
     end
     return compositions
 end
+# integer_compositions(v::Vector{Int}) = (c for n in v for c in integer_compositions(n))
 
 """
 Get all (μ and/or λ) counterterm partitions (n1, n2, n3) satisfying the following constraints:

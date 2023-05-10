@@ -2,7 +2,7 @@
 module DiagGen
 
 using AbstractTrees
-using Combinatorics: integer_partitions
+using Combinatorics
 using ..ElectronLiquid
 using ..FeynmanDiagram
 using ..Logging
@@ -35,7 +35,10 @@ export Settings, Config, checktree, atomize
 
 include("partitions.jl")
 export partition,
-    counterterm_partitions, counterterm_partitions_fixed_order, counterterm_single_split
+    integer_compositions,
+    counterterm_partitions,
+    counterterm_partitions_fixed_order,
+    counterterm_single_split
 
 # Non-local moment
 include("build_nonlocal.jl")

@@ -2,14 +2,28 @@
 function restodict(res, partitions::Vector{PartitionType})
     N = length(partitions) == 1 ? ndims(res.mean) : ndims(res.mean[1])
     T = length(partitions) == 1 ? eltype(res.mean) : eltype(res.mean[1])
-    S = Array{Measurement{T},N}
-    # println(N, " ", T, " ", S)
+    # N = max(1, N)
+    if N == 0
+        S = Array{Measurement{T},1}
+    else
+        S = Array{Measurement{T},N}
+    end
+    println(N, " ", T, " ", S)
     data = MeasType{S}()
+    println(data)
     if length(partitions) == 1
-        data[partitions[1]] = measurement.(res.mean, res.stdev)
+        if N == 0
+            data[partitions[1]] = [measurement(res.mean, res.stdev)]
+        else
+            data[partitions[1]] = measurement.(res.mean, res.stdev)
+        end
     else
         for (i, p) in enumerate(partitions)
-            data[p] = measurement.(res.mean[i], res.stdev[i])
+            if N == 0
+                data[p] = [measurement(res.mean[i], res.stdev[i])]
+            else
+                data[p] = measurement.(res.mean[i], res.stdev[i])
+            end
         end
     end
     return data

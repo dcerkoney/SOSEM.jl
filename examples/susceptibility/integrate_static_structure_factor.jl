@@ -67,7 +67,12 @@ function swap_extTout(diag, extTout_new=diag.id.para.totalTauNum)
     return new_root
 end
 
-function build_c1l_with_ct(orders; renorm_mu=true, renorm_lambda=true, isFock=false)
+function build_susceptibility_with_ct(
+    orders;
+    renorm_mu=true,
+    renorm_lambda=true,
+    isFock=false,
+)
     DiagTree.uidreset()
     valid_partitions = Vector{PartitionType}()
     diagparams = Vector{DiagParaF64}()
@@ -108,13 +113,13 @@ function build_diagtree(; n_inner_loop=1)
     @assert n_inner_loop > 0
     # χ has one external momentum loop
     n_outer_loop = 1
-    # Interaction order for V χ V
-    order = n_inner_loop + 1
+    # Interaction order for χ
+    order = n_inner_loop - 1
     # External momentum and times
     extT = (1, n_inner_loop + 1)
     extK = DiagTree.getK(n_inner_loop + n_outer_loop, 1)
 
-    # Diagram parameters
+    # χ diagram parameters
     DiagTree.uidreset()
     diagparam = DiagParaF64(;
         type=PolarDiag,  # χ can be viewed diagram as an improper polarization diagram
@@ -124,11 +129,11 @@ function build_diagtree(; n_inner_loop=1)
         filter=[NoHartree],
         interaction=[FeynmanDiagram.Interaction(ChargeCharge, Instant)],  # Yukawa interaction
     )
-    c1l_id = DiagTree.PolarId(diagparam, ChargeCharge; k=extK, t=extT)
+    chi_id = DiagTree.PolarId(diagparam, ChargeCharge; k=extK, t=extT)
 
     # Get Dyson subterms of χ by generating all integer compositions `c` of n_inner_loop.
     # For example, c = [3, 2, 1] generates the term Π_2(14) V(44) Π_1(46) V(66) Π_0(67) in χ_5.
-    c1l_subtrees = []
+    chi_subtrees = []
     for (j, c) in enumerate(DiagGen.integer_compositions(n_inner_loop))
         first_tau_indices = accumulate(+, [1; c[1:(end - 1)]])
         first_loop_indices = accumulate(+, [1 + n_outer_loop; c[1:(end - 1)]])
@@ -138,7 +143,6 @@ function build_diagtree(; n_inner_loop=1)
         # Construct each Π[i] subdiagram
         pis = []
         for i in eachindex(c)
-            # inner_tau_nums = c .- 1
             pi_param = DiagParaF64(;
                 type=PolarDiag,
                 hasTau=true,
@@ -162,12 +166,11 @@ function build_diagtree(; n_inner_loop=1)
             pi_c_swap = swap_extTout(pi_c)
             push!(pis, pi_c_swap)
         end
-        # Diagram parameters for interaction lines
-        v_param = reconstruct(diagparam; type=Ver4Diag, innerLoopNum=0, firstLoopIdx=1)
         # Construct diagram tree for χ[c]:
         # T = Π[1] ⨂ Π[2] ⨂ ⋯ ⨂ Π[length(c)] ⨂ (V_λ)^(length(c) - 1)
-        v_lambda_taus = [(t, t) for t in first_tau_indices[2:end]]
-        v_lambda_ids = [
+        v_param = reconstruct(diagparam; type=Ver4Diag, innerLoopNum=0, firstLoopIdx=1)
+        v_taus = [(t, t) for t in first_tau_indices[2:end]]
+        v_ids = [
             BareInteractionId(
                 v_param,
                 ChargeCharge,
@@ -176,61 +179,34 @@ function build_diagtree(; n_inner_loop=1)
                 k=extK,
                 t=tau_pair,
                 permu=Di,
-            ) for tau_pair in v_lambda_taus
+            ) for tau_pair in v_taus
         ]
-        # The local moment has two additional interaction lines.
-        # We treat one as a fixed bare interaction V, and expand the other as V[V_λ].
-        v_bare_in_id = BareInteractionId(
-            v_param,
-            ChargeCharge,
-            Instant,
-            [0, 0, 0, 1];  # Mark this interaction line as bare
-            k=extK,
-            t=(1, 1),
-            permu=Di,
-        )
-        v_lambda_out_id = BareInteractionId(
-            v_param,
-            ChargeCharge,
-            Instant,
-            [0, 0, 0, 0];  # Mark this interaction line as expandable V[V_λ]
-            k=extK,
-            t=(n_inner_loop + 1, n_inner_loop + 1),
-            permu=Di,
-        )
         # NOTE: We have a Mahan-type Dyson equation in terms of -V because
         # in the N&O convention, χ = Π / (1 + V Π) = Π / (1 - (-V) Π)
-        v_bare_in = DiagramF64(v_bare_in_id; name=:V, factor=-1.0)
-        v_lambdas = [DiagramF64(v_id; name=:V_λ, factor=-1.0) for v_id in v_lambda_ids]
-        v_lambda_out = DiagramF64(v_lambda_out_id; name=Symbol("V[V_λ]"), factor=-1.0)
-        @debug "$v_lambdas"
+        vs = [DiagramF64(v_id; name=:V, factor=-1.0) for v_id in v_ids]
+        @debug "$vs"
         @debug "$pis"
-        # C⁽¹⁾ˡ[c] = V χ[c] V[V_λ]
-        subtree = DiagramF64(
-            c1l_id,
-            Prod(),
-            [v_bare_in; v_lambdas; pis; v_lambda_out];
-            name=Symbol("C⁽¹⁾ˡ_$order,$c"),
-        )
-        push!(c1l_subtrees, subtree)
+        subtree = DiagramF64(chi_id, Prod(), [vs; pis]; name=Symbol("χ^{$c}_$order"))
+        push!(chi_subtrees, subtree)
     end
 
-    # Construct tree for full C⁽¹⁾ˡ = V χ V
-    c1l = DiagramF64(c1l_id, Sum(), c1l_subtrees; name=Symbol("C⁽¹⁾ˡ_$order"))
+    # Construct tree for full χ
+    chi = DiagramF64(chi_id, Sum(), chi_subtrees; name=Symbol("χ_$order"))
     # For convenient access to the external times in the integration step, we swap the
     # outgoing time index from the maximum loop order to 2 (T[1] = τin, T[2] = τout)
-    c1l_swap = swap_extTout(c1l, 2)
-    @assert c1l_swap.id.extT == (1, 2)
+    chi_swap = swap_extTout(chi, 2)
+    @assert chi_swap.id.extT == (1, 2)
     @debug "\nDiagTree:\n" * repr_tree(diagtree)
-    return diagparam, c1l_swap
+    return diagparam, chi_swap
 end
 
 """UEG_MC"""
 
-function integrate_c1l_with_ct(
+function integrate_static_structure_with_ct(
     mcparam::UEG.ParaMC,
     diagparams::Vector{DiagParaF64},
     exprtrees::Vector{ExprTreeF64};
+    kgrid=[0.0],
     alpha=3.0,
     neval=1e5,
     print=-1,
@@ -241,41 +217,40 @@ function integrate_c1l_with_ct(
     # We assume that each partition expression tree has a single root
     @assert all(length(et.root) == 1 for et in exprtrees)
 
-    # List of expression tree roots, external times, and total
+    # List of expression tree roots, external times, and inner
     # loop numbers for each tree (to be passed to integrand)
     # roots = [et.root[1] for et in exprtrees]
-    totalLoopNums = [p.totalLoopNum for p in diagparams]
+    innerLoopNums = [p.innerLoopNum for p in diagparams]
 
-    # Temporary array for K-variables
+    # Grid sizes
+    n_kgrid = length(kgrid)
+
+    # Temporary array for combined K-variables [ExtK, K].
     # We use the maximum necessary loop basis size for K pool.
-    maxloops = maximum(totalLoopNums)
+    maxloops = maximum(p.totalLoopNum for p in diagparams)
     varK = zeros(3, maxloops)
 
     # Build adaptable MC integration variables
-    (K, T) = c1l_mc_variables(mcparam, alpha)
+    (K, T, ExtKidx) = static_structure_mc_variables(mcparam, n_kgrid, alpha)
 
-    # MC configuration degrees of freedom (DOF): shape(K), shape(T)
+    # MC configuration degrees of freedom (DOF): shape(K), shape(T), shape(ExtKidx)
     # We do not integrate the external times and χ is dynamic, hence n_τ = totalTauNum - 2.
-    dof = [[p.totalLoopNum, p.totalTauNum - 2] for p in diagparams]
+    dof = [[p.innerLoopNum, p.totalTauNum - 2, 1] for p in diagparams]
     println("Integration DOF: $dof")
 
-    # Local moment is a scalar
-    obs = zeros(length(dof))  # observable for each partition
+    # UEG SOSEM diagram observables are a function of |k| only (equal-time)
+    obs = repeat([zeros(n_kgrid)], length(dof))  # observable for each partition
 
     # Fix external times to zero (COM coordinates and instantaneous observable)
     T.data[1] = 0     # τin  = 0
     T.data[2] = 1e-8  # τout = 0⁺
 
-    # Thomas-Fermi energy squared
-    eTF2 = mcparam.qTF^4 / (2 * mcparam.me)^2
-
     # Phase-space factors
-    phase_factors = [1.0 / (2π)^(mcparam.dim * nl) for nl in totalLoopNums]
+    phase_factors = [1.0 / (2π)^(mcparam.dim * nl) for nl in innerLoopNums]
 
-    # Total prefactors (including spin sum factor ∑_{σ'} = 2S+1 = 2)
-    # The extra minus sign from the fermion loop (-1)^F = -1 is already
-    # included in the N&O definition of the susceptibility, χ_N&O = -χ_Mahan.
-    prefactors = mcparam.spin * phase_factors / eTF2
+    # Total prefactors (including outer spin sum factor S=2)
+    n0 = mcparam.kF^3 / 3π^2
+    prefactors = -(mcparam.spin / n0) * phase_factors
 
     return integrate(
         integrand;
@@ -284,74 +259,74 @@ function integrate_c1l_with_ct(
         neval=neval,
         print=print,
         # MC config kwargs
-        userdata=(mcparam, exprtrees, totalLoopNums, prefactors, varK),
-        var=(K, T),
+        userdata=(mcparam, exprtrees, innerLoopNums, prefactors, varK, kgrid),
+        var=(K, T, ExtKidx),
         dof=dof,
         obs=obs,
     )
 end
 
-"""Build variable pools for the local moment C⁽¹⁾ˡ."""
-function c1l_mc_variables(mcparam::UEG.ParaMC, alpha::Float64)
+"""Build variable pools for the static structure factor S(q)."""
+function static_structure_mc_variables(mcparam::UEG.ParaMC, n_kgrid::Int, alpha::Float64)
     R = Continuous(0.0, 1.0; alpha=alpha)
     Theta = Continuous(0.0, 1π; alpha=alpha)
     Phi = Continuous(0.0, 2π; alpha=alpha)
     K = CompositeVar(R, Theta, Phi)
     # Offset T pool by 2 for fixed external times τin & τout
     T = Continuous(0.0, mcparam.β; offset=2, alpha=alpha)
-    return (K, T)
+    # Bin in external momentum & time
+    ExtKidx = Discrete(1, n_kgrid; alpha=alpha)
+    return (K, T, ExtKidx)
 end
 
 """Measurement for multiple diagram trees (counterterm partitions)."""
 function measure(vars, obs, weights, config)
+    ik = vars[3][1]  # ExtK bin index
     # Measure the weight of each partition
     for o in 1:(config.N)
-        obs[o] += weights[o]
+        obs[o][ik] += weights[o]
     end
     return
 end
 
-"""Integrand for the local moment C⁽¹⁾ˡ."""
+"""Integrand for the static structure factor S(q)."""
 function integrand(vars, config)
     # We sample internal momentum/times, and external momentum index
-    K, varT = vars
+    K, varT, ExtKidx = vars
     R, Theta, Phi = K
 
     # Unpack userdata
-    mcparam, exprtrees, totalLoopNums, prefactors, varK = config.userdata
+    mcparam, exprtrees, innerLoopNums, prefactors, varK, kgrid = config.userdata
+
+    # External momentum via random index into kgrid (wlog, we place it along the x-axis)
+    ik = ExtKidx[1]
+    varK[1, 1] = kgrid[ik]
 
     @assert varT.data[1] == 0
     @assert varT.data[2] == 1e-8
-    @debug "totalLoopNums = $totalLoopNums" maxlog = 3
-    @debug "config.N = $(config.N)" maxlog = 3
 
     # Evaluate the integrand for each partition
     integrand = Vector(undef, config.N)
     for i in 1:(config.N)
         phifactor = 1.0
-        for j in 1:totalLoopNums[i]  # config.dof[i][1]
+        for j in 1:innerLoopNums[i]  # config.dof[i][1]
             r = R[j] / (1 - R[j])
             θ = Theta[j]
             ϕ = Phi[j]
-            varK[1, j] = r * sin(θ) * cos(ϕ)
-            varK[2, j] = r * sin(θ) * sin(ϕ)
-            varK[3, j] = r * cos(θ)
+            varK[1, j + 1] = r * sin(θ) * cos(ϕ)
+            varK[2, j + 1] = r * sin(θ) * sin(ϕ)
+            varK[3, j + 1] = r * cos(θ)
             phifactor *= r^2 * sin(θ) / (1 - R[j])^2
         end
+
         @debug "K = $(varK)" maxlog = 3
-        @debug "T = $(varT.data)" maxlog = 3
+        @debug "ik = $ik" maxlog = 3
+        @debug "ExtK = $(kgrid[ik])" maxlog = 3
 
         # Evaluate the expression tree (additional = mcparam)
-        # NOTE: We use UEG_MC propagators to mark the outer interaction as bare
-        ExprTree.evalKT!(
-            exprtrees[i],
-            varK,
-            varT.data,
-            mcparam;
-            eval=UEG_MC.Propagators.eval,
-        )
+        ExprTree.evalKT!(exprtrees[i], varK, varT.data, mcparam)
 
-        # Evaluate the C⁽¹⁾ˡ integrand for this partition
+        # Evaluate the static structure factor S(q) for this partition
         root = exprtrees[i].root[1]  # there is only one root per partition
         weight = exprtrees[i].node.current
         integrand[i] = phifactor * prefactors[i] * weight[root]
@@ -373,9 +348,8 @@ function main()
         ENV["JULIA_DEBUG"] = Main
     end
 
-    # Total loop orders N (interaction order + 1). N = 1 ⟹ V χ_0 V, etc.
+    # Total loop orders N (interaction order + 1). N = 1 ⟹ χ_0, etc.
     orders = [1, 2, 3, 4]
-    # orders = [1]
     max_order = maximum(orders)
     sort!(orders)
 
@@ -405,9 +379,25 @@ function main()
     )
     @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)"
 
-    # Build diagram/expression trees for C⁽¹⁾ˡ to order
+    # K-mesh for measurement
+    minK = 0.2 * param.kF
+    Nk, korder = 4, 3
+    kgrid =
+        CompositeGrid.LogDensedGrid(
+            :uniform,
+            [0.0, 3 * param.kF],
+            [0.0, 2 * param.kF],
+            Nk,
+            minK,
+            korder,
+        ).grid
+
+    # Dimensionless k-grid
+    # k_kf_grid = kgrid / param.kF
+
+    # Build diagram/expression trees for the susceptibility to order
     # ξᴺ in the renormalized perturbation theory (includes CTs in μ and λ)
-    partitions, diagparams, diagtrees, exprtrees = build_c1l_with_ct(
+    partitions, diagparams, diagtrees, exprtrees = build_susceptibility_with_ct(
         orders;
         renorm_mu=renorm_mu,
         renorm_lambda=renorm_lambda,
@@ -418,10 +408,11 @@ function main()
     println("diagtrees: $diagtrees")
     println("exprtrees: $exprtrees")
 
-    res = integrate_c1l_with_ct(
+    res = integrate_static_structure_with_ct(
         param,
         diagparams,
         exprtrees;
+        kgrid=kgrid,
         alpha=alpha,
         neval=neval,
         print=print,
@@ -443,15 +434,15 @@ function main()
     # Save to JLD2 on main thread
     if !isnothing(res)
         savename =
-            "results/data/c1l_n=$(param.order)_rs=$(param.rs)_beta_ef=$(param.beta)_" *
-            "lambda=$(param.mass2)_neval=$(neval)_$(solver)$(ct_string)"
+            "results/data/static_structure_factor_n=$(param.order)_rs=$(param.rs)_" *
+            "beta_ef=$(param.beta)_lambda=$(param.mass2)_neval=$(neval)_$(solver)$(ct_string)"
         jldopen("$savename.jld2", "a+"; compress=true) do f
             key = "$(UEG.short(param))"
             if haskey(f, key)
                 @warn("replacing existing data for $key")
                 delete!(f, key)
             end
-            return f[key] = (orders, param, partitions, res)
+            return f[key] = (orders, param, kgrid, partitions, res)
         end
     end
 end

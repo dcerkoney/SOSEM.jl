@@ -1,22 +1,34 @@
+using AbstractTrees
 using CodecZlib
-using DataFrames
-using DelimitedFiles
+using CompositeGrids
 using ElectronGas
 using ElectronLiquid
-using Interpolations
+using ElectronLiquid.UEG
+using FeynmanDiagram
 using JLD2
-using Lehmann
-using LsqFit
 using Measurements
+using MCIntegration
+using Lehmann
+using LinearAlgebra
 using Parameters
-using Polynomials
 using PyCall
 using SOSEM
 
 # For saving/loading numpy data
 @pyimport numpy as np
-@pyimport matplotlib.pyplot as plt
-@pyimport mpl_toolkits.axes_grid1.inset_locator as il
+
+function c1l2_over_eTF_vlambda_vlambda(l)
+    m = sqrt(l)
+    I1 = (l / (l + 4) - log(l / (l + 4)) - 1) / 4
+    I2 = (l^2 / (l + 4) - (l + 4) - 2l * log(l / (l + 4))) / 64
+    I3 = 2(2 / (l + 4) - atan(2 / m) / m) / 3
+    return (I1 + I2 + I3)
+end
+
+function c1l2_over_eTF_v_vlambda(l)
+    m = sqrt(l)
+    return (π / 3m - 1 / 12) + (l / 12 + 1) * log((4 + l) / l) / 4 - (2 / 3m) * atan(2 / m)
+end
 
 """Returns the static structure factor S₀(q) of the UEG in the HF approximation."""
 function static_structure_factor(q, param::ParaMC)
@@ -33,6 +45,7 @@ function bare_polarization_exact_t0(q, param::ParaMC)
     return -n0 * static_structure_factor(q, param)
 end
 
+# Post-process integrations for c1l given binned P(q, tau)
 function main()
     # Change to project directory
     if haskey(ENV, "SOSEM_CEPH")
@@ -206,77 +219,7 @@ function main()
     # Aggregate the full results for Σₓ up to order N
     inst_poln_total = UEG_MC.aggregate_orders(inst_poln)
 
-    # Use LaTex fonts for plots
-    plt.rc("text"; usetex=true)
-    plt.rc("font"; family="serif")
-
-    qgrid_fine = param.kF * np.linspace(0.0, 3.0; num=600)
-    q_kf_grid_fine = np.linspace(0.0, 3.0; num=600)
-    pi0_t0_fine = bare_polarization_exact_t0.(qgrid_fine, [param])
-
-    # Plot the instantaneous polarization for each aggregate order
-    fig, ax = plt.subplots()
-    ax.axvline(2.0; linestyle="--", linewidth=1, color="gray")
-    ax.axhline(1.0; linestyle="--", linewidth=1, color="gray")
-    # ax.axhline(n0; linestyle="--", linewidth=1, color="k", label="\$n_0\$")
-    if min_order_plot == 1
-        # Include exact instantaneous bare polarization in plot
-        ax.plot(q_kf_grid_fine, -pi0_t0_fine / n0, "k"; label="\$N=1\$ (exact)")
-    end
-    ic = 1
-    colors = ["C0", "C1", "C2", "C3", "C4", "C5"]
-    # colors = ["orchid", "cornflowerblue", "turquoise", "chartreuse"]
-    for (i, N) in enumerate(min_order:max_order_plot)
-        # S(q) = -Π(q, τ=0) / n₀
-        static_structure_means = Measurements.value.(inst_poln_total[N])
-        static_structure_stdevs = Measurements.uncertainty.(inst_poln_total[N])
-        marker = "o-"
-        ax.plot(
-            k_kf_grid,
-            static_structure_means,
-            marker;
-            markersize=2,
-            color="$(colors[ic])",
-            label="\$N=$N\$ ($solver)",
-        )
-        ax.fill_between(
-            k_kf_grid,
-            static_structure_means - static_structure_stdevs,
-            static_structure_means + static_structure_stdevs;
-            color="$(colors[ic])",
-            alpha=0.4,
-        )
-        ic += 1
-    end
-    ax.legend(; loc="best")
-    ax.set_xlim(0, 3.0)
-    # ax.set_ylim(nothing, 2)
-    ax.set_xlabel("\$q / k_F\$")
-    ax.set_ylabel("\$-\\Pi(q, \\tau=0) / n_0\$")
-    # xloc = 1.5
-    xloc = 0.45
-    yloc = 0.2
-    ydiv = -0.125
-    ax.text(
-        xloc,
-        yloc,
-        "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
-        fontsize=14,
-    )
-    ax.text(
-        xloc,
-        yloc + ydiv,
-        "\$\\lambda = $(mass2)\\epsilon_{\\mathrm{Ry}},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)}\$";
-        # "\$\\lambda = \\frac{\\epsilon_{\\mathrm{Ry}}}{10},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)},\$";
-        fontsize=14,
-    )
-    fig.tight_layout()
-    fig.savefig(
-        "results/polarization/instantaneous_polarization_N=$(max_order_plot)_rs=$(param.rs)_" *
-        "beta_ef=$(param.beta)_lambda=$(param.mass2)_neval=$(neval)_$(solver)$(ct_string)$(fix_string).pdf",
-    )
-
-    plt.close("all")
+    
     return
 end
 

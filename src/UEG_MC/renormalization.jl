@@ -106,8 +106,10 @@ function chemicalpotential_renormalization_green(data, δμ; min_order=0, max_or
     )
 end
 
-const chemicalpotential_renormalization_poln = chemicalpotential_renormalization_sigma
 const chemicalpotential_renormalization_density = chemicalpotential_renormalization_green
+const chemicalpotential_renormalization_poln = chemicalpotential_renormalization_sigma
+const chemicalpotential_renormalization_susceptibility =
+    chemicalpotential_renormalization_sigma
 
 """
 Computes the exact value for the lowest-order chemical 

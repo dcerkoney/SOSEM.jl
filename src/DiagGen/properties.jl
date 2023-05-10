@@ -323,3 +323,48 @@ function DiagTree.hasOrderHigher(diag::Diagram{W}, ::Type{ID}) where {W,ID<:Prop
     # and derivatives of dashed or bare Coulomb lines also vanish
     return diag.id isa ID && all(diag.id.order[[3, 4]] .== 0)
 end
+
+"""
+    Parameters.reconstruct(id::DiagramId; kwargs...)
+
+    Reconstruct a DiagramId subtype, updating the specified properties.
+"""
+function Parameters.reconstruct(::Type{T}, id::T, update_dict) where {T<:DiagramId}
+    update_dict = !isa(update_dict, AbstractDict) ? Dict(update_dict) : copy(update_dict)
+    # List of all possible DiagramId subtype argument properties
+    all_id_args = [:para, :response, :type, :extra, :order]
+    # Mappings of all possible DiagramId subtype keyword
+    # argument properties to constructor keynames
+    all_id_kwargs = Dict(
+        :extK => :k,
+        :extT => :t,
+        :permutation => :permu,
+        :channel => :chan,
+        :site => :r,
+        :creation => :creation,
+        :orbital => :orbital,
+    )
+    # Get argument properties associated with this DiagramId
+    id_args = []
+    for property in all_id_args
+        if hasproperty(id, property)
+            push!(id_args, property)
+        end
+    end
+    # Get keyword argument properties associated with this DiagramId
+    id_kwargs = []
+    for property in keys(all_id_kwargs)
+        if hasproperty(id, property)
+            push!(id_kwargs, property)
+        end
+    end
+    # @debug "$id_args"
+    # @debug "$id_kwargs"
+    # Construct updated DiagramId
+    get(id, update_dict, key) = pop!(update_dict, key, getproperty(id, key))
+    args = [get(id, update_dict, key) for key in id_args]
+    kwargs = Dict(all_id_kwargs[key] => get(id, update_dict, key) for key in id_kwargs)
+    new_id = T(args...; kwargs...)
+    length(update_dict) != 0 && error("Fields $(keys(update_dict)) not in type $T")
+    return new_id
+end
