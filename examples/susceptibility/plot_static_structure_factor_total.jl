@@ -47,13 +47,13 @@ function main()
     solver = :vegasmc
 
     # Number of evals
-    neval = 1e7
+    neval = 1e10
 
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
-    min_order = 1
-    max_order = 3
+    min_order = 2
+    max_order = 4
     min_order_plot = 1
-    max_order_plot = 3
+    max_order_plot = 4
 
     # Distinguish results with fixed vs re-expanded bare interactions
     intn_str = ""
@@ -275,7 +275,7 @@ function main()
     fig.tight_layout()
     fig.savefig(
         "results/static_structure_factor/static_structure_factor_N=$(max_order_plot)_rs=$(param.rs)_" *
-        "beta_ef=$(param.beta)_lambda=$(param.mass2)_neval=$(neval)_$(solver)$(ct_string)$(fix_string).pdf",
+        "beta_ef=$(param.beta)_lambda=$(param.mass2)_neval=$(neval)_$(solver)$(ct_string)$(fix_string)_exact_bare.pdf",
     )
 
     plt.close("all")

@@ -16,13 +16,14 @@ end
 function main()
     # Physical params matching data for SOSEM observables
     order = [4]  # C^{(1)}_{N≤5} includes CTs up to 3rd order
-    rs = [2.0]
-    mass2 = [0.4]
+    rs = [1.0]
+    mass2 = [1.0]
     beta = [40.0]
 
     # Momentum spacing for finite-difference derivative of Sigma (in units of kF)
     # δK = 5e-6
-    δK = 0.025
+    # δK = 0.025
+    δK = 0.001
 
     # Total number of MCMC evaluations
     neval = 5e10
@@ -57,8 +58,10 @@ function main()
 
         ######### calcualte Z factor and mass ratio ######################
         δK *= kF
-        kgrid = [kF, kF + δK, kF + 2δK, kF + 4δK, kF + 8δK]
+        kgrid = [kF, kF + δK, kF + 5δK, kF + 10δK]
         ngrid = [0, 1]
+        # kgrid = [kF, kF + δK, kF + 2δK, kF + 4δK, kF + 8δK]
+        # ngrid = [0, 1]
         # ngrid = [-1, 0]
 
         # Build diagrams

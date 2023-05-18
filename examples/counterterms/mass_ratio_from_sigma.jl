@@ -56,9 +56,9 @@ function main()
         kF = para.kF
 
         ######### calcualte Z factor and mass ratio ######################
-	δK *= kF
+        δK *= kF
         kgrid = [kF, kF + δK, kF + 5δK, kF + 10δK]
-	ngrid = [0]
+        ngrid = [0]
 
         # Build diagrams
         n_min, n_max = 1, _order

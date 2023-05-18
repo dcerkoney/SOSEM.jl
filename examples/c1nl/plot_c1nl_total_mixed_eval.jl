@@ -147,6 +147,13 @@ function main()
                 f["c1b/N=5/neval=$neval5_c1b/meas"] +
                 f["c1c/N=5/neval=$neval5_c1c/meas"] +
                 f["c1d/N=5/neval=$neval5_c1d/meas"]
+        elseif N == 2
+            param = f["c1d/N=$N/neval=$neval34/param"]
+            kgrid = f["c1d/N=$N/neval=$neval34/kgrid"]
+            c1nl_N_total =
+                f["c1b0/N=$N/neval=$neval34/meas"] +
+                f["c1c/N=$N/neval=$neval34/meas"] +
+                f["c1d/N=$N/neval=$neval34/meas"]
         else
             param = f["c1d/N=$N/neval=$neval34/param"]
             kgrid = f["c1d/N=$N/neval=$neval34/kgrid"]
@@ -165,6 +172,22 @@ function main()
         c1nl_N_means, c1nl_N_stdevs =
             Measurements.value.(c1nl_N_total), Measurements.uncertainty.(c1nl_N_total)
         @assert length(k_kf_grid) == length(c1nl_N_means) == length(c1nl_N_stdevs)
+
+        if N == 4
+            if N == 1
+                c1l_N = measurement("0.913 ± 0.0017")
+            elseif N == 2
+                c1l_N = measurement("1.0639 ± 0.0019")
+            elseif N == 3
+                c1l_N = measurement("1.1154 ± 0.0028")
+            elseif N == 4
+                c1l_N = measurement("1.1369 ± 0.0073")
+            end
+            c1_nl_l_ratio = abs(c1nl_N_total[1] / c1l_N)
+            println("C⁽¹⁾ⁿˡ(k = 0) (N=$N)\n: $(c1nl_N_total[1])")
+            println("C⁽¹⁾ˡ(k = 0) (N=$N)\n: $c1l_N")
+            println("|C⁽¹⁾ⁿˡ(k = 0) / C⁽¹⁾ˡ| (N=$N)\n: $c1_nl_l_ratio")
+        end
 
         if i == 1
             ax.plot(

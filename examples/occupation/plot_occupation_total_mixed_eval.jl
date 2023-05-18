@@ -40,21 +40,23 @@ function main()
         cd(ENV["SOSEM_HOME"])
     end
 
-    # rs = 1.0
-    rs = 2.0
+    rs = 1.0
+    # rs = 2.0
     beta = 40.0
-    # mass2 = 1.0
-    mass2 = 0.4
+    mass2 = 1.0
+    # mass2 = 0.4
     solver = :vegasmc
 
     # Number of evals
-    # neval12 = rs == 1 ? 1e10 : 5e10  # neval12 for existing data has this discrepancy
+    neval12 = rs == 1 ? 1e10 : 5e10  # neval12 for existing data has this discrepancy
     # neval12 = 1e10
     # neval12 = 5e10
-    neval3 = 1e10
-    neval4 = 1e10
-    # neval = max(neval12, neval3, neval4)
-    neval = max(neval3, neval4)
+    neval3 = 5e10
+    neval4 = 5e10
+    # neval3 = 1e10
+    # neval4 = 1e10
+    neval = max(neval12, neval3, neval4)
+    # neval = max(neval3, neval4)
 
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
     min_order = 0
@@ -113,39 +115,39 @@ function main()
     )
 
     # Load the raw data
-    if max_order > 3
-        max_together = 3
-    else
-        max_together = max_order
-    end
-    # if max_order > 2
-    #     max_together = 2
+    # if max_order > 3
+    #     max_together = 3
     # else
     #     max_together = max_order
     # end
+    if max_order > 2
+        max_together = 2
+    else
+        max_together = max_order
+    end
     savename =
         "results/data/occupation_n=$(max_together)_rs=$(rs)_beta_ef=$(beta)_" *
         # "results/data/occupation_n=$(max_order)_rs=$(rs)_beta_ef=$(beta)_" *
-        "lambda=$(mass2)_neval=$(neval)_$(solver)_$(ct_string)"
-        # "lambda=$(mass2)_neval=$(neval12)_$(solver)_$(ct_string)"
+        # "lambda=$(mass2)_neval=$(neval)_$(solver)_$(ct_string)"
+        "lambda=$(mass2)_neval=$(neval12)_$(solver)_$(ct_string)"
     print("Loading data from $savename...")
     orders, param, kgrid, partitions, res = jldopen("$savename.jld2", "a+") do f
         key = "$(UEG.short(loadparam))"
         return f[key]
     end
     println("done!")
-    # if max_order >= 3
-    #     # 3rd order 
-    #     savename =
-    #         "results/data/occupation_n=3_rs=$(rs)_beta_ef=$(beta)_" *
-    #         "lambda=$(mass2)_neval=$(neval3)_$(solver)_$(ct_string)"
-    #     print("Loading 3rd order data from $savename...")
-    #     orders3, param3, kgrid3, partitions3, res3 = jldopen("$savename.jld2", "a+") do f
-    #         key = "$(UEG.short(loadparam))"
-    #         return f[key]
-    #     end
-    #     println("done!")
-    # end
+    if max_order >= 3
+        # 3rd order 
+        savename =
+            "results/data/occupation_n=3_rs=$(rs)_beta_ef=$(beta)_" *
+            "lambda=$(mass2)_neval=$(neval3)_$(solver)_$(ct_string)"
+        print("Loading 3rd order data from $savename...")
+        orders3, param3, kgrid3, partitions3, res3 = jldopen("$savename.jld2", "a+") do f
+            key = "$(UEG.short(loadparam))"
+            return f[key]
+        end
+        println("done!")
+    end
     if max_order >= 4
         # 4th order 
         savename =
@@ -161,9 +163,9 @@ function main()
 
     # Get dimensionless k-grid (k / kF) and index corresponding to the Fermi energy
     k_kf_grid = kgrid / param.kF
-    # if max_order >= 3
-    #     k_kf_grid3 = kgrid3 / param.kF
-    # end
+    if max_order >= 3
+        k_kf_grid3 = kgrid3 / param.kF
+    end
     if max_order >= 4
         k_kf_grid4 = kgrid4 / param.kF
     end
@@ -171,35 +173,37 @@ function main()
     # Convert results to a Dict of measurements at each order with interaction counterterms merged
     data = UEG_MC.restodict(res, partitions)
     # NOTE: Old data for orders 0, 1, and 2 at rs = 1 has Taylor factors already present in eval!
-    # if loadparam.rs != 1.0
-    #     for (k, v) in data
-    #         data[k] = v / (factorial(k[2]) * factorial(k[3]))
-    #     end
-    # end
-    for (k, v) in data
-        data[k] = v / (factorial(k[2]) * factorial(k[3]))
+    if loadparam.rs != 1.0
+        for (k, v) in data
+            data[k] = v / (factorial(k[2]) * factorial(k[3]))
+        end
     end
-    # # Add 3rd order results to data dict
-    # if max_order >= 3
-    #     data3 = UEG_MC.restodict(res3, partitions3)
-    #     for (k, v) in data3
-    #         data3[k] = v / (factorial(k[2]) * factorial(k[3]))
-    #     end
-    #     merge!(data, data3)
+    # for (k, v) in data
+    #     data[k] = v / (factorial(k[2]) * factorial(k[3]))
     # end
+    # Add 3rd order results to data dict
+    if max_order >= 3
+        data3 = UEG_MC.restodict(res3, partitions3)
+        for (k, v) in data3
+            data3[k] = v / (factorial(k[2]) * factorial(k[3]))
+            @assert length(data3[k]) == length(kgrid)
+        end
+        @assert length(kgrid3) == length(kgrid)
+        merge!(data, data3)
+    end
     # Add 4th order results to data dict
     if max_order >= 4
         data4 = UEG_MC.restodict(res4, partitions4)
         for (k, v) in data4
             data4[k] = v / (factorial(k[2]) * factorial(k[3]))
             # # NOTE: we delete the point at kF for consistency with old data
-            # @assert length(data4[k]) == length(kgrid) + 1
-            # deleteat!(data4[k], kgrid4 .== param.kF)
+            @assert length(data4[k]) == length(kgrid) + 1
+            deleteat!(data4[k], kgrid4 .== param.kF)
             @assert length(data4[k]) == length(kgrid)
         end
         # # NOTE: we delete the point at kF for consistency with old data
-        # @assert length(kgrid4) == length(kgrid) + 1
-        # deleteat!(kgrid4, kgrid4 .== param.kF)
+        @assert length(kgrid4) == length(kgrid) + 1
+        deleteat!(kgrid4, kgrid4 .== param.kF)
         @assert length(kgrid4) == length(kgrid)
         merge!(data, data4)
     end
@@ -338,11 +342,11 @@ function main()
         for N in min_order_plot:max_order
             if N == 4
                 num_eval = neval4
-            # elseif N == 3
-            #     num_eval = neval3
-            else
+            elseif N == 3
                 num_eval = neval3
-                # num_eval = neval12
+            else
+                # num_eval = neval3
+                num_eval = neval12
             end
             # num_eval = neval
             # Skip exact (N = 0) result
@@ -405,7 +409,7 @@ function main()
     k_kf_plus  = sqrt(e_ef_plus)   # = √(1 + Δ_HWHM / ϵF)
 
     # Use maximum broadening (sqrt is a non-linear transformation, so abs(k - k_+) ≠ abs(k - k_-)!)
-    dk_max       = max(abs(1 - k_kf_minus), abs(k_kf_plus - 1))
+    dk_max = max(abs(1 - k_kf_minus), abs(k_kf_plus - 1))
     # k_kf_lesser  = 1 - dk_max
     # k_kf_greater = 1 + dk_max
 
@@ -440,6 +444,26 @@ function main()
     colors2 = ["purple", "blue", "green", "yellow", "orange"]
     zfactors = []
     mstar_over_ms = []
+    zfactor_vs_window = Dict(i => [] for i in min_order:max_order_plot)
+    mstar_over_m_vs_window = Dict(i => [] for i in min_order:max_order_plot)
+    # zfactor_vs_window = []
+    # mstar_over_m_vs_window = []
+
+    # Get all different centered window sizes for the given kgrid centered about k=kF
+    centered_windows = []
+    length_left = length(k_kf_grid[1:ikFminus])
+    length_right = length(k_kf_grid[ikFplus:end])
+    for n in 2:min(length_left - 1, length_right - 1)
+        # for n in 0:min(length_left - 1, length_right - 1)
+        push!(centered_windows, collect(eachindex(k_kf_grid))[(ikFminus - n):(ikFplus + n)])
+    end
+    println(centered_windows)
+    max_idx_delta = length(centered_windows[end]) ÷ 2
+    delta_k_kfs =
+        reverse(abs.(k_kf_grid .- 1)[centered_windows[end][1:(max_idx_delta - 2)]])
+    println(length(centered_windows))
+    println(length(delta_k_kfs))
+
     for (i, N) in enumerate(min_order:max_order_plot)
         # if plot_fit
         #     N < max_order_plot && continue
@@ -534,6 +558,50 @@ function main()
             )
             println(errors_est)
             println(covariance_est)
+
+            # Flow of Z and m⋆ at max order N vs window size
+            if plot_fit
+            # if N == max_order_plot && plot_fit
+                for window_indices in centered_windows
+                    window_size = length(window_indices)
+                    # Gridded data for k in window_indices near kF
+                    window_k_data = kgrid[window_indices]
+                    window_means_data = means[window_indices]
+
+                    # Least-squares quasiparticle fit
+                    window_fit = curve_fit(
+                        model_Z_mstar,
+                        window_k_data,
+                        window_means_data,
+                        p0_Z_mstar,
+                    )
+                    window_qp_fit(k) = model_Z_mstar(k, window_fit.param)
+                    # window_fit = curve_fit(model_Z_mstar_v2, window_k_data, window_means_data, p0_Z_mstar)
+                    # window_qp_fit(k) = model_Z_mstar_v2(k, window_fit.param)
+                    # Coefficients of determination (r²)
+                    window_r2 = rsquared(
+                        window_k_data,
+                        window_means_data,
+                        window_qp_fit(window_k_data),
+                        window_fit,
+                    )
+                    # Fermi-liquid parameters (Z, m⋆) (on the Fermi surface k = kF) from quasiparticle fit
+                    println(
+                        "(N=$N, i=$(window_size ÷ 2)): (Z, m⋆) ≈ $(window_fit.param), r2=$window_r2",
+                    )
+                    push!(zfactor_vs_window[N], window_fit.param[1])
+                    push!(mstar_over_m_vs_window[N], window_fit.param[2] / param.me)
+                    # Estimate errors and covariance matrix for fit params Z and m⋆
+                    # errors_est = estimate_errors(window_fit)
+                    # covariance_est = estimate_covar(window_fit)
+                    println(
+                        "(N=$N, i=$(window_size ÷ 2)) Estimated errors and covariance matrix for fit parameters (Z, m⋆):",
+                    )
+                    # println(errors_est)
+                    # println(covariance_est)
+                end
+            end
+
             # Another LSQ fit, but using K.H. & K.C. data for m⋆/m at rs = 1, 2
             if rs == 1.0 || rs == 2.0
                 fit_N_khkc = curve_fit(model_Z, k_data, means_data, p0_Z)
@@ -740,6 +808,63 @@ function main()
         ax.set_ylabel("\$Z\$")
         fig.tight_layout()
         fig.savefig("results/occupation/z_factor_vs_N.pdf")
+
+        # Plot fit to Z vs window size at maximal order N
+        fig, ax = plt.subplots()
+        window_sizes = delta_k_kfs
+        ax.axvline(
+            dk_max;
+            color="k",
+            linestyle="--",
+            label="\$\\Delta = \\mathrm{FWHM}_{k}(f_{k\\sigma})\$",
+        )
+        for N in min_order:max_order_plot
+            ax.plot(
+                window_sizes,
+                zfactor_vs_window[N],
+                "o-";
+                markersize=3,
+                label="\$N=$N\$",
+                # label="\$N=$max_order_plot\$",
+            )
+        end
+        ax.legend(; loc="lower right")
+        ax.set_xlim(0.0, 0.25)
+        ax.set_ylim(0.6, 1.05)
+        ax.set_xlabel("Half-window size \$\\Delta = |k - k_F| / k_F\$")
+        ax.set_ylabel("\$Z\$")
+        fig.tight_layout()
+        fig.savefig("results/occupation/z_factor_vs_window.pdf")
+
+        # Plot fit to m⋆/m vs window size at maximal order N
+        fig, ax = plt.subplots()
+        window_sizes = delta_k_kfs
+        ax.axvline(
+            dk_max;
+            color="k",
+            linestyle="--",
+            label="\$\\Delta = \\mathrm{FWHM}_{k}(f_{k\\sigma})\$",
+        )
+        for N in min_order:max_order_plot
+            ax.plot(
+                window_sizes,
+                mstar_over_m_vs_window[N],
+                "o-";
+                markersize=3,
+                # label="\$N=$max_order_plot\$",
+                label="\$N=$N\$",
+            )
+        end
+        ax.legend(; loc="lower right")
+        ax.set_xlim(0.0, 0.25)
+        ax.set_ylim(0.6, 1.05)
+        ax.set_xlabel("Half-window size \$\\Delta = |k - k_F| / k_F\$")
+        ax.set_ylabel("\$m^\\star / m\$")
+        fig.tight_layout()
+        fig.savefig("results/occupation/effective_mass_ratio_vs_window.pdf")
+
+        println(zfactor_vs_window[max_order_plot])
+        println(mstar_over_m_vs_window[max_order_plot])
     end
 
     plt.close("all")

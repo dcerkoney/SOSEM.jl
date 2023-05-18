@@ -20,12 +20,16 @@ beta = [40.0]
 
 # Momentum spacing for finite-difference derivative of Sigma (in units of kF)
 # δK = 5e-6
-δK = 0.025
+# δK = 0.025
+δK = 0.001
 
 # kgrid indices & spacings
-idks = 1:4
-dks = [1, 2, 4, 8] * δK
-dkscales = [1, 2, 4, 8]
+idks = 1:3
+dks = [1, 5, 10] * δK
+dkscales = [1, 5, 10]
+# idks = 1:4
+# dks = [1, 2, 4, 8] * δK
+# dkscales = [1, 2, 4, 8]
 
 # Enable/disable interaction and chemical potential counterterms
 renorm_mu = true
@@ -127,35 +131,73 @@ function process_mass_ratio(datatuple, isSave)
     println(sigma_N_total)
 
     # Compute m⋆/m for each order N in RPT
-    mass_ratios = []
+    mtildes = []
+    dzis = []
     for N in 1:max_order
-        # Σ and Z to order N in RPT
         Σ_N = sigma_N_total[N]
-        z_N = 1 / (1 + sum(δz[1:(N - 1)]))
-        # z_N = 1 / (1 - sum(δz[1:(N - 1)]))
-        @assert size(Σ_N) == (1, 5)
-
         # ∂ₖReΣ(k, ikₙ = 0) at the Fermi surface k = kF
         # NOTE: n1 = 0, k1 = kF, k2 = kF * (1 + δK), k2 - k1 = kF * δK
         idk = 1
-        # ds_dk = (real(Σ_N[1, 1]) - real(Σ_N[1, 1 + idk])) / (kgrid[1] - kgrid[1 + idk])
-        ds_dk = (real(Σ_N[1, 1 + idk]) - real(Σ_N[1, 1])) / (kgrid[1 + idk] - kgrid[1])
         @assert idk ∈ 1:4
         @assert kgrid[1] ≈ para.kF
         @assert kgrid[2] ≈ para.kF + para.kF * δK
         @assert kgrid[1 + idk] - kgrid[1] ≈ para.kF * dks[idk]
-
-        println("\n(N=$N)")
-        println("Z = $z_N")
-        println("ReΣ(kF, 0) = $(real(Σ_N[1, 1]))")
-        println("ReΣ(kF + $(dkscales[idk])δK * kF, 0) = $(real(Σ_N[1, 1 + idk]))")
-        println("ds_dk = $ds_dk")
-
-        # Compute m⋆/m
-        mass_ratio = 1.0 / z_N / (1 + (para.me / para.kF) * ds_dk)
-        println("(N = $N) m⋆/m: ", mass_ratio)
-        push!(mass_ratios, mass_ratio)
+        # ds_dk = (real(Σ_N[1, 1]) - real(Σ_N[1, 1 + idk])) / (kgrid[1] - kgrid[1 + idk])
+        ds_dk = (real(Σ_N[1, 1 + idk]) - real(Σ_N[1, 1])) / (kgrid[1 + idk] - kgrid[1])
+        mtilde = (para.me / para.kF) * ds_dk
+        dzi = (para.β / 2π) * (imag(Σ_N[2, 1]) - imag(Σ_N[1, 1])) # = zfactor(Σ_N, para.β) = δ(1/z)
+        push!(mtildes, mtilde)
+        push!(dzis, dzi)
     end
+    # Power series for (1 + mtilde[ξ])⁻¹
+    Mtildes = [
+        mtilde[1],
+        mtilde[1]^2 + mtilde[2],
+        mtilde[1]^3 + 2 * mtilde[1] * mtilde[2] + mtilde[3],
+        mtilde[1]^4 + 3 * mtilde[1]^2 * mtilde[2] + 2 * mtilde[1] * mtilde[3] + mtilde[4],
+    ]
+    # Power series for (m⋆/m)[ξ] = (1 - δzi[ξ]) ∘ (1 + mtilde[ξ])⁻¹
+    mass_ratios = [
+        1.0,
+        -Mtildes[1] - dzis[1],
+        Mtildes[2] + Mtildes[1] * dzis[1] - dzis[2],
+        -Mtildes[3] - Mtildes[2] * dzis[1] + Mtildes[1] * dzis[2] + dzis[3],
+        Mtildes[4] + Mtildes[3] * dzis[1] - Mtildes[2] * dzis[2] + Mtildes[1] * dzis[3] - dzis[4],
+    ]
+    for r in mass_ratios
+        println("(N = $N) m⋆/m: $r")
+    end
+
+    # # Compute m⋆/m for each order N in RPT
+    # mass_ratios = []
+    # for N in 1:max_order
+    #     # Σ and Z to order N in RPT
+    #     Σ_N = sigma_N_total[N]
+    #     z_N = 1 / (1 + sum(δz[1:(N - 1)]))
+    #     # z_N = 1 / (1 - sum(δz[1:(N - 1)]))
+    #     @assert size(Σ_N) == (1, 5)
+
+    #     # ∂ₖReΣ(k, ikₙ = 0) at the Fermi surface k = kF
+    #     # NOTE: n1 = 0, k1 = kF, k2 = kF * (1 + δK), k2 - k1 = kF * δK
+    #     idk = 1
+    #     # ds_dk = (real(Σ_N[1, 1]) - real(Σ_N[1, 1 + idk])) / (kgrid[1] - kgrid[1 + idk])
+    #     ds_dk = (real(Σ_N[1, 1 + idk]) - real(Σ_N[1, 1])) / (kgrid[1 + idk] - kgrid[1])
+    #     @assert idk ∈ 1:4
+    #     @assert kgrid[1] ≈ para.kF
+    #     @assert kgrid[2] ≈ para.kF + para.kF * δK
+    #     @assert kgrid[1 + idk] - kgrid[1] ≈ para.kF * dks[idk]
+
+    #     println("\n(N=$N)")
+    #     println("Z = $z_N")
+    #     println("ReΣ(kF, 0) = $(real(Σ_N[1, 1]))")
+    #     println("ReΣ(kF + $(dkscales[idk])δK * kF, 0) = $(real(Σ_N[1, 1 + idk]))")
+    #     println("ds_dk = $ds_dk")
+
+    #     # Compute m⋆/m
+    #     mass_ratio = 1.0 / z_N / (1 + (para.me / para.kF) * ds_dk)
+    #     println("(N = $N) m⋆/m: ", mass_ratio)
+    #     push!(mass_ratios, mass_ratio)
+    # end
 
     if isSave
         println("Current working directory: $(pwd())")

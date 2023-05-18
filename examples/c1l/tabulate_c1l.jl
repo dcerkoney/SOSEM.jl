@@ -1,10 +1,28 @@
-using SOSEM
 using CodecZlib
-using JLD2
-using FeynmanDiagram
-using ElectronLiquid
-using Measurements
 using DataStructures
+using DelimitedFiles
+using ElectronLiquid
+using FeynmanDiagram
+using Interpolations
+using JLD2
+using Measurements
+using PyCall
+using SOSEM
+
+# For saving/loading numpy data
+@pyimport numpy as np
+@pyimport matplotlib.pyplot as plt
+
+const vzn_dir = "results/vzn_paper"
+
+function load_csv(filename)
+    # assumes csv format: (x, y)
+    d = readdlm(filename, ',')
+    @assert ndims(d) == 2
+    xdata = d[:, 1]
+    ydata = d[:, 2]
+    return xdata, ydata
+end
 
 function c1l2_over_eTF2_vlambda_vlambda(l)
     m = sqrt(l)
@@ -54,7 +72,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 5e10
+    neval = 1e10
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -62,6 +80,9 @@ function main()
 
     # Remove Fock insertions?
     isFock = false
+
+    # Plot the local moment vs N and compare with VZN QMC data?
+    plot = true
 
     # UEG parameters for MC integration
     loadparam = ParaMC(;
@@ -165,6 +186,79 @@ function main()
         println("Computed c1l2:\t$calc")
         println("Standard score for c1l2:\t$zscore")
         # @assert zscore ≤ 20
+    end
+
+    if plot
+
+        # Use LaTex fonts for plots
+        plt.rc("text"; usetex=true)
+        plt.rc("font"; family="serif")
+
+        # Get QMC value of the local moment at this rs
+        k_kf_grid_qmc, c1l_qmc_over_rs2 = load_csv("$vzn_dir/c1l_over_rs2_qmc.csv")
+        P = sortperm(k_kf_grid_qmc)
+        c1l_qmc_over_rs2_interp = linear_interpolation(
+            k_kf_grid_qmc[P],
+            c1l_qmc_over_rs2[P];
+            extrapolation_bc=Line(),
+        )
+        eTF = param.qTF^2 / (2 * param.me)
+        c1l_qmc = c1l_qmc_over_rs2_interp(param.rs) * param.rs^2
+        c1l_qmc_over_eTF2 = c1l_qmc * (param.EF / eTF)^2
+        println("C⁽¹⁾ˡ (QMC, rs = $(param.rs)): $c1l_qmc")
+        println("C⁽¹⁾ˡ / eTF² (QMC, rs = $(param.rs)): $c1l_qmc_over_eTF2")
+
+        # Plot the local moment vs order N and compare to QMC value
+        fig, ax = plt.subplots()
+        orders = collect(min_order:max_order_plot)
+        ax.axhline(c1l_qmc_over_eTF2; color="k", linestyle="--", label="QMC")
+        c1l_means = [Measurements.value(c1l_total[N][1]) for N in orders]
+        c1l_stdevs = [Measurements.uncertainty(c1l_total[N][1]) for N in orders]
+        marker = "o-"
+        ax.plot(orders, c1l_means, marker; color="C0", markersize=4, label="RPT ($solver)")
+        ax.fill_between(
+            orders,
+            c1l_means - c1l_stdevs,
+            c1l_means + c1l_stdevs;
+            color="C0",
+            alpha=0.4,
+        )
+        ax.legend(; loc="best")
+        ax.set_xticks(orders)
+        ax.set_xlim(min_order, max_order_plot)
+        # ax.set_ylim(nothing, 1.25)
+        ax.set_xlabel("Perturbation order \$N\$")
+        # ax.set_ylabel("\$C^{(1)l} / \\epsilon^2_{\\mathrm{TF}}\$")
+        ax.set_ylabel("\$C^{(1)l} \\,/\\, {\\epsilon}^{\\hspace{0.1em}2}_{\\mathrm{TF}}\$")
+        # ax.set_ylabel("\$S(q)\$")
+        # xloc = 1.5
+        xloc = 2.5
+        yloc = 1.04
+        ydiv = -0.035
+        ax.text(
+            xloc,
+            yloc,
+            "\$r_s = $(param.rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(param.beta),\$";
+            fontsize=14,
+        )
+        ax.text(
+            xloc,
+            yloc + ydiv,
+            "\$\\lambda = $(param.mass2)\\epsilon_{\\mathrm{Ry}},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)}\$";
+            fontsize=14,
+        )
+        ax.text(
+            xloc,
+            yloc + 2 * ydiv,
+            "\${\\epsilon}_{\\mathrm{TF}}\\equiv\\frac{\\hbar^2 q^2_{\\mathrm{TF}}}{2 m_e}=2\\pi\\mathcal{N}_F\$ (a.u.)";
+            fontsize=12,
+        )
+        fig.tight_layout()
+        fig.savefig(
+            "results/c1l/c1l_N=$(max_order_plot)_rs=$(param.rs)_beta_ef=$(param.beta)_" *
+            "lambda=$(param.mass2)_neval=$(neval)_$(solver)$(ct_string).pdf",
+        )
+        plt.close("all")
     end
 
     println("Done!")
