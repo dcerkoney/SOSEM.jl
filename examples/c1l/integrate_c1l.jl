@@ -374,8 +374,8 @@ function main()
     end
 
     # Total loop orders N (interaction order + 1). N = 1 ⟹ V χ_0 V, etc.
-    orders = [1, 2, 3, 4]
-    # orders = [1]
+    # orders = [1, 2, 3, 4]
+    orders = [5]
     max_order = maximum(orders)
     sort!(orders)
 
@@ -385,7 +385,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 1e10
+    neval = 1e9
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
