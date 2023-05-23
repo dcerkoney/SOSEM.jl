@@ -62,17 +62,19 @@ function main()
 
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
     min_order = minimum(orders)
-    max_order = maximum(orders)
+    max_order = 5
+    all_orders = collect(min_order:max_order)
+    # max_order = maximum(orders)
     min_order_plot = 1
-    max_order_plot = 4
+    max_order_plot = 5
 
     # Settings
     alpha = 3.0
-    print = 0
     solver = :vegasmc
 
     # Number of evals below and above kF
     neval = 1e10
+    neval5 = 1e9
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -83,6 +85,10 @@ function main()
 
     # Plot the local moment vs N and compare with VZN QMC data?
     plot = true
+
+    # Save to JLD2?
+    save = false
+    # save = true
 
     # UEG parameters for MC integration
     loadparam = ParaMC(;
@@ -109,25 +115,52 @@ function main()
     end
 
     # Load the raw data
+    if max_order > 4
+        max_together = 4
+    else
+        max_together = max_order
+    end
     savename =
-        "results/data/c1l_n=$(loadparam.order)_rs=$(loadparam.rs)_beta_ef=$(loadparam.beta)_" *
+        "results/data/c1l_n=$(max_together)_rs=$(loadparam.rs)_beta_ef=$(loadparam.beta)_" *
         "lambda=$(loadparam.mass2)_neval=$(neval)_$(solver)$(ct_string)"
     println(savename)
     orders, param, partitions, res = jldopen("$savename.jld2", "a+") do f
         key = "$(UEG.short(loadparam))"
         return f[key]
     end
+    println("done 4!")
+    if max_order >= 5
+        # 5th order 
+        savename =
+            "results/data/c1l_n=5_rs=$(loadparam.rs)_beta_ef=$(loadparam.beta)_" *
+            "lambda=$(loadparam.mass2)_neval=$(neval5)_$(solver)$(ct_string)"
+        println("Loading 5th order data from $savename...")
+        orders5, param5, partitions5, res5 = jldopen("$savename.jld2", "a+") do f
+            key = "$(UEG.short(loadparam))"
+            return f[key]
+        end
+        println("done!")
+    end
     println(partitions)
+    println(partitions5)
 
     # Convert results to a Dict of measurements at each order with interaction counterterms merged
     data = UEG_MC.restodict(res, partitions)
     println(data)
-
     # Add Taylor factors 1 / (n_μ! n_λ!)
     for (k, v) in data
         data[k] = v / (factorial(k[2]) * factorial(k[3]))
         # # Extra minus sign for missing factor of (-1)^F = -1?
         # data[k] = [-v / (factorial(k[2]) * factorial(k[3]))]
+    end
+
+    # Add 5th order results to data dict
+    if max_order >= 5
+        data5 = UEG_MC.restodict(res5, partitions5)
+        for (k, v) in data5
+            data5[k] = v / (factorial(k[2]) * factorial(k[3]))
+        end
+        merge!(data, data5)
     end
     println(data)
 
@@ -166,6 +199,39 @@ function main()
         max_order=max_order,
     )
     c1l_total = UEG_MC.aggregate_orders(c1l)
+    @assert all(length(c1l_total[o]) == 1 for o in all_orders)
+    c1l_means = [Measurements.value(c1l_total[o][1]) for o in all_orders]
+    c1l_stdevs = [Measurements.uncertainty(c1l_total[o][1]) for o in all_orders]
+
+    # Save to JLD2
+    if save
+        savename =
+            "results/data/rs=$(param.rs)_beta_ef=$(param.beta)_" *
+            "lambda=$(param.mass2)_$(solver)$(ct_string)"
+        # "lambda=$(param.mass2)_$(intn_str)$(solver)$(ct_string)"
+        f = jldopen("$savename.jld2", "a+"; compress=true)
+        for o in all_orders
+            N = o + 1
+            if o == 5
+                num_eval = neval5
+            else
+                num_eval = neval
+            end
+            if haskey(f, "c1l") &&
+               haskey(f["c1l"], "N=$N") &&
+               haskey(f["c1l/N=$N"], "neval=$(num_eval)")
+                @warn("replacing existing data for N=$N, neval=$(num_eval)")
+                delete!(f["c1l/N=$N"], "neval=$(num_eval)")
+            end
+            f["c1l/N=$N/neval=$(num_eval)/meas"] = c1l_total[o][1]
+            if o == 5
+                f["c1l/N=$N/neval=$(num_eval)/param5"] = param5
+            else
+                f["c1l/N=$N/neval=$(num_eval)/param5"] = param
+            end
+        end
+        close(f)  # close file
+    end
 
     println("\nOrder-by-order local moment contributions:\n")
     for o in keys(c1l)
@@ -189,10 +255,23 @@ function main()
     end
 
     if plot
-
         # Use LaTex fonts for plots
         plt.rc("text"; usetex=true)
         plt.rc("font"; family="serif")
+
+        # Get RPA value of the local moment at this rs
+        k_kf_grid_rpa, c1l_rpa_over_rs2 = load_csv("$vzn_dir/c1l_over_rs2_rpa.csv")
+        P = sortperm(k_kf_grid_rpa)
+        c1l_rpa_over_rs2_interp = linear_interpolation(
+            k_kf_grid_rpa[P],
+            c1l_rpa_over_rs2[P];
+            extrapolation_bc=Line(),
+        )
+        eTF = param.qTF^2 / (2 * param.me)
+        c1l_rpa = c1l_rpa_over_rs2_interp(param.rs) * param.rs^2
+        c1l_rpa_over_eTF2 = c1l_rpa * (param.EF / eTF)^2
+        println("C⁽¹⁾ˡ (RPA, rs = $(param.rs)): $c1l_rpa")
+        println("C⁽¹⁾ˡ / eTF² (RPA, rs = $(param.rs)): $c1l_rpa_over_eTF2")
 
         # Get QMC value of the local moment at this rs
         k_kf_grid_qmc, c1l_qmc_over_rs2 = load_csv("$vzn_dir/c1l_over_rs2_qmc.csv")
@@ -210,53 +289,79 @@ function main()
 
         # Plot the local moment vs order N and compare to QMC value
         fig, ax = plt.subplots()
-        orders = collect(min_order:max_order_plot)
+        # Ns = orders .+ 1
+        Ns = all_orders .+ 1
         ax.axhline(c1l_qmc_over_eTF2; color="k", linestyle="--", label="QMC")
-        c1l_means = [Measurements.value(c1l_total[N][1]) for N in orders]
-        c1l_stdevs = [Measurements.uncertainty(c1l_total[N][1]) for N in orders]
         marker = "o-"
-        ax.plot(orders, c1l_means, marker; color="C0", markersize=4, label="RPT ($solver)")
+        ax.plot(
+            Ns,
+            c1l_means,
+            marker;
+            color="C0",
+            markersize=4,
+            label="RPT ($solver, \$N_{eval} = $neval\$)",
+        )
         ax.fill_between(
-            orders,
+            Ns,
             c1l_means - c1l_stdevs,
             c1l_means + c1l_stdevs;
             color="C0",
             alpha=0.4,
         )
+        # Darken last point (OOM lower eval)
+        if max_order == 5
+            ax.plot(
+                Ns[end],
+                c1l_means[end],
+                marker;
+                color="mediumblue",
+                markersize=4,
+                label="RPT ($solver, \$N_{eval} = $neval5\$)",
+            )
+            ax.fill_between(
+                Ns[end],
+                c1l_means[end] - c1l_stdevs[end],
+                c1l_means[end] + c1l_stdevs[end];
+                color="mediumblue",
+                alpha=0.4,
+            )
+        end
         ax.legend(; loc="best")
-        ax.set_xticks(orders)
-        ax.set_xlim(min_order, max_order_plot)
+        ax.set_xticks(Ns)
+        ax.set_xlim(minimum(Ns), maximum(Ns))
         # ax.set_ylim(nothing, 1.25)
         ax.set_xlabel("Perturbation order \$N\$")
         # ax.set_ylabel("\$C^{(1)l} / \\epsilon^2_{\\mathrm{TF}}\$")
         ax.set_ylabel("\$C^{(1)l} \\,/\\, {\\epsilon}^{\\hspace{0.1em}2}_{\\mathrm{TF}}\$")
         # ax.set_ylabel("\$S(q)\$")
         # xloc = 1.5
-        xloc = 2.5
+        xloc = 3.5
         yloc = 1.04
         ydiv = -0.035
         ax.text(
             xloc,
             yloc,
-            "\$r_s = $(param.rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(param.beta),\$";
+            "\$r_s = $(param.rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(param.beta),\\, \\lambda = $(param.mass2)\\epsilon_{\\mathrm{Ry}}\$";
             fontsize=14,
         )
         ax.text(
             xloc,
             yloc + ydiv,
-            "\$\\lambda = $(param.mass2)\\epsilon_{\\mathrm{Ry}},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)}\$";
-            fontsize=14,
-        )
-        ax.text(
-            xloc,
-            yloc + 2 * ydiv,
+            # yloc + 2 * ydiv,
             "\${\\epsilon}_{\\mathrm{TF}}\\equiv\\frac{\\hbar^2 q^2_{\\mathrm{TF}}}{2 m_e}=2\\pi\\mathcal{N}_F\$ (a.u.)";
             fontsize=12,
         )
+        # ax.text(
+        #     xloc,
+        #     yloc + ydiv,
+        #     # "\$\\lambda = $(param.mass2)\\epsilon_{\\mathrm{Ry}}\$";
+        #     # "\$\\lambda = $(param.mass2)\\epsilon_{\\mathrm{Ry}},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)}\$";
+        #     fontsize=14,
+        # )
         fig.tight_layout()
         fig.savefig(
-            "results/c1l/c1l_N=$(max_order_plot)_rs=$(param.rs)_beta_ef=$(param.beta)_" *
-            "lambda=$(param.mass2)_neval=$(neval)_$(solver)$(ct_string).pdf",
+            "results/c1l/c1l_N=$(max_order + 1)_rs=$(param.rs)_beta_ef=$(param.beta)_" *
+            "lambda=$(param.mass2)_neval=$(neval)_$(neval5)_$(solver)$(ct_string).pdf",
         )
         plt.close("all")
     end

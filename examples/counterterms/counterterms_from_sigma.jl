@@ -15,13 +15,14 @@ end
 
 function main()
     # Physical params matching data for SOSEM observables
-    order = [4]  # C^{(1)}_{N≤5} includes CTs up to 3rd order
-    rs = [2.0]
-    mass2 = [0.4]
+    # order = [4]  # C^{(1)}_{N≤5} includes CTs up to 4th order
+    order = [5]  # C^{(1)}_{N≤6} includes CTs up to 5th order
+    rs = [1.0]
+    mass2 = [1.0]
     beta = [40.0]
 
     # Total number of MCMC evaluations
-    neval = 5e10
+    neval = 1e8
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -67,19 +68,25 @@ function main()
         )
         neighbor = UEG.neighbor(partition)
         @time diagram = Sigma.diagram(para, partition)
+        valid_partition = diagram[1]
 
         #! format: off
-        reweight_goal = [
-            1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 4.0, 2.0, 
-            2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0,
-        ]
+        # reweight_goal = [
+        #     1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 4.0, 2.0, 
+        #     2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0,
+        # ]
+        reweight_goal = [1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 4.0, 2.0]
+        reweight_pad = repeat([2.0], max(0, length(valid_partition) - length(reweight_goal) + 1))
+        reweight_goal = [reweight_goal; reweight_pad]
+        @assert length(reweight_goal) ≥ length(valid_partition) + 1
         #! format: on
 
         sigma, result = Sigma.KW(
             para,
             diagram;
             neighbor=neighbor,
-            reweight_goal=reweight_goal[1:(length(partition) + 1)],
+            reweight_goal=reweight_goal[1:(length(valid_partition) + 1)],
+            # reweight_goal=reweight_goal[1:(length(partition) + 1)],
             kgrid=kgrid,
             ngrid=ngrid,
             neval=neval,
