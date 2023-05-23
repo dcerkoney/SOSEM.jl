@@ -252,7 +252,7 @@ function integrate_full_nonlocal_with_ct_fixed_extK(
         print=print,
         # MC config kwargs
         userdata=(mcparam, exprtrees, innerLoopNums, prefactors, varK, extK),
-        var=(K, T, ExtKidx),
+        var=(K, T),
         dof=dof,
         obs=obs,
     )

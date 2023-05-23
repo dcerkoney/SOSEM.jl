@@ -1,7 +1,7 @@
 using CodecZlib
 using ElectronLiquid
 using Measurements
-using Printf
+# using Printf
 using JLD2
 using SOSEM
 
@@ -23,8 +23,11 @@ beta = [40.0]
 # δK = 0.025
 δK = 0.001
 
-# kgrid indices & spacings
+# We estimate the derivative wrt k using grid points kgrid[ikF] and kgrid[ikF + idk]
 idks = 1:3
+# idks = [3]
+
+# kgrid indices & spacings
 dks = [1, 5, 10] * δK
 dkscales = [1, 5, 10]
 # idks = 1:4
@@ -48,10 +51,8 @@ if renorm_lambda
 end
 
 # const filename = "data_mass_ratio_and_Z$(ct_string).jld2"
-# const parafilename = "para_mass_ratio_and_Z.csv"
 const filename = "data_mass_ratio$(ct_string).jld2"
-const parafilename = "para_mass_ratio.csv"
-# const parafilename = "para.csv"
+const parafilename = "para.csv"
 
 function zfactor(data, β)
     return @. (imag(data[2, 1]) - imag(data[1, 1])) / (2π / β)
@@ -61,25 +62,8 @@ function mu(data)
     return real(data[1, 1])
 end
 
-# function massratio(data, β, kF)
-#     kamp = Σ.mesh[2][k_label]
-#     z = zfactor(data, β)
-
-#     Σ_freq = dlr_to_imfreq(to_dlr(Σ), [0, 1])
-#     k1, k2 = k_label, k_label + 1
-#     while abs(Σ.mesh[2][k2] - Σ.mesh[2][k1]) < δK
-#         k2 += 1
-#     end
-#     # @assert kF < kgrid.grid[k1] < kgrid.grid[k2] "k1 and k2 are not on the same side! It breaks $kF > $(kgrid.grid[k1]) > $(kgrid.grid[k2])"
-#     sigma1 = real(Σ_freq[1, k1] + Σ_ins[1, k1])
-#     sigma2 = real(Σ_freq[1, k2] + Σ_ins[1, k2])
-#     ds_dk = (sigma1 - sigma2) / (Σ.mesh[2][k1] - Σ.mesh[2][k2])
-#     mass_ratio = 1.0 / z / (1 + me / kamp * ds_dk)
-#     return mass_ratio
-# end
-
 # function process_mass_ratio(datatuple, δz, δμ, isSave)
-function process_mass_ratio(datatuple, isSave)
+function process_mass_ratio(datatuple, isSave; idk=1)
     print("Processing mass ratio...")
     # df = UEG_MC.fromFile(parafilename)
     para, ngrid, kgrid, data = datatuple
@@ -88,10 +72,11 @@ function process_mass_ratio(datatuple, isSave)
 
     # Max order in RPT calculation
     max_order = para.order
+    println("Max order: ", max_order)
 
     # Reexpand merged data in powers of μ
     ct_filename = "data_Z$(ct_string).jld2"
-    z, μ = UEG_MC.load_z_mu(para; ct_filename=ct_filename)
+    z, μ = UEG_MC.load_z_mu(para; ct_filename=ct_filename, parafilename=parafilename)
     # Add Taylor factors to CT data
     for (p, v) in z
         z[p] = v / (factorial(p[2]) * factorial(p[3]))
@@ -99,8 +84,8 @@ function process_mass_ratio(datatuple, isSave)
     for (p, v) in μ
         μ[p] = v / (factorial(p[2]) * factorial(p[3]))
     end
-    δz, δμ = CounterTerm.sigmaCT(max_order - 1, μ, z; verbose=1)
-    # δz, δμ = CounterTerm.sigmaCT(max_order, μ, z; verbose=1)
+    # δz, δμ = CounterTerm.sigmaCT(max_order - 1, μ, z; verbose=1)
+    δz, δμ = CounterTerm.sigmaCT(max_order, μ, z; verbose=1)
     println("Computed δμ: ", δμ)
 
     # Total Z to order max_order
@@ -113,97 +98,88 @@ function process_mass_ratio(datatuple, isSave)
     _data = Dict{keytype(data),valtype(data)}()
     for (k, v) in data
         _data[k] = v / (factorial(k[2]) * factorial(k[3]))
-        # data[k] = v / (factorial(k[2]) * factorial(k[3]))
     end
     merged_data = CounterTerm.mergeInteraction(_data)
-    # merged_data = CounterTerm.mergeInteraction(data)
+    println()
     println([k for (k, _) in merged_data])
     println(merged_data)
 
     # Renormalize self-energy data (ngrid, kgrid) to get Sigma to order N in RPT
-    sigma_renorm =
-        UEG_MC.chemicalpotential_renormalization_sigma(merged_data, δμ; max_order=max_order)
-    println(sigma_renorm)
+    Σ_renorm = CounterTerm.chemicalpotential_renormalization(max_order, merged_data, δμ)
+    # Σ_renorm =
+    #     UEG_MC.chemicalpotential_renormalization_sigma(merged_data, δμ; max_order=max_order)
 
     # Aggregate the full results for Σₓ up to order N
-    sigma_N_total = UEG_MC.aggregate_orders(sigma_renorm)
+    # Σ_total = UEG_MC.aggregate_orders(Σ_renorm)
 
-    println(sigma_N_total)
+    println()
+    println(Σ_renorm)
+    # println(Σ_total)
 
-    # Compute m⋆/m for each order N in RPT
-    mtildes = []
-    dzis = []
-    for N in 1:max_order
-        Σ_N = sigma_N_total[N]
+    # Compute shifts δm and δs for each order n in RPT
+    δm = Measurement{Float64}[]
+    δs = Measurement{Float64}[]
+    for n in 1:max_order
+        # Σ_N = Σ_total[n]  # bug!
+        Σ_n = Σ_renorm[n]
         # ∂ₖReΣ(k, ikₙ = 0) at the Fermi surface k = kF
         # NOTE: n1 = 0, k1 = kF, k2 = kF * (1 + δK), k2 - k1 = kF * δK
-        idk = 1
-        @assert idk ∈ 1:4
+        # idk = 1
+        @assert idk ∈ 1:3
         @assert kgrid[1] ≈ para.kF
         @assert kgrid[2] ≈ para.kF + para.kF * δK
         @assert kgrid[1 + idk] - kgrid[1] ≈ para.kF * dks[idk]
-        # ds_dk = (real(Σ_N[1, 1]) - real(Σ_N[1, 1 + idk])) / (kgrid[1] - kgrid[1 + idk])
-        ds_dk = (real(Σ_N[1, 1 + idk]) - real(Σ_N[1, 1])) / (kgrid[1 + idk] - kgrid[1])
-        mtilde = (para.me / para.kF) * ds_dk
-        dzi = (para.β / 2π) * (imag(Σ_N[2, 1]) - imag(Σ_N[1, 1])) # = zfactor(Σ_N, para.β) = δ(1/z)
-        push!(mtildes, mtilde)
-        push!(dzis, dzi)
+        # ds_dk = (real(Σ_n[1, 1]) - real(Σ_n[1, 1 + idk])) / (kgrid[1] - kgrid[1 + idk])
+        ds_dk = (real(Σ_n[1, 1 + idk]) - real(Σ_n[1, 1])) / (kgrid[1 + idk] - kgrid[1])
+        dm = (para.me / para.kF) * ds_dk
+        println("ds_dk = ", ds_dk)
+        # Use existing Z-factor data
+        ds = δz[n]
+        # Recompute Z-factor from new Σ run
+        # ds = (para.β / 2π) * (imag(Σ_n[2, 1]) - imag(Σ_n[1, 1])) # = zfactor(Σ_n, para.β) = δ(1/z)
+        push!(δm, dm)
+        push!(δs, ds)
     end
-    # Power series for (1 + mtilde[ξ])⁻¹
-    Mtildes = [
-        mtilde[1],
-        mtilde[1]^2 + mtilde[2],
-        mtilde[1]^3 + 2 * mtilde[1] * mtilde[2] + mtilde[3],
-        mtilde[1]^4 + 3 * mtilde[1]^2 * mtilde[2] + 2 * mtilde[1] * mtilde[3] + mtilde[4],
+    println()
+    println(δs)
+    println(δm)
+
+    # Power series terms for (1 + δM[ξ]) = (1 + δm[ξ])⁻¹
+    δM = Measurement{Float64}[
+        -δm[1],
+        δm[1]^2 - δm[2],
+        -δm[1]^3 + 2 * δm[1] * δm[2] - δm[3],
+        δm[1]^4 - 3 * δm[1]^2 * δm[2] + 2 * δm[1] * δm[3] - δm[4],
     ]
-    # Power series for (m⋆/m)[ξ] = (1 - δzi[ξ]) ∘ (1 + mtilde[ξ])⁻¹
-    mass_ratios = [
+    # Power series terms for (m⋆/m)[ξ] = (1 - δs[ξ]) ∘ (1 + δm[ξ])⁻¹ = (1 - δs[ξ]) ∘ (1 + δM[ξ])
+    δr = Measurement{Float64}[
         1.0,
-        -Mtildes[1] - dzis[1],
-        Mtildes[2] + Mtildes[1] * dzis[1] - dzis[2],
-        -Mtildes[3] - Mtildes[2] * dzis[1] + Mtildes[1] * dzis[2] + dzis[3],
-        Mtildes[4] + Mtildes[3] * dzis[1] - Mtildes[2] * dzis[2] + Mtildes[1] * dzis[3] - dzis[4],
+        δM[1] - δs[1],
+        δM[2] - δM[1] * δs[1] - δs[2],
+        δM[3] - δM[2] * δs[1] - δM[1] * δs[2] - δs[3],
+        δM[4] - δM[3] * δs[1] - δM[2] * δs[2] - δM[1] * δs[3] - δs[4],
     ]
-    for r in mass_ratios
-        println("(N = $N) m⋆/m: $r")
+    println(δM)
+
+    # Aggregate terms in power series for (m⋆/m)[ξ]
+    mass_ratios = accumulate(+, δr)
+    # mass_ratios = accumulate(+, δr; init=1.0)
+    # Print results
+    for i in eachindex(mass_ratios)
+        N = i - 1
+        println(δr[i].val, "\t", δr[i].err)
+        println(mass_ratios[i].val, "\t", mass_ratios[i].err)
+        println("\n(N = $N)\nδ(m⋆/m) = $(δr[i])\nm⋆/m = $(mass_ratios[i])")
     end
-
-    # # Compute m⋆/m for each order N in RPT
-    # mass_ratios = []
-    # for N in 1:max_order
-    #     # Σ and Z to order N in RPT
-    #     Σ_N = sigma_N_total[N]
-    #     z_N = 1 / (1 + sum(δz[1:(N - 1)]))
-    #     # z_N = 1 / (1 - sum(δz[1:(N - 1)]))
-    #     @assert size(Σ_N) == (1, 5)
-
-    #     # ∂ₖReΣ(k, ikₙ = 0) at the Fermi surface k = kF
-    #     # NOTE: n1 = 0, k1 = kF, k2 = kF * (1 + δK), k2 - k1 = kF * δK
-    #     idk = 1
-    #     # ds_dk = (real(Σ_N[1, 1]) - real(Σ_N[1, 1 + idk])) / (kgrid[1] - kgrid[1 + idk])
-    #     ds_dk = (real(Σ_N[1, 1 + idk]) - real(Σ_N[1, 1])) / (kgrid[1 + idk] - kgrid[1])
-    #     @assert idk ∈ 1:4
-    #     @assert kgrid[1] ≈ para.kF
-    #     @assert kgrid[2] ≈ para.kF + para.kF * δK
-    #     @assert kgrid[1 + idk] - kgrid[1] ≈ para.kF * dks[idk]
-
-    #     println("\n(N=$N)")
-    #     println("Z = $z_N")
-    #     println("ReΣ(kF, 0) = $(real(Σ_N[1, 1]))")
-    #     println("ReΣ(kF + $(dkscales[idk])δK * kF, 0) = $(real(Σ_N[1, 1 + idk]))")
-    #     println("ds_dk = $ds_dk")
-
-    #     # Compute m⋆/m
-    #     mass_ratio = 1.0 / z_N / (1 + (para.me / para.kF) * ds_dk)
-    #     println("(N = $N) m⋆/m: ", mass_ratio)
-    #     push!(mass_ratios, mass_ratio)
-    # end
+    println()
+    println(δr)
+    println(mass_ratios)
 
     if isSave
         println("Current working directory: $(pwd())")
         println("Saving data to JLD2...")
         jldopen("mass_ratio_from_sigma.jld2", "a+"; compress=true) do f
-            key = "$(UEG.short(para))"
+            key = "$(UEG.short(para))_idk=$(idk)"
             if haskey(f, key)
                 @warn("replacing existing data for $key")
                 delete!(f, key)
@@ -214,60 +190,6 @@ function process_mass_ratio(datatuple, isSave)
     println("Done!")
     return mass_ratios
 end
-
-# function process_zmu(datatuple, isSave)
-#     print("Processing Z and μ...")
-#     df = UEG_MC.fromFile(parafilename)
-#     para, _, _, data = datatuple
-#     printstyled(UEG.short(para); color=:yellow)
-#     println()
-
-#     _mu = Dict()
-#     for (p, val) in data
-#         _mu[p] = mu(val) / (factorial(p[2]) * factorial(p[3]))
-#     end
-#     _z = Dict()
-#     for (p, val) in data
-#         _z[p] = zfactor(val, para.β) / (factorial(p[2]) * factorial(p[3]))
-#     end
-
-#     for p in sort([k for k in keys(data)])
-#         println("$p: μ = $(mu(data[p]))   z = $(zfactor(data[p], para.β))")
-#     end
-
-#     δz, δμ = CounterTerm.sigmaCT(para.order, _mu, _z; isfock=isFock, verbose=1)
-#     println("zfactor: ", δz)
-#     println("mu: ", δμ)
-
-#     ############# save to csv  #################
-#     # println(df)
-#     for o in keys(data)
-#         println("Adding order $o")
-#         # global df
-#         paraid = UEG.paraid(para)
-#         df = CounterTerm.appendDict(
-#             df,
-#             paraid,
-#             Dict(
-#                 "order" => o,
-#                 "μ" => _mu[o].val,
-#                 "μ.err" => _mu[o].err,
-#                 "Σw" => _z[o].val,
-#                 "Σw.err" => _z[o].err,
-#             );
-#             replace=true,
-#         )
-#     end
-
-#     # println("new dataframe\n$df")
-#     if isSave
-#         println("Current working directory: $(pwd())")
-#         println("Saving results...")
-#         UEG_MC.toFile(df, parafilename)
-#     end
-#     println("Done!")
-#     return δz, δμ
-# end
 
 if abspath(PROGRAM_FILE) == @__FILE__
 
@@ -292,12 +214,16 @@ if abspath(PROGRAM_FILE) == @__FILE__
         )
 
         kF = para.kF
+        mass_ratios = []
         for key in keys(f)
             if UEG.paraid(f[key][1]) == UEG.paraid(para)
                 println("Found matching key, processing...")
-                # δz, δμ = process_zmu(f[key], isSave)
-                # process_mass_ratio(f[key], δz, δμ, isSave)
-                process_mass_ratio(f[key], isSave)
+                # process_mass_ratio(f[key], isSave)
+                for idk in idks
+                    mass_ratio = process_mass_ratio(f[key], isSave; idk=idk)
+                    push!(mass_ratios, mass_ratio)
+                end
+                println("done!")
             end
         end
     end
