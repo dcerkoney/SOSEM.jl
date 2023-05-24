@@ -22,7 +22,7 @@ function main()
 
     # Momentum spacing for finite-difference derivative of Sigma (in units of kF)
     # δK = 5e-6
-    δK = 0.001
+    δK = 0.01
 
     # Total number of MCMC evaluations
     neval = 5e10
@@ -57,7 +57,7 @@ function main()
 
         ######### calcualte Z factor and mass ratio ######################
         δK *= kF
-        kgrid = [kF, kF + δK, kF + 5δK, kF + 10δK]
+        kgrid = kF * (1 .+ δK * collect(0:30))
         ngrid = [0]
 
         # Build diagrams
@@ -93,7 +93,7 @@ function main()
         if isnothing(sigma) == false
             println("Current working directory: $(pwd())")
             println("Saving data to JLD2...")
-            jldopen("data_mass_ratio$(ct_string).jld2", "a+"; compress=true) do f
+            jldopen("data_mass_ratio$(ct_string)_gridtest.jld2", "a+"; compress=true) do f
                 key = "$(UEG.short(para))"
                 if haskey(f, key)
                     @warn("replacing existing data for $key")

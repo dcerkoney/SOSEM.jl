@@ -13,7 +13,7 @@ elseif haskey(ENV, "SOSEM_HOME")
 end
 
 # Physical params matching data for SOSEM observables
-order = [4]  # C^{(1)}_{N≤5} includes CTs up to 3rd order
+order = [5]  # C^{(1)}_{N≤6} includes CTs up to 5th order
 rs = [1.0]
 mass2 = [1.0]
 beta = [40.0]
