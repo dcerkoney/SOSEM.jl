@@ -111,24 +111,35 @@ function main()
     println(c1nl_N_stdevs)
 
     # Get the G0W0 self-energy and corresponding DLR grid from the ElectronGas package
-    sigma_tau_dynamic, sigma_tau_instant =
-        SelfEnergy.G0W0(param.basic; minK=1e-8 * param.kF, maxK=(1 + 1e-8) * param.kF)
+    sigma_tau_dynamic, sigma_tau_instant = SelfEnergy.G0W0(param.basic; minK = 1e-8 * param.kF, maxK = 30 * param.kF)
     # sigma_tau_dynamic, sigma_tau_instant = SelfEnergy.G0W0(param.basic)
     sigma_dlr_dynamic = to_dlr(sigma_tau_dynamic)
     dlr = sigma_dlr_dynamic.mesh[1].dlr
     kgrid_g0w0 = sigma_dlr_dynamic.mesh[2]
+    println(kgrid_g0w0)
 
     # Grid indices where k ≈ kF
     ikF = searchsortedfirst(k_kf_grid, 1.0)
+    i2kF = searchsortedfirst(k_kf_grid, 2.0)
     ikF_g0w0 = searchsortedfirst(kgrid_g0w0, param.kF)
-    println(k_kf_grid[ikF - 1], k_kf_grid[ikF])
-
+    i2kF_g0w0 = searchsortedfirst(kgrid_g0w0, 2param.kF)
+    println(k_kf_grid[ikF - 1], " ", k_kf_grid[ikF])
+    println(k_kf_grid[i2kF - 1], " ", k_kf_grid[i2kF])
+    println(kgrid_g0w0[ikF - 1] / param.kF, " ", kgrid_g0w0[ikF] / param.kF)
+    println(kgrid_g0w0[i2kF - 1] / param.kF, " ", kgrid_g0w0[i2kF] / param.kF)
     # Get the static and dynamic components of the self-energy
     sigma_g0w0_static = sigma_tau_instant[1, :]
+    # sigma_g0w0_wn_dynamic = (param.β / 2π) * to_imfreq(sigma_dlr_dynamic)
+    # sigma_g0w0_wn_dynamic = (2π / param.β) * to_imfreq(sigma_dlr_dynamic)
+    # sigma_g0w0_wn_dynamic = ((2π)^3 / param.β) * to_imfreq(sigma_dlr_dynamic)
+    # sigma_g0w0_wn_dynamic = (2π)^3 * to_imfreq(sigma_dlr_dynamic)
+    # sigma_g0w0_wn_dynamic = param.β * to_imfreq(sigma_dlr_dynamic)
     sigma_g0w0_wn_dynamic = to_imfreq(sigma_dlr_dynamic)
 
     # The static part is real, so we can discard it for the present tail fit
-    @assert all(abs.(imag(sigma_g0w0_static)) .≤ 1e-10)
+    # println(imag(sigma_g0w0_static)[abs.(imag(sigma_g0w0_static)) .≥ 1e-8])
+    # @assert all(abs.(imag(sigma_g0w0_static)) .≤ 1e-8)
+    # @assert all(abs.(imag(sigma_g0w0_static)) .≤ 1e-10)
 
     # Positive Matsubara frequencies
     wns = dlr.ωn[dlr.ωn .≥ 0]
@@ -136,15 +147,21 @@ function main()
     # Self-energies at k = 0 and k = kF
     sigma_g0w0_wn_dynamic_k0 = sigma_g0w0_wn_dynamic[:, 1][dlr.ωn .≥ 0]
     sigma_g0w0_wn_dynamic_kF = sigma_g0w0_wn_dynamic[:, ikF_g0w0][dlr.ωn .≥ 0]
+    sigma_g0w0_wn_dynamic_2kF = sigma_g0w0_wn_dynamic[:, i2kF_g0w0][dlr.ωn .≥ 0]
 
     # Put back dimensions in C⁽¹⁾
     eTF2 = param.qTF^4 / (2 * param.me)^2
 
+    @assert kgrid[1] == 0.0
+    @assert kgrid[ikF] ≈ param.kF
+
     # The high-frequency tail of ImΣ(iωₙ) is -C⁽¹⁾ / ωₙ
     tail_fit_k0 = -eTF2 * (c1l_N_mean + c1nl_N_means[1]) ./ wns
     tail_fit_kF = -eTF2 * (c1l_N_mean + c1nl_N_means[ikF]) ./ wns
+    tail_fit_2kF = -eTF2 * (c1l_N_mean + c1nl_N_means[i2kF]) ./ wns
     tail_fit_k0_err = eTF2 * (c1l_N_stdev + c1nl_N_stdevs[1]) ./ wns
     tail_fit_kF_err = eTF2 * (c1l_N_stdev + c1nl_N_stdevs[ikF]) ./ wns
+    tail_fit_2kF_err = eTF2 * (c1l_N_stdev + c1nl_N_stdevs[i2kF]) ./ wns
 
     # Get RPA value of the local moment at this rs
     k_kf_grid_rpa, c1l_rpa_over_rs2 = load_csv("$vzn_dir/c1l_over_rs2_rpa.csv")
@@ -168,6 +185,7 @@ function main()
     # Bare and RPA(+FL) results (stored in Hartree a.u.)
     k_kf_grid_quad = np.linspace(0.0, 3.0; num=600)
     ikF_quad = searchsortedfirst(k_kf_grid_quad, 1.0)
+    i2kF_quad = searchsortedfirst(k_kf_grid_quad, 2.0)
     c1nl_lo =
         (sosem_lo.get("bare_b") + sosem_lo.get("bare_c") + sosem_lo.get("bare_d")) / eTF^2
     c1nl_rpa =
@@ -179,8 +197,12 @@ function main()
         Measurements.value.(c1nl_rpa), Measurements.uncertainty.(c1nl_rpa)
 
     # Tail fit using RPA results
-    rpa_tail_fit_kF = -eTF^2 * (c1l_rpa_over_eTF2 + c1nl_rpa_means[ikF_quad]) ./ wns
-    rpa_tail_fit_kF_err = -eTF^2 * c1nl_rpa_stdevs[ikF_quad] ./ wns
+    rpa_tail_fit_k0 = -eTF^2 * (c1l_rpa_over_eTF2 + c1nl_rpa_means[1]) ./ wns / 2
+    rpa_tail_fit_k0_err = -eTF^2 * c1nl_rpa_stdevs[1] ./ wns / 2
+    rpa_tail_fit_kF = -eTF^2 * (c1l_rpa_over_eTF2 + c1nl_rpa_means[ikF_quad]) ./ wns / 2
+    rpa_tail_fit_kF_err = -eTF^2 * c1nl_rpa_stdevs[ikF_quad] ./ wns / 2
+    rpa_tail_fit_2kF = -eTF^2 * (c1l_rpa_over_eTF2 + c1nl_rpa_means[i2kF_quad]) ./ wns / 2
+    rpa_tail_fit_2kF_err = -eTF^2 * c1nl_rpa_stdevs[i2kF_quad] ./ wns / 2
 
     println()
     println(c1l_N_mean)
@@ -190,12 +212,84 @@ function main()
     # println(c1l_N_mean + c1nl_N_means[1])
     # println(c1l_N_mean + c1nl_N_means[ikF])
 
+    # k = 0
+    println()
+    println(imag(sigma_g0w0_wn_dynamic_k0)[end])
+    println(tail_fit_k0[end])
+
+    println()
+    println(imag(sigma_g0w0_wn_dynamic_k0) ./ tail_fit_k0)
+    println(imag(sigma_g0w0_wn_dynamic_k0) ./ rpa_tail_fit_k0)
+
+    # k = kF
     println()
     println(imag(sigma_g0w0_wn_dynamic_kF)[end])
     println(tail_fit_kF[end])
 
     println()
     println(imag(sigma_g0w0_wn_dynamic_kF) ./ tail_fit_kF)
+    println(imag(sigma_g0w0_wn_dynamic_kF) ./ rpa_tail_fit_kF)
+
+    # k = 2kF
+    println()
+    println(imag(sigma_g0w0_wn_dynamic_2kF)[end])
+    println(tail_fit_2kF[end])
+
+    println()
+    println(imag(sigma_g0w0_wn_dynamic_2kF) ./ tail_fit_2kF)
+    println(imag(sigma_g0w0_wn_dynamic_2kF) ./ rpa_tail_fit_2kF)
+
+    # Compare ImΣ_{G0W0}(iωₙ) and -C⁽¹⁾_N / ωₙ at k = 2kF
+    fig, ax = plt.subplots()
+    # k = 2kF
+    # ax.plot(wns / param.EF, param.EF * imag(sigma_g0w0_wn_dynamic_kF), "k"; label="\$RPA\$")
+    ax.plot(wns / param.EF, imag(sigma_g0w0_wn_dynamic_2kF), "k"; label="\$RPA\$")
+    ax.plot(
+        wns / param.EF,
+        rpa_tail_fit_2kF,
+        "C0";
+        # linestyle="--",
+        label="\$-C^{(1)}_{RPA} / \\omega_n\$",
+    )
+    ax.fill_between(
+        wns / param.EF,
+        rpa_tail_fit_2kF - rpa_tail_fit_2kF_err,
+        rpa_tail_fit_2kF + rpa_tail_fit_2kF_err;
+        color="C0",
+        alpha=0.4,
+    )
+    # ax.plot(wns / param.EF, sigma_g0w0_dynamic_kF, "C1"; label="\$k = k_F (RPA)\$")
+    ax.plot(
+        wns / param.EF,
+        tail_fit_2kF,
+        "C1";
+        # linestyle="--",
+        label="\$-C^{(1)}_N / \\omega_n\$",
+    )
+    ax.fill_between(
+        wns / param.EF,
+        tail_fit_2kF - tail_fit_2kF_err,
+        tail_fit_2kF + tail_fit_2kF_err;
+        color="C1",
+        alpha=0.4,
+    )
+    # ax.plot(wns / param.EF, sigma_g0w0_dynamic_kF, "C1"; label="\$k = k_F (RPA)\$")
+    # ax.set_xlim(0, 200)
+    # ax.set_xlim(0, maximum(wns) / param.EF)
+    ax.set_xlim(0, 100)
+    # ax.set_xlim(10, 500)
+    # ax.set_ylim(; bottom=-0.003, top=0)
+    ax.set_ylim(; bottom=-0.125, top=0)
+    ax.legend(; loc="lower right")
+    ax.set_xlabel("\$\\omega_n / \\epsilon_F\$")
+    ax.set_ylabel("\$\\mathrm{Im}\\Sigma(k = 2k_F, i\\omega_n)\$")
+    plt.tight_layout()
+    fig.savefig(
+        "results/high_frequency_tail/sigma_g0w0_tail_comparison_" *
+        "N=$(N)_rs=$(rs)_beta_ef=$(beta)_" *
+        "lambda=$(mass2)_neval=$(neval)_$(solver)_k=2kF.pdf",
+    )
+    plt.close("all")
 
     # Compare ImΣ_{G0W0}(iωₙ) and -C⁽¹⁾_N / ωₙ at k = kF
     fig, ax = plt.subplots()
@@ -237,8 +331,8 @@ function main()
     ax.set_xlim(0, 100)
     # ax.set_xlim(10, 500)
     # ax.set_ylim(; bottom=-0.003, top=0)
-    ax.set_ylim(; bottom=-0.04, top=0)
-    ax.legend(; loc="best")
+    ax.set_ylim(; bottom=-0.125, top=0)
+    ax.legend(; loc="lower right")
     ax.set_xlabel("\$\\omega_n / \\epsilon_F\$")
     ax.set_ylabel("\$\\mathrm{Im}\\Sigma(k = k_F, i\\omega_n)\$")
     plt.tight_layout()
@@ -252,7 +346,21 @@ function main()
     # Compare ImΣ_{G0W0}(iωₙ) and -C⁽¹⁾_N / ωₙ at k = 0
     fig, ax = plt.subplots()
     # k = 0
-    ax.plot(wns / param.EF, imag(sigma_g0w0_wn_dynamic_k0), "C0"; label="\$RPA\$")
+    ax.plot(wns / param.EF, imag(sigma_g0w0_wn_dynamic_k0), "k"; label="\$RPA\$")
+    ax.plot(
+        wns / param.EF,
+        rpa_tail_fit_k0,
+        "C0";
+        # linestyle="--",
+        label="\$-C^{(1)}_{RPA} / \\omega_n\$",
+    )
+    ax.fill_between(
+        wns / param.EF,
+        rpa_tail_fit_k0 - rpa_tail_fit_k0_err,
+        rpa_tail_fit_k0 + rpa_tail_fit_k0_err;
+        color="C0",
+        alpha=0.4,
+    )
     ax.plot(
         wns / param.EF,
         tail_fit_k0,
@@ -273,10 +381,10 @@ function main()
     ax.set_xlim(0, 100)
     # ax.set_xlim(10, 500)
     # ax.set_ylim(; bottom=-0.003, top=0)
-    ax.set_ylim(; bottom=-0.08, top=0)
-    ax.legend(; loc="best")
+    ax.set_ylim(; bottom=-0.125, top=0)
+    ax.legend(; loc="lower right")
     ax.set_xlabel("\$\\omega_n / \\epsilon_F\$")
-    ax.set_ylabel("\$\\mathrm{Im}\\Sigma(k = 0, i\\omega_n)\$") 
+    ax.set_ylabel("\$\\mathrm{Im}\\Sigma(k = 0, i\\omega_n)\$")
     plt.tight_layout()
     fig.savefig(
         "results/high_frequency_tail/sigma_g0w0_tail_comparison_" *

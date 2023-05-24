@@ -137,12 +137,21 @@ function process_mass_ratio(datatuple, isSave; idk=1)
         ds = δz[n]
         # Recompute Z-factor from new Σ run
         # ds = (para.β / 2π) * (imag(Σ_n[2, 1]) - imag(Σ_n[1, 1])) # = zfactor(Σ_n, para.β) = δ(1/z)
-        push!(δm, dm)
-        push!(δs, ds)
+        # push!(δm, dm)
+        # push!(δs, ds)
+        # NOTE: Extra minus sign on definition of Σ
+        push!(δm, -dm)
+        push!(δs, -ds)
     end
     println()
     println(δs)
     println(δm)
+
+    # The inverse Z-factor is (1 - δs[ξ])
+    zinv = Measurement{Float64}[1; accumulate(+, δz; init=1)]
+
+    # The Z-factor can be approximated by (1 - δs[ξ])⁻¹ (WARNING: we should expand as a power series instead!)
+    zapprox = 1 ./ zinv
 
     # Power series terms for (1 + δM[ξ]) = (1 + δm[ξ])⁻¹
     δM = Measurement{Float64}[
@@ -185,6 +194,22 @@ function process_mass_ratio(datatuple, isSave; idk=1)
                 delete!(f, key)
             end
             return f[key] = (para, ngrid, kgrid, mass_ratios)
+        end
+        jldopen("inverse_zfactor.jld2", "a+"; compress=true) do f
+            key = "$(UEG.short(para))"
+            if haskey(f, key)
+                @warn("replacing existing data for $key")
+                delete!(f, key)
+            end
+            return f[key] = (para, ngrid, kgrid, zinv)
+        end
+        jldopen("zfactor_approx.jld2", "a+"; compress=true) do f
+            key = "$(UEG.short(para))"
+            if haskey(f, key)
+                @warn("replacing existing data for $key")
+                delete!(f, key)
+            end
+            return f[key] = (para, ngrid, kgrid, zapprox)
         end
     end
     println("Done!")
