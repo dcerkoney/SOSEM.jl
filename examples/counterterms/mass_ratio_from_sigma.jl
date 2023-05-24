@@ -21,7 +21,6 @@ function main()
     beta = [40.0]
 
     # Momentum spacing for finite-difference derivative of Sigma (in units of kF)
-    # δK = 5e-6
     δK = 0.01
 
     # Total number of MCMC evaluations
@@ -56,7 +55,6 @@ function main()
         kF = para.kF
 
         ######### calcualte Z factor and mass ratio ######################
-        δK *= kF
         kgrid = kF * (1 .+ δK * collect(0:30))
         ngrid = [0]
 
