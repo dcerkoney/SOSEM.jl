@@ -47,7 +47,7 @@ function main()
 
     # Get self-energy data needed for the chemical potential and Z-factor measurements
     # for (_rs, _mass2, _beta, _order) in Iterators.product(rs, mass2, beta, order)
-    for (_rs, beta, _order) in Iterators.product(rs, beta, order)
+    for (_rs, _beta, _order) in Iterators.product(rs, beta, order)
         @assert haskey(c1nl_mass2_optima, _rs) "Missing optimized mass2 for rs = $_rs"
         para = UEG.ParaMC(;
             order=_order,
@@ -60,7 +60,10 @@ function main()
         )
 
         ######### calculate Z factor ######################
-        kgrid = [para.kF]
+        # For Z(k = 0)
+        kgrid = [0.0]
+        # For μ & Z := Z(k = kF)
+        # kgrid = [para.kF]
         ngrid = [0, 1]
         # ngrid = [-1, 0]
 
@@ -103,7 +106,8 @@ function main()
         if isnothing(sigma) == false
             println("Current working directory: $(pwd())")
             println("Saving data to JLD2...")
-            jldopen("data_Z$(ct_string).jld2", "a+"; compress=true) do f
+            jldopen("data_Z$(ct_string)_k0.jld2", "a+"; compress=true) do f
+	    #jldopen("data_Z$(ct_string)_kF.jld2", "a+"; compress=true) do f
                 # jldopen("data_Z.jld2", "a+") do f
                 key = "$(UEG.short(para))"
                 if haskey(f, key)
