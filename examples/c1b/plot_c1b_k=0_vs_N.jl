@@ -30,11 +30,11 @@ function main()
     beta = 40.0
     mass2 = 1.0
     solver = :vegasmc
-    # expand_bare_interactions = 1  # single V[V_λ] scheme
-    expand_bare_interactions = 0  # bare V, V (non-reexpanded) scheme
+    expand_bare_interactions = 1  # single V[V_λ] scheme
+    # expand_bare_interactions = 0  # bare V, V (non-reexpanded) scheme
 
     # neval = 1e10
-    neval = 1e8
+    neval = 1e9
 
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
     n_min = 3  # True minimal loop order for this observable
