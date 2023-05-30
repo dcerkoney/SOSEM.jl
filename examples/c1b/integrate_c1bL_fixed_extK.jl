@@ -25,8 +25,8 @@ function main()
         min_order=3,  # no (2,0,0) partition for this observable (Γⁱ₃ > Γ₀),
         max_order=6,
         verbosity=DiagGen.quiet,
-        # expand_bare_interactions=1,  # testing single V[V_λ] scheme
-        expand_bare_interactions=0,    # testing V, V scheme (no re-expand)
+        expand_bare_interactions=1,  # testing single V[V_λ] scheme
+        # expand_bare_interactions=0,  # testing V, V scheme (no re-expand)
         filter=[NoHartree],
         interaction=[FeynmanDiagram.Interaction(ChargeCharge, Instant)],  # Yukawa-type interaction
         # interaction=[FeynmanDiagram.Interaction(ChargeCharge, Dynamic)],  # TODO: test RPA-type interaction
@@ -53,7 +53,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 1e8  # a reduced neval is sufficient to test this single observable
+    neval = 1e9  # a reduced neval is sufficient to test this single observable
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
