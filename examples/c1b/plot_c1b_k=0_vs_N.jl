@@ -30,7 +30,8 @@ function main()
     beta = 40.0
     mass2 = 1.0
     solver = :vegasmc
-    expand_bare_interactions = 1  # testing single V[V_λ] scheme
+    # expand_bare_interactions = 1  # single V[V_λ] scheme
+    expand_bare_interactions = 0  # bare V, V (non-reexpanded) scheme
 
     # neval = 1e10
     neval = 1e8
