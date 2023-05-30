@@ -38,7 +38,7 @@ function main()
     beta = 40.0
     mass2 = 1.0
     solver = :vegasmc
-    expand_bare_interactions = false
+    expand_bare_interactions = 0
 
     neval_c1l = 1e10
     neval_c1b0 = 5e10
@@ -63,8 +63,10 @@ function main()
 
     # Distinguish results with fixed vs re-expanded bare interactions
     intn_str = ""
-    if expand_bare_interactions
+    if expand_bare_interactions == 2
         intn_str = "no_bare_"
+    elseif expand_bare_interactions == 1
+        intn_str = "one_bare_"
     end
 
     # Filename for new JLD2 format
@@ -111,7 +113,8 @@ function main()
     println(c1nl_N_stdevs)
 
     # Get the G0W0 self-energy and corresponding DLR grid from the ElectronGas package
-    sigma_tau_dynamic, sigma_tau_instant = SelfEnergy.G0W0(param.basic; minK = 1e-8 * param.kF, maxK = 30 * param.kF)
+    sigma_tau_dynamic, sigma_tau_instant = SelfEnergy.G0W0(param.basic)
+    # SelfEnergy.G0W0(param.basic; minK=1e-8 * param.kF, maxK=30 * param.kF)
     # sigma_tau_dynamic, sigma_tau_instant = SelfEnergy.G0W0(param.basic)
     sigma_dlr_dynamic = to_dlr(sigma_tau_dynamic)
     dlr = sigma_dlr_dynamic.mesh[1].dlr
@@ -125,8 +128,8 @@ function main()
     i2kF_g0w0 = searchsortedfirst(kgrid_g0w0, 2param.kF)
     println(k_kf_grid[ikF - 1], " ", k_kf_grid[ikF])
     println(k_kf_grid[i2kF - 1], " ", k_kf_grid[i2kF])
-    println(kgrid_g0w0[ikF - 1] / param.kF, " ", kgrid_g0w0[ikF] / param.kF)
-    println(kgrid_g0w0[i2kF - 1] / param.kF, " ", kgrid_g0w0[i2kF] / param.kF)
+    println(kgrid_g0w0[ikF_g0w0 - 1] / param.kF, " ", kgrid_g0w0[ikF_g0w0] / param.kF)
+    println(kgrid_g0w0[i2kF_g0w0 - 1] / param.kF, " ", kgrid_g0w0[i2kF_g0w0] / param.kF)
     # Get the static and dynamic components of the self-energy
     sigma_g0w0_static = sigma_tau_instant[1, :]
     # sigma_g0w0_wn_dynamic = (param.β / 2π) * to_imfreq(sigma_dlr_dynamic)
@@ -143,11 +146,57 @@ function main()
 
     # Positive Matsubara frequencies
     wns = dlr.ωn[dlr.ωn .≥ 0]
+    println(wns)
 
     # Self-energies at k = 0 and k = kF
     sigma_g0w0_wn_dynamic_k0 = sigma_g0w0_wn_dynamic[:, 1][dlr.ωn .≥ 0]
     sigma_g0w0_wn_dynamic_kF = sigma_g0w0_wn_dynamic[:, ikF_g0w0][dlr.ωn .≥ 0]
     sigma_g0w0_wn_dynamic_2kF = sigma_g0w0_wn_dynamic[:, i2kF_g0w0][dlr.ωn .≥ 0]
+
+    ############################################################
+    # ParaMC for rs=2
+    param2 = ParaMC(; rs=2.0, beta=beta, mass2=mass2, isDynamic=false)
+
+    # Get the G0W0 self-energy and corresponding DLR grid from the ElectronGas package
+    sigma2_tau_dynamic, sigma2_tau_instant = SelfEnergy.G0W0(param2.basic)
+    # SelfEnergy.G0W0(param2.basic; minK=1e-8 * param2.kF, maxK=30 * param2.kF)
+    # sigma2_tau_dynamic, sigma2_tau_instant = SelfEnergy.G0W0(param2.basic)
+    sigma2_dlr_dynamic = to_dlr(sigma2_tau_dynamic)
+    dlr2 = sigma2_dlr_dynamic.mesh[1].dlr
+    kgrid2_g0w0 = sigma2_dlr_dynamic.mesh[2]
+    println(kgrid2_g0w0)
+
+    # Grid indices where k ≈ kF
+    ikF2_g0w0 = searchsortedfirst(kgrid2_g0w0, param2.kF)
+    i2kF2_g0w0 = searchsortedfirst(kgrid2_g0w0, 2 * param2.kF)
+    println(kgrid2_g0w0[ikF2_g0w0 - 1] / param2.kF, " ", kgrid2_g0w0[ikF2_g0w0] / param2.kF)
+    println(
+        kgrid2_g0w0[i2kF2_g0w0 - 1] / param2.kF,
+        " ",
+        kgrid2_g0w0[i2kF2_g0w0] / param2.kF,
+    )
+    # Get the static and dynamic components of the self-energy
+    sigma2_g0w0_static = sigma2_tau_instant[1, :]
+    # sigma_g0w0_wn_dynamic = (param2.β / 2π) * to_imfreq(sigma2_dlr_dynamic)
+    # sigma_g0w0_wn_dynamic = (2π / param2.β) * to_imfreq(sigma2_dlr_dynamic)
+    # sigma_g0w0_wn_dynamic = ((2π)^3 / param2.β) * to_imfreq(sigma2_dlr_dynamic)
+    # sigma_g0w0_wn_dynamic = (2π)^3 * to_imfreq(sigma2_dlr_dynamic)
+    # sigma_g0w0_wn_dynamic = param2.β * to_imfreq(sigma2_dlr_dynamic)
+    sigma2_g0w0_wn_dynamic = to_imfreq(sigma2_dlr_dynamic)
+
+    # The static part is real, so we can discard it for the present tail fit
+    # println(imag(sigma_g0w0_static)[abs.(imag(sigma_g0w0_static)) .≥ 1e-8])
+    # @assert all(abs.(imag(sigma_g0w0_static)) .≤ 1e-8)
+    # @assert all(abs.(imag(sigma_g0w0_static)) .≤ 1e-10)
+
+    # Positive Matsubara frequencies
+    wn2s = dlr2.ωn[dlr2.ωn .≥ 0]
+
+    # Self-energies at k = 0 and k = kF
+    sigma2_g0w0_wn_dynamic_k0 = sigma2_g0w0_wn_dynamic[:, 1][dlr2.ωn .≥ 0]
+    sigma2_g0w0_wn_dynamic_kF = sigma2_g0w0_wn_dynamic[:, ikF_g0w0][dlr2.ωn .≥ 0]
+    sigma2_g0w0_wn_dynamic_2kF = sigma2_g0w0_wn_dynamic[:, i2kF_g0w0][dlr2.ωn .≥ 0]
+    ############################################################
 
     # Put back dimensions in C⁽¹⁾
     eTF2 = param.qTF^4 / (2 * param.me)^2
@@ -204,6 +253,91 @@ function main()
     rpa_tail_fit_2kF = -eTF^2 * (c1l_rpa_over_eTF2 + c1nl_rpa_means[i2kF_quad]) ./ wns / 2
     rpa_tail_fit_2kF_err = -eTF^2 * c1nl_rpa_stdevs[i2kF_quad] ./ wns / 2
 
+    # TODO: Double-check factors and units!
+
+    # # Put back dimensions in C⁽¹⁾
+    # eTF = param.qTF^2 / (2 * param.me)
+    # eTF2 = param.qTF^4 / (2 * param.me)^2
+
+    # @assert kgrid[1] == 0.0
+    # @assert kgrid[ikF] ≈ param.kF
+
+    # # The high-frequency tail of ImΣ(iωₙ) is -C⁽¹⁾ / ωₙ,
+    # # where we convert back to the dimensionful result for C⁽¹⁾
+    # tail_fit_k0 = -eTF2 * (c1l_N_mean + c1nl_N_means[1]) ./ wns
+    # tail_fit_kF = -eTF2 * (c1l_N_mean + c1nl_N_means[ikF]) ./ wns
+    # tail_fit_2kF = -eTF2 * (c1l_N_mean + c1nl_N_means[i2kF]) ./ wns
+    # tail_fit_k0_err = eTF2 * (c1l_N_stdev + c1nl_N_stdevs[1]) ./ wns
+    # tail_fit_kF_err = eTF2 * (c1l_N_stdev + c1nl_N_stdevs[ikF]) ./ wns
+    # tail_fit_2kF_err = eTF2 * (c1l_N_stdev + c1nl_N_stdevs[i2kF]) ./ wns
+
+    # # Get RPA value of the local moment at this rs
+    # k_kf_grid_rpa, c1l_rpa_over_rs2 = load_csv("$vzn_dir/c1l_over_rs2_rpa.csv")
+    # P = sortperm(k_kf_grid_rpa)
+    # c1l_rpa_over_rs2_interp =
+    #     linear_interpolation(k_kf_grid_rpa[P], c1l_rpa_over_rs2[P]; extrapolation_bc=Line())
+    # c1l_rpa_over_rs2 = c1l_rpa_over_rs2_interp(param.rs)
+    # # c1l_rpa_over_EF2 = c1l_rpa_over_rs2_interp(param.rs) * param.rs^2
+    # # Convert back to dimensionful result (units of EF to Rydberg a.u.)
+    # alpha = (4 / 9π)^(1 / 3)
+    # c1l_rpa_vzn = c1l_rpa_over_rs2 / alpha^2
+    # # c1l_rpa_vzn = c1l_rpa_over_EF2 * param.EF
+    # # c1l_rpa_vzn = c1l_rpa_over_EF2 * (param.EF / eTF)^2
+    # # TODO: Check units --- is this a bug in VZN scripts?
+    # # c1l_rpa_vzn = c1l_rpa_over_EF2 * (param.EF / eTF)^2
+    # # println("C⁽¹⁾ˡ / EF² (RPA, rs = $(param.rs)): $c1l_rpa_over_EF2")
+    # # println("C⁽¹⁾ˡ / EF (RPA, rs = $(param.rs)): $c1l_rpa_over_EF2")
+    # println("(VZN) C⁽¹⁾ˡ (RPA, rs = $(param.rs)): $c1l_rpa_vzn")
+    # println("C⁽¹⁾ˡ_N (RPT, rs = $(param.rs)): $(c1l_N_mean * eTF2)")
+
+    # # Non-dimensionalize bare and RPA+FL non-local moments
+    # sosem_lo = np.load("results/data/soms_rs=$(rs)_beta_ef=40.0.npz")
+
+    # # NOTE: Additional factors of 2 due to Hartree to Rydberg a.u. conversion!
+    # factor_hartree_to_rydberg = 2.0
+
+    # # rs_lo = rs
+    # # sosem_lo = np.load("results/data/soms_rs=$(rs_lo)_beta_ef=40.0.npz")
+    # # # Non-dimensionalize rs = 2 quadrature results by Thomas-Fermi energy
+    # # param_lo = Parameter.atomicUnit(0, rs_lo)    # (dimensionless T, rs)
+    # # eTF_lo = param_lo.qTF^2 / (2 * param_lo.me)
+
+    # # # Get local RPA moment from HEG SOMS data instead
+    # # c1l_rpa_hartrees = sosem_lo.get("rpa_a_T=0")[1]
+    # # # TODO: Fix overall sign error on local moment in get_heg_som.py
+    # # c1l_rpa_hartrees *= -1.0
+    # # c1l_rpa = c1l_rpa_hartrees * factor_hartree_to_rydberg
+    # # println("(SOM) C⁽¹⁾ˡ (RPA, rs = $(param.rs)): $c1l_rpa")
+
+    # # Bare and RPA(+FL) results (stored in Hartree a.u.)
+    # k_kf_grid_quad = np.linspace(0.0, 3.0; num=600)
+    # ikF_quad = searchsortedfirst(k_kf_grid_quad, 1.0)
+    # i2kF_quad = searchsortedfirst(k_kf_grid_quad, 2.0)
+    # # Load bare and RPA(+FL) results (stored in Hartree a.u.)
+    # c1nl_lo_hartrees =
+    #     sosem_lo.get("bare_b") + sosem_lo.get("bare_c") + sosem_lo.get("bare_d")
+    # c1nl_rpa_hartrees =
+    #     sosem_lo.get("rpa_b") + sosem_lo.get("bare_c") + sosem_lo.get("bare_d")
+    # c1nl_rpa_fl_hartrees =
+    #     sosem_lo.get("rpa+fl_b") + sosem_lo.get("bare_c") + sosem_lo.get("bare_d")
+    # c1nl_lo = c1nl_lo_hartrees * factor_hartree_to_rydberg
+    # c1nl_rpa = c1nl_rpa_hartrees * factor_hartree_to_rydberg
+    # c1nl_rpa_fl = c1nl_rpa_fl_hartrees * factor_hartree_to_rydberg
+    # # RPA(+FL) means are error bars
+    # c1nl_rpa_means, c1nl_rpa_stdevs =
+    #     Measurements.value.(c1nl_rpa), Measurements.uncertainty.(c1nl_rpa)
+
+    # # Tail fit using RPA results
+    # # rpa_tail_fit_k0 = -(c1l_rpa + c1nl_rpa_means[1]) ./ wns
+    # # rpa_tail_fit_kF = -(c1l_rpa + c1nl_rpa_means[ikF_quad]) ./ wns
+    # # rpa_tail_fit_2kF = -(c1l_rpa + c1nl_rpa_means[i2kF_quad]) ./ wns
+    # rpa_tail_fit_k0 = -(c1l_rpa_vzn + c1nl_rpa_means[1]) ./ wns
+    # rpa_tail_fit_kF = -(c1l_rpa_vzn + c1nl_rpa_means[ikF_quad]) ./ wns
+    # rpa_tail_fit_2kF = -(c1l_rpa_vzn + c1nl_rpa_means[i2kF_quad]) ./ wns
+    # rpa_tail_fit_k0_err = c1nl_rpa_stdevs[1] ./ wns
+    # rpa_tail_fit_kF_err = c1nl_rpa_stdevs[ikF_quad] ./ wns
+    # rpa_tail_fit_2kF_err = c1nl_rpa_stdevs[i2kF_quad] ./ wns
+
     println()
     println(c1l_N_mean)
     println(c1nl_N_means[ikF])
@@ -242,8 +376,19 @@ function main()
     # Compare ImΣ_{G0W0}(iωₙ) and -C⁽¹⁾_N / ωₙ at k = 2kF
     fig, ax = plt.subplots()
     # k = 2kF
-    # ax.plot(wns / param.EF, param.EF * imag(sigma_g0w0_wn_dynamic_kF), "k"; label="\$RPA\$")
-    ax.plot(wns / param.EF, imag(sigma_g0w0_wn_dynamic_2kF), "k"; label="\$RPA\$")
+    # ax.plot(wns / param.EF, param.EF * imag(sigma_g0w0_wn_dynamic_kF), "k"; label="\$G_0 W_0\$")
+    ax.plot(
+        wns / param.EF,
+        imag(sigma_g0w0_wn_dynamic_2kF),
+        "k";
+        label="\$G_0 W_0\$ (\$rs=1\$)",
+    )
+    ax.plot(
+        wn2s / param.EF,
+        imag(sigma2_g0w0_wn_dynamic_2kF),
+        "red";
+        label="\$G_0 W_0\$ (\$rs=2\$)",
+    )
     ax.plot(
         wns / param.EF,
         rpa_tail_fit_2kF,
@@ -294,8 +439,14 @@ function main()
     # Compare ImΣ_{G0W0}(iωₙ) and -C⁽¹⁾_N / ωₙ at k = kF
     fig, ax = plt.subplots()
     # k = kF
-    # ax.plot(wns / param.EF, param.EF * imag(sigma_g0w0_wn_dynamic_kF), "k"; label="\$RPA\$")
-    ax.plot(wns / param.EF, imag(sigma_g0w0_wn_dynamic_kF), "k"; label="\$RPA\$")
+    # ax.plot(wns / param.EF, param.EF * imag(sigma_g0w0_wn_dynamic_kF), "k"; label="\$G_0 W_0\$")
+    ax.plot(wns / param.EF, imag(sigma_g0w0_wn_dynamic_kF), "k"; label="\$G_0 W_0\$ (\$rs=1\$)")
+    ax.plot(
+        wn2s / param.EF,
+        imag(sigma2_g0w0_wn_dynamic_kF),
+        "red";
+        label="\$G_0 W_0\$ (\$rs=2\$)",
+    )
     ax.plot(
         wns / param.EF,
         rpa_tail_fit_kF,
@@ -346,7 +497,14 @@ function main()
     # Compare ImΣ_{G0W0}(iωₙ) and -C⁽¹⁾_N / ωₙ at k = 0
     fig, ax = plt.subplots()
     # k = 0
-    ax.plot(wns / param.EF, imag(sigma_g0w0_wn_dynamic_k0), "k"; label="\$RPA\$")
+    # ax.plot(wns / param.EF, imag(sigma_g0w0_wn_dynamic_k0), "k"; label="\$G_0 W_0\$")
+    ax.plot(wns / param.EF, imag(sigma_g0w0_wn_dynamic_k0), "k"; label="\$G_0 W_0\$ (\$rs=1\$)")
+    ax.plot(
+        wn2s / param.EF,
+        imag(sigma2_g0w0_wn_dynamic_k0),
+        "red";
+        label="\$G_0 W_0\$ (\$rs=2\$)",
+    )
     ax.plot(
         wns / param.EF,
         rpa_tail_fit_k0,
