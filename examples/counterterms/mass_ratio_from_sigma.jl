@@ -16,15 +16,21 @@ end
 function main()
     # Physical params matching data for SOSEM observables
     order = [4]  # C^{(1)}_{N≤5} includes CTs up to 3rd order
-    rs = [1.0]
-    mass2 = [1.0]
     beta = [40.0]
+    rs = [1.0, 2.0, 5.0]
+    # rs = [1.0]
+    # mass2 = [1.0]
 
-    # Momentum spacing for finite-difference derivative of Sigma (in units of kF)
-    δK = 0.01
+    # Using mass2 from optimization of C⁽¹⁾ⁿˡ(k = 0)
+    # TODO: Optimize specifically for ReΣ_N(para.kF, ik0) convergence vs N
+    c1nl_mass2_optima = Dict{Float64,Float64}(1.0 => 1.0, 2.0 => 0.4, 5.0 => 0.1375)
+
+    # Momentum spacing for finite-difference derivative of Sigma (in units of para.kF)
+    δK = 0.005  # spacings n*δK = 0.15–0.3 not relevant for rs = 1.0 => reduce δK by half
+    # δK = 0.01
 
     # Total number of MCMC evaluations
-    neval = 5e10
+    neval = 1e11
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -43,19 +49,21 @@ function main()
     end
 
     # Get self-energy data needed for the chemical potential and Z-factor measurements
-    for (_rs, _mass2, _beta, _order) in Iterators.product(rs, mass2, beta, order)
+    # for (_rs, _mass2, _beta, _order) in Iterators.product(rs, mass2, beta, order)
+    for (_rs, _beta, _order) in Iterators.product(rs, beta, order)
+        @assert haskey(c1nl_mass2_optima, _rs) "Missing optimized mass2 for rs = $_rs"
         para = UEG.ParaMC(;
             order=_order,
             rs=_rs,
             beta=_beta,
-            mass2=_mass2,
+            mass2=c1nl_mass2_optima[_rs],
+            # mass2=_mass2,
             isDynamic=false,
             isFock=isFock,
         )
-        kF = para.kF
 
-        ######### calcualte Z factor and mass ratio ######################
-        kgrid = kF * (1 .+ δK * collect(0:30))
+        ######### calculate mass ratio ######################
+        kgrid = para.kF * (1 .+ δK * collect(0:30))
         ngrid = [0]
 
         # Build diagrams
@@ -69,19 +77,25 @@ function main()
         )
         neighbor = UEG.neighbor(partition)
         @time diagram = Sigma.diagram(para, partition)
+        valid_partition = diagram[1]
 
         #! format: off
-        reweight_goal = [
-            1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 4.0, 2.0, 
-            2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0,
-        ]
+        # reweight_goal = [
+        #     1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 4.0, 2.0, 
+        #     2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0,
+        # ]
+        reweight_goal = [1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 4.0, 2.0]
+        reweight_pad = repeat([2.0], max(0, length(valid_partition) - length(reweight_goal) + 1))
+        reweight_goal = [reweight_goal; reweight_pad]
+        @assert length(reweight_goal) ≥ length(valid_partition) + 1
         #! format: on
 
         sigma, result = Sigma.KW(
             para,
             diagram;
             neighbor=neighbor,
-            reweight_goal=reweight_goal[1:(length(partition) + 1)],
+            reweight_goal=reweight_goal[1:(length(valid_partition) + 1)],
+            # reweight_goal=reweight_goal[1:(length(partition) + 1)],
             kgrid=kgrid,
             ngrid=ngrid,
             neval=neval,

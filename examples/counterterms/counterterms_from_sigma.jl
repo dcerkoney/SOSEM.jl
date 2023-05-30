@@ -15,14 +15,19 @@ end
 
 function main()
     # Physical params matching data for SOSEM observables
-    # order = [4]  # C^{(1)}_{N≤5} includes CTs up to 4th order
-    order = [5]  # C^{(1)}_{N≤6} includes CTs up to 5th order
-    rs = [1.0]
-    mass2 = [1.0]
+    # order = [5]  # C^{(1)}_{N≤6} includes CTs up to 5th order
+    order = [4]  # C^{(1)}_{N≤5} includes CTs up to 4th order
     beta = [40.0]
+    rs = [1.0, 2.0, 5.0]
+    # rs = [1.0]
+    # mass2 = [1.0]
+
+    # Using mass2 from optimization of C⁽¹⁾ⁿˡ(k = 0)
+    # TODO: Optimize specifically for ReΣ_N(kF, ik0) convergence vs N
+    c1nl_mass2_optima = Dict{Float64,Float64}(1.0 => 1.0, 2.0 => 0.4, 5.0 => 0.1375)
 
     # Total number of MCMC evaluations
-    neval = 1e10
+    neval = 1e11
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -41,19 +46,21 @@ function main()
     end
 
     # Get self-energy data needed for the chemical potential and Z-factor measurements
-    for (_rs, _mass2, _beta, _order) in Iterators.product(rs, mass2, beta, order)
+    # for (_rs, _mass2, _beta, _order) in Iterators.product(rs, mass2, beta, order)
+    for (_rs, beta, _order) in Iterators.product(rs, beta, order)
+        @assert haskey(c1nl_mass2_optima, _rs) "Missing optimized mass2 for rs = $_rs"
         para = UEG.ParaMC(;
             order=_order,
             rs=_rs,
             beta=_beta,
-            mass2=_mass2,
+            mass2=c1nl_mass2_optima[_rs],
+            # mass2=_mass2,
             isDynamic=false,
             isFock=isFock,
         )
-        kF = para.kF
 
-        ######### calcualte Z factor ######################
-        kgrid = [kF]
+        ######### calculate Z factor ######################
+        kgrid = [para.kF]
         ngrid = [0, 1]
         # ngrid = [-1, 0]
 
