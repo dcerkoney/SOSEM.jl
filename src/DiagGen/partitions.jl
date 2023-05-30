@@ -4,6 +4,8 @@ Hard-coded counterterm partitions in the form (nloop, nμ, nλ).
 function partition(order::Int)
     #! format: off
     # normal order, G order, W order
+    # NOTE: partitions of the form (0, nμ, nλ) with nλ > 0 vanish,
+    #       since there is no interaction line at zeroth loop order
     partitions = [
         # order 0
         (0, 0, 0),
@@ -20,6 +22,10 @@ function partition(order::Int)
         #order 5
         (5, 0, 0), (4, 1, 0), (4, 0, 1), (3, 2, 0), (3, 1, 1), (3, 0, 2), (2, 3, 0), (2, 2, 1),
         (2, 1, 2), (2, 0, 3), (1, 4, 0), (1, 3, 1), (1, 2, 2), (1, 1, 3), (1, 0, 4), (0, 5, 0),
+        #order 6
+        (6, 0, 0), (5, 1, 0), (5, 0, 1), (4, 2, 0), (4, 1, 1), (4, 0, 2), (3, 3, 0), (3, 2, 1),
+        (3, 1, 2), (3, 0, 3), (2, 4, 0), (2, 3, 1), (2, 2, 2), (2, 1, 3), (2, 0, 4), (1, 5, 0),
+        (1, 4, 1), (1, 3, 2), (1, 2, 3), (1, 1, 4), (1, 0, 5), (0, 6, 0),
     ]
     #! format: on
     return sort([p for p in partitions if sum(p) <= order])
