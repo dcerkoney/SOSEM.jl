@@ -140,8 +140,19 @@ function build_nonlocal_with_ct(
     settings::Settings{CompositeObservable};
     renorm_mu=false,
     renorm_lambda=true,
+    # expand_bare_interactions_list=nothing,  # for explicitly mixed expansion schemes
 )
-    settings_list = atomize(settings)  # atomized settings
+    # # Atomize settings
+    # if isnothing(expand_bare_interactions_list)
+    #     settings_list = atomize(settings)
+    # else
+    #     @assert length(expand_bare_interactions_list) ==
+    #             length(settings.observable.observables)
+    #     settings_list = atomize(settings, expand_bare_interactions_list)
+    # end
+
+    # Atomize settings
+    settings_list = atomize(settings)
     # TODO: Check that we don't need this assumption!
     # @assert settings.min_order == settings.max_order
 
@@ -358,7 +369,8 @@ function _build_subdiagram_gamma0(cfg::Config, expansion_orders::Vector{Int}; tr
             v_params[i],
             ChargeCharge,
             Instant,
-            cfg.V.orders;
+            # cfg.V.orders;
+            cfg.V.orders[i];
             k=cfg.V.ks[i],
             t=cfg.V.taus[i],
             permu=Di,
@@ -549,7 +561,8 @@ function _build_subdiagram_gamma(cfg::Config, expansion_orders::Vector{Int}; tre
             v_params[i],
             ChargeCharge,
             Instant,
-            cfg.V.orders;
+            # cfg.V.orders;
+            cfg.V.orders[i];
             k=cfg.V.ks[i],
             t=cfg.V.taus[i],
             permu=Di,

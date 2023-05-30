@@ -210,9 +210,9 @@ function main()
     save = true
 
     # Re-expanding EOM bare Coulomb interactions V[V_λ]?
-    expand_bare_interactions = false
+    expand_bare_interactions = 0
     # TODO: Add functionality for one or two re-expanded bare interaction lines V[V_λ]
-    @assert expand_bare_interactions == false
+    @assert expand_bare_interactions == 0
 
     # Save to JLD2 on main thread
     if save

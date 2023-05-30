@@ -33,7 +33,7 @@ function main()
 
     # TODO: Write special-purpose integrator for bare result; currently using the old numerically
     #       exact results from quadrature, wich are valid for `expand_bare_interactions=false` only!
-    # @assert settings.expand_bare_interactions == false
+    # @assert settings.expand_bare_interactions == 0
 
     # UEG parameters for MC integration
     param =
@@ -99,8 +99,10 @@ function main()
 
     # Distinguish results with fixed vs re-expanded bare interactions
     intn_str = ""
-    if settings.expand_bare_interactions
+    if settings.expand_bare_interactions == 2
         intn_str = "no_bare_"
+    elseif settings.expand_bare_interactions == 1
+        intn_str = "one_bare_"
     end
 
     # Distinguish results with different counterterm schemes

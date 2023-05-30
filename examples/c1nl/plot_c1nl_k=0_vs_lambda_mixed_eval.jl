@@ -28,7 +28,7 @@ function main()
     lambdas = [0.5, 1.0, 1.5, 2.0, 3.0]
     # lambdas = [1.0, 3.0]
     solver = :vegasmc
-    expand_bare_interactions = false
+    expand_bare_interactions = 0
 
     plot_rpa = false
 
@@ -41,8 +41,10 @@ function main()
 
     # Distinguish results with fixed vs re-expanded bare interactions
     intn_str = ""
-    if expand_bare_interactions
+    if expand_bare_interactions == 2
         intn_str = "no_bare_"
+    elseif expand_bare_interactions == 1
+        intn_str = "one_bare_"
     end
 
     # Use LaTex fonts for plots

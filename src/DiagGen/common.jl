@@ -11,7 +11,7 @@ struct Settings{O}
     min_order::Int
     max_order::Int
     verbosity::Verbosity
-    expand_bare_interactions::Bool
+    expand_bare_interactions::Int
     filter::Vector{Filter}
     interaction::Vector{Interaction}
     name::Symbol
@@ -21,7 +21,7 @@ function Settings{O}(
     min_order::Int=_get_lowest_loop_order(obs),  # Minimum allowed total order ξ (loops + CTs)
     max_order::Int=_get_lowest_loop_order(obs),  # Maximum allowed total order ξ (loops + CTs)
     verbosity::Verbosity=quiet,
-    expand_bare_interactions::Bool=false,
+    expand_bare_interactions::Int=0,
     filter::Vector{Filter}=[NoHartree],
     interaction::Vector{Interaction}=[Interaction(ChargeCharge, Instant)],
     name::Symbol=Symbol(string(obs)),  # Derive SOSEM name from observable
@@ -53,6 +53,24 @@ function atomize(settings::Settings{CompositeObservable})
         o in settings.observable.observables
     ]
 end
+"""
+Split settings for a composite observable with observable-dependent expansion
+schemes for bare interactions into a list of settings for each atomic observable.
+"""
+function atomize(
+    settings::Settings{CompositeObservable},
+    expand_bare_interactions_list::Vector{Int},
+)
+    return [
+        reconstruct(
+            Settings,
+            settings;
+            observable=o,
+            name=Symbol(string(o)),
+            expand_bare_interactions=expand_bare_interactions_list[i],
+        ) for (i, o) in enumerate(settings.observable.observables)
+    ]
+end
 # Settings(obs::CompositeObservable; kwargs...) = Settings.(obs.observables; kwargs...)
 
 """Call print on args when above the verbosity threshold v."""
@@ -79,7 +97,7 @@ end
     names::Tuple{Symbol,Symbol}
     taus::Tuple{ProprTauType,ProprTauType}
     ks::Tuple{VFloat64,VFloat64}
-    orders::Vector{Int}  # (before differentiations)
+    orders::Tuple{Vector{Int},Vector{Int}}  # (before differentiations)
 end
 
 @with_kw struct Gamma3Data
@@ -186,11 +204,26 @@ function _Config(settings::Settings{Observable}, n_loop, g_names, v_names)
     # External times (τᵢₙ, τₒᵤₜ) ∈ {(3, 1), (3, 2)}
     extT = (3, Tout)
 
-    # Optionally mark the two V lines as unscreened
-    v_orders = [0, 0, 0, 0]
-    if !settings.expand_bare_interactions
-        v_orders[end] = 1
+    # We fix both external interaction lines as bare
+    # for all non-local observables without vertex corrections
+    # (i.e., all except c1bL and c1bR)
+    v_orders = ([0, 0, 0, 1], [0, 0, 0, 1])
+    if settings.expand_bare_interactions > 0
+        @warn(
+            "No support for expanded bare interactions for SOSEM observable " *
+            "$(settings.observable) without Γⁱ₃ insertion, falling back to bare V lines..."
+        )
     end
+
+    # # Start by assuming we re-expand both V_left and V_right
+    # # Mark external V lines as fixed bare, where applicable
+    # if settings.expand_bare_interactions == 0
+    #     # Mark both external lines as fixed bare
+    #     v_orders = ([0, 0, 0, 1], [0, 0, 0, 1])  # bare V_left, bare V_right
+    # elseif settings.expand_bare_interactions == 1
+    #     # Mark one (left) external line as fixed bare
+    #     v_orders = ([0, 0, 0, 1], [0, 0, 0, 0])  # bare V_left, expanded V_right
+    # end
 
     # Indices of (dashed) G lines in the expansion order list
     indices_g = collect(1:n_g)
@@ -278,7 +311,8 @@ function _Config(settings::Settings{Observable}, n_loop, g_names, v_names, gamma
     # By convention, the outgoing external time is τₒᵤₜ = 1 (2)
     # for observables with negative (positive) discontinuity side
     Tout = _get_discont_side(settings.observable) == negative ? 1 : 2
-    @assert Tout == 2  # since c1c has no gamma insertions
+    # Since c1c has no gamma insertions, discont side must be positive
+    @assert Tout == 2
 
     if gamma3_side == right  # c1bL
         v_taus = ((3, 3), (Tout, Tout))
@@ -291,11 +325,27 @@ function _Config(settings::Settings{Observable}, n_loop, g_names, v_names, gamma
         @todo
     end
 
-    # Optionally mark the two V lines as unscreened
-    v_orders = [0, 0, 0, 0]
-    if !settings.expand_bare_interactions
-        v_orders[end] = 1
+    # Mark external V lines as fixed bare, where applicable
+    if settings.expand_bare_interactions == 0
+        # Mark both external lines as fixed bare
+        v_orders = ([0, 0, 0, 1], [0, 0, 0, 1])  # bare V_left, bare V_right
+    elseif settings.expand_bare_interactions == 1
+        # Mark external line not connecting with gamma3 as fixed bare
+        if gamma3_side == right  # c1bL
+            v_orders = ([0, 0, 0, 0], [0, 0, 0, 1])  # expand V_left, bare V_right
+        else
+            v_orders = ([0, 0, 0, 1], [0, 0, 0, 0])  # bare V_left, expand V_right
+        end
+    else
+        # Re-expanding both V_left and V_right in V_λ
+        v_orders = ([0, 0, 0, 0], [0, 0, 0, 0])
     end
+
+    # # Mark external V lines as fixed bare, where applicable
+    # v_orders = [0, 0, 0, 0]
+    # if settings.expand_bare_interactions == 0
+    #     v_orders[end] = 1
+    # end
 
     # Indices of (dashed) G lines in the expansion order list
     indices_g = collect(1:n_g)

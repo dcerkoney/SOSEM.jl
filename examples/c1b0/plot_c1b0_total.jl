@@ -27,7 +27,7 @@ function main()
     beta = 40.0
     mass2 = 1.0
     solver = :vegasmc
-    expand_bare_interactions = false
+    expand_bare_interactions = 0
 
     neval = 5e10
 
@@ -59,8 +59,10 @@ function main()
 
     # Distinguish results with fixed vs re-expanded bare interactions
     intn_str = ""
-    if expand_bare_interactions
+    if expand_bare_interactions == 2
         intn_str = "no_bare_"
+    elseif expand_bare_interactions == 1
+        intn_str = "one_bare_"
     end
 
     # Distinguish results with different counterterm schemes
@@ -240,7 +242,7 @@ function main()
                 alpha=0.3,
             )
         end
-        if expand_bare_interactions == false
+        if expand_bare_interactions == 0
             ax.plot(
                 k_kf_grid_vegas,
                 c1b2_exact_vegas,

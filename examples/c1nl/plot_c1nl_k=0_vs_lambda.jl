@@ -43,7 +43,7 @@ function main()
     neval_hi = 5e10
     neval = min(neval_lo, neval_hi)
     solver = :vegasmc
-    expand_bare_interactions = false
+    expand_bare_interactions = 0
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -76,8 +76,10 @@ function main()
 
     # Distinguish results with fixed vs re-expanded bare interactions
     intn_str = ""
-    if expand_bare_interactions
+    if expand_bare_interactions == 2
         intn_str = "no_bare_"
+    elseif expand_bare_interactions == 1
+        intn_str = "one_bare_"
     end
 
     # Distinguish results with different counterterm schemes

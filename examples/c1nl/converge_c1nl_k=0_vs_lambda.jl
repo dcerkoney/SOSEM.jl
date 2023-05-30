@@ -117,8 +117,10 @@ function main()
 
     # Distinguish results with fixed vs re-expanded bare interactions
     intn_str = ""
-    if settings.expand_bare_interactions
+    if settings.expand_bare_interactions == 2
         intn_str = "no_bare_"
+    elseif settings.expand_bare_interactions == 1
+        intn_str = "one_bare_"
     end
 
     # Distinguish results with different counterterm schemes

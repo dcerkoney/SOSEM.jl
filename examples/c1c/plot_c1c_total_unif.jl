@@ -25,7 +25,7 @@ function main()
     beta = 40.0
     mass2 = 2.0
     solver = :vegasmc
-    expand_bare_interactions = false
+    expand_bare_interactions = 0
 
     neval34 = 1e10
     neval5 = 1e9
@@ -53,8 +53,10 @@ function main()
 
     # Distinguish results with fixed vs re-expanded bare interactions
     intn_str = ""
-    if expand_bare_interactions
+    if expand_bare_interactions == 2
         intn_str = "no_bare_"
+    elseif expand_bare_interactions == 1
+        intn_str = "one_bare_"
     end
 
     # Distinguish results with different counterterm schemes

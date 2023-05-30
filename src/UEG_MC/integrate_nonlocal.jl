@@ -128,6 +128,70 @@ function integrate_nonlocal_with_ct(
     )
 end
 
+function integrate_nonlocal_with_ct_fixed_extK(
+    # settings::Settings,
+    mcparam::UEG.ParaMC,
+    diagparams::Vector{DiagParaF64},
+    exprtrees::Vector{ExprTreeF64};
+    extK=0.0,
+    alpha=3.0,
+    neval=1e5,
+    print=-1,
+    solver=:vegasmc,
+    debug=false,  # whether to print debug info (type instability, float overflow, etc.)
+)
+    # We assume that each partition expression tree has a single root
+    @assert all(length(et.root) == 1 for et in exprtrees)
+
+    # List of expression tree roots, external times, and inner
+    # loop numbers for each tree (to be passed to integrand)
+    # roots = [et.root[1] for et in exprtrees]
+    innerLoopNums = [p.innerLoopNum for p in diagparams]
+
+    # Temporary array for combined K-variables [ExtK, K].
+    # We use the maximum necessary loop basis size for K pool.
+    maxloops = maximum(p.totalLoopNum for p in diagparams)
+    varK = zeros(3, maxloops)
+
+    # Build adaptable MC integration variables
+    (K, T) = mc_variables_fixed_extK(mcparam, alpha)
+
+    # MC configuration degrees of freedom (DOF): shape(K), shape(T)
+    # We do not integrate the three external times, hence n_τ = totalTauNum - 3
+    dof = [[p.innerLoopNum, p.totalTauNum - 3] for p in diagparams]
+
+    # UEG SOSEM diagram observables are a function of |k| only (equal-time)
+    obs = zeros(length(dof))  # observable for each partition
+
+    # External times are fixed for left/right measurement of the discontinuity at τ = 0
+    T.data[1] = -1e-6  # τout = -δ, for observables with discont_side = negative
+    T.data[2] = 1e-6   # τout = +δ, for observables with discont_side = positive
+    T.data[3] = 0      # τin  = 0,  for all observables
+
+    # Thomas-Fermi energy squared
+    eTF2 = mcparam.qTF^4 / (2 * mcparam.me)^2
+
+    # Phase-space factors
+    phase_factors = [1.0 / (2π)^(mcparam.dim * nl) for nl in innerLoopNums]
+
+    # Total prefactors
+    prefactors = -phase_factors / eTF2
+
+    return integrate(
+        integrand_single_fixed_extK;
+        debug=debug,
+        solver=solver,
+        measure=measure_fixed_extK,
+        neval=neval,
+        print=print,
+        # MC config kwargs
+        userdata=(mcparam, exprtrees, innerLoopNums, prefactors, varK, extK),
+        var=(K, T),
+        dof=dof,
+        obs=obs,
+    )
+end
+
 function integrate_full_nonlocal_with_ct(
     mcparam::UEG.ParaMC,
     diagparams::Vector{DiagParaF64},

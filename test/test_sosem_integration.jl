@@ -13,7 +13,7 @@ function bare_integral_k0(;
 )
     # Settings for diagram generation
     settings =
-        Settings{Observable}(observable; verbosity=verbosity, expand_bare_interactions=false)
+        Settings{Observable}(observable; verbosity=verbosity, expand_bare_interactions=0)
 
     # UEG parameters for MC integration
     param = ParaMC(; order=settings.max_order, rs=1.0, beta=beta, isDynamic=false)
@@ -83,7 +83,7 @@ function bare_integral_k0_multipartition(;
         observable;
         max_order=2,
         verbosity=verbosity,
-        expand_bare_interactions=false,
+        expand_bare_interactions=0,
     )
 
     # UEG parameters for MC integration

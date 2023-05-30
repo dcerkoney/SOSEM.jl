@@ -22,14 +22,21 @@ function main()
 
     settings = DiagGen.Settings{DiagGen.Observable}(
         DiagGen.c1bL;
-        min_order=6,  # no (2,0,0) partition for this observable (Γⁱ₃ > Γ₀),
-        max_order=6,
+        min_order=3,  # no (2,0,0) partition for this observable (Γⁱ₃ > Γ₀),
+        max_order=3,
+        # max_order=5,
         verbosity=DiagGen.quiet,
-        expand_bare_interactions=false,
+        expand_bare_interactions=1,  # testing single V[V_λ] scheme
+        # expand_bare_interactions=false,
         filter=[NoHartree],
         interaction=[FeynmanDiagram.Interaction(ChargeCharge, Instant)],  # Yukawa-type interaction
         # interaction=[FeynmanDiagram.Interaction(ChargeCharge, Dynamic)],  # TODO: test RPA-type interaction
     )
+    if settings.expand_bare_interactions == 1
+        cfg = DiagGen.Config(settings)
+        @debug "External V orders: $(cfg.V.orders)"
+        @assert cfg.V.orders == ([0, 0, 0, 0], [0, 0, 0, 1])  # V_left = V[V_λ], V_right = V
+    end
 
     # UEG parameters for MC integration
     param =
@@ -39,7 +46,6 @@ function main()
     println("lambda = $(param.mass2)")
 
     # K-mesh for measurement
-    # kgrid = [0.0]
     minK = 0.2 * param.kF
     Nk, korder = 4, 4
     kgrid =
@@ -51,6 +57,7 @@ function main()
             minK,
             korder,
         ).grid
+    # kgrid = [0.0]  # start with k=0 only
 
     # Settings
     alpha = 3.0
@@ -58,7 +65,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 5e10
+    neval = 1e10
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -76,9 +83,10 @@ function main()
     @debug "exprtrees: $exprtrees"
 
     # Check the diagram tree
-    # for d in diagtrees
-    #     DiagGen.checktree(d, settings)
-    # end
+    for d in diagtrees
+        DiagGen.checktree(d, settings)
+    end
+    return
 
     # Bin external momenta, performing a single integration
     res = UEG_MC.integrate_nonlocal_with_ct(
@@ -93,10 +101,12 @@ function main()
         solver=solver,
     )
 
-    # Distinguish results with fixed vs re-expanded bare interactions
+    # Distinguish results with fixed vs re-expanded bare interaction line
     intn_str = ""
-    if settings.expand_bare_interactions
+    if settings.expand_bare_interactions == 2
         intn_str = "no_bare_"
+    elseif settings.expand_bare_interactions == 1
+        intn_str = "one_bare_"
     end
 
     # Distinguish results with different counterterm schemes
@@ -108,10 +118,13 @@ function main()
         ct_string *= "_lambda"
     end
 
+    # Tag k=0 measurement
+    kgrid_string = kgrid == [0.0] ? "k=0.0_" : ""
+
     # Save to JLD2 on main thread
     if !isnothing(res)
         savename =
-            "results/data/c1bL_n=$(param.order)_rs=$(param.rs)_" *
+            "results/data/c1bL_$(kgrid_string)n=$(param.order)_rs=$(param.rs)_" *
             "beta_ef=$(param.beta)_lambda=$(param.mass2)_" *
             "neval=$(neval)_$(intn_str)$(solver)$(ct_string)"
         jldopen("$savename.jld2", "a+"; compress=true) do f
@@ -130,7 +143,7 @@ function main()
             "results/data/rs=$(param.rs)_beta_ef=$(param.beta)_" *
             "lambda=$(param.mass2)_$(intn_str)$(solver)$(ct_string)"
         jldopen("$savename.jld2", "a+"; compress=true) do f
-            key = "c1bL_n_min=$(settings.min_order)_n_max=$(settings.max_order)_neval=$(neval)"
+            key = "c1bL_$(kgrid_string)n_min=$(settings.min_order)_n_max=$(settings.max_order)_neval=$(neval)"
             if haskey(f, key)
                 @warn("replacing existing data for $key")
                 delete!(f, key)

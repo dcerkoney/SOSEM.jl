@@ -7,7 +7,7 @@ function build_local(s::Settings)
 
     # TODO: reexpress bare interaction lines via Parquet.vertex4 to allow for
     #       optional re-expansion via the statically screened interaction
-    if s.expand_bare_interactions == false
+    if s.expand_bare_interactions == 0
         error("Bare interactions from EOM must be re-expanded for the local moment!")
     end
 

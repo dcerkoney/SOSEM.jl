@@ -137,6 +137,11 @@ function delta_mu1(param::UEG.ParaMC)
     return -(param.e0^2 * param.kF / (2 * pi^2 * param.ϵ0)) * F_x_lambda
 end
 
+"""Computes the exact first-order (screened HF) effective mass ratio"""
+function fock_mass_ratio(param::UEG.ParaMC)
+    return
+end
+
 """Load counterterm data from CSV file."""
 function load_z_mu(
     param::UEG.ParaMC;
