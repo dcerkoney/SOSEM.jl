@@ -29,7 +29,7 @@ function main()
     # δK = 0.01
 
     # Total number of MCMC evaluations
-    neval = 1e9
+    neval = 1e10
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -60,7 +60,7 @@ function main()
 
         ######### calculate mass ratio ######################
         # k_points near k = 0
-        kgrid = para.kF * (δK * collect(0:30))
+        kgrid = para.kF * (δK * collect(-15:15))  # testing central difference
         # k-points near k = kF
         # kgrid = para.kF * (1 .+ δK * collect(0:30))
         ngrid = [0]
@@ -104,10 +104,10 @@ function main()
         if isnothing(sigma) == false
             println("Current working directory: $(pwd())")
             println("Saving data to JLD2...")
-            #jldopen("data_mass_ratio$(ct_string)_gridtest.jld2", "a+"; compress=true) do f
-            # jldopen("data_mass_ratio$(ct_string)_k0_gridtest.jld2", "a+"; compress=true) do f
+            #jldopen("data/data_mass_ratio$(ct_string)_gridtest.jld2", "a+"; compress=true) do f
+            # jldopen("data/data_mass_ratio$(ct_string)_k0_gridtest.jld2", "a+"; compress=true) do f
             jldopen(
-                "data_mass_ratio$(ct_string)_kF_gridtest.jld2",
+                "data/data_mass_ratio$(ct_string)_kF_gridtest.jld2",
                 "a+";
                 compress=true,
             ) do f

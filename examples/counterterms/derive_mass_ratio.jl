@@ -12,23 +12,44 @@ elseif haskey(ENV, "SOSEM_HOME")
     cd("$(ENV["SOSEM_HOME"])/examples/counterterms")
 end
 
-# Physical params matching data for SOSEM observables
+############################################
+# For lambda optimization
+############################################
 order = [4]  # C^{(1)}_{N≤5} includes CTs up to 3rd order
-rs = [1.0]
-mass2 = [1.0]
 beta = [40.0]
+rs = [2.0]
+mass2 = [0.1, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
 
-# Momentum spacing for finite-difference derivative of Sigma (in units of kF)
-δK = 0.001
-# δK = 0.01
+# Momentum spacing for finite-difference derivative of Sigma (in units of para.kF)
+δK = 0.005  # spacings n*δK = 0.15–0.3 not relevant for rs = 1.0 => reduce δK by half
 
 # We estimate the derivative wrt k using grid points kgrid[ikF] and kgrid[ikF + idk]
-idks = 1:3
-# idks = 1:30
+idks = 1:30
+# idks = -15:15  # testing central difference
 
 # kgrid indices & spacings
-dks = [δK, 5δK, 10δK]
-# dks = δK * collect(idks)
+dks = δK * collect(idks)
+
+############################################
+############################################
+
+# # Physical params matching data for SOSEM observables
+# order = [4]  # C^{(1)}_{N≤5} includes CTs up to 3rd order
+# rs = [1.0]
+# mass2 = [1.0]
+# beta = [40.0]
+
+# # Momentum spacing for finite-difference derivative of Sigma (in units of kF)
+# δK = 0.001
+# # δK = 0.01
+
+# # We estimate the derivative wrt k using grid points kgrid[ikF] and kgrid[ikF + idk]
+# idks = 1:3
+# # idks = 1:30
+
+# # kgrid indices & spacings
+# dks = [δK, 5δK, 10δK]
+# # dks = δK * collect(idks)
 
 # Enable/disable interaction and chemical potential counterterms
 renorm_mu = true
@@ -47,8 +68,8 @@ if renorm_lambda
 end
 
 # const filename = "data/data_mass_ratio$(ct_string).jld2"
-# const filename = "data/data_mass_ratio$(ct_string)_gridtest.jld2"
-const filename = "data/data_mass_ratio$(ct_string).jld2"
+# const filename = "data/data_mass_ratio$(ct_string).jld2"
+const filename = "data/data_mass_ratio$(ct_string)_kF_gridtest.jld2"
 const parafilename = "data/para.csv"
 
 function zfactor(data, β)
@@ -73,7 +94,10 @@ function process_mass_ratio(datatuple, isSave; idk=1)
     println("Max order: ", max_order)
 
     # Reexpand merged data in powers of μ
-    ct_filename = "data/data_Z$(ct_string).jld2"
+    ct_filename = "data/data_Z$(ct_string)_opt.jld2"
+    # ct_filename = "data/data_Z$(ct_string)_kF.jld2"
+    # ct_filename = "data/data_Z$(ct_string)_k0.jld2"
+    # ct_filename = "data/data_Z$(ct_string).jld2"
     z, μ = UEG_MC.load_z_mu(para; ct_filename=ct_filename, parafilename=parafilename)
     # Add Taylor factors to CT data
     for (p, v) in z
@@ -197,7 +221,8 @@ function process_mass_ratio(datatuple, isSave; idk=1)
         println("Current working directory: $(pwd())")
         println("Saving data to JLD2...")
         # jldopen("data/mass_ratio_from_sigma.jld2", "a+"; compress=true) do f
-        jldopen("data/mass_ratio_from_sigma_gridtest.jld2", "a+"; compress=true) do f
+        # jldopen("data/mass_ratio_from_sigma_gridtest.jld2", "a+"; compress=true) do f
+        jldopen("data/mass_ratio_from_sigma_kF_gridtest.jld2", "a+"; compress=true) do f
             key = "$(UEG.short(para))_idk=$(idk)"
             if haskey(f, key)
                 @warn("replacing existing data for $key")
