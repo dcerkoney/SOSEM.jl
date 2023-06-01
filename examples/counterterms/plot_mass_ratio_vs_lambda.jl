@@ -32,8 +32,6 @@ function main()
     # lambdas = [1.0, 3.0]
     solver = :mcmc
 
-    plot_rpa = false
-
     min_order = 1
     max_order = 4
 
@@ -94,167 +92,40 @@ function main()
     mass_ratios_N_vs_lambda = zip(mass_ratios_lambda_vs_N...)
     println("mass_ratios_lambda_vs_N:\n$mass_ratios_lambda_vs_N")
     println("\nmass_ratios_N_vs_lambda:\n$mass_ratios_N_vs_lambda")
-    return
 
-    # Plot the results for each order ξ vs lambda and compare to RPA(+FL)
+    # Plot the results for each order ξ vs lambda
     fig, ax = plt.subplots()
-    ax.axvline(1.0; linestyle="--", color="dimgray", label="\$\\lambda^\\star = 1\$")
-    if min_order_plot == 2
-        if plot_rpa
-            ax.plot(
-                lambdas,
-                c1nl_rpa_means,
-                "o--";
-                color="k",
-                markersize=3,
-                label="RPA (vegas)",
-            )
-            ax.fill_between(
-                lambdas,
-                (c1nl_rpa_means - c1nl_rpa_stdevs),
-                (c1nl_rpa_means + c1nl_rpa_stdevs);
-                color="k",
-                alpha=0.3,
-            )
-            ax.plot(
-                lambdas,
-                c1nl_rpa_fl_means,
-                "o-";
-                color="k",
-                markersize=3,
-                label="RPA\$+\$FL (vegas)",
-            )
-            ax.fill_between(
-                lambdas,
-                (c1nl_rpa_fl_means - c1nl_rpa_fl_stdevs),
-                (c1nl_rpa_fl_means + c1nl_rpa_fl_stdevs);
-                color="r",
-                alpha=0.3,
-            )
-        end
-        # ax.plot(
-        #     lambdas,
-        #     c1nl_los,
-        #     "o-";
-        #     color="C0",
-        #     markersize=3,
-        #     label="\$N=2\$ (quad, \$T = 0\$)",
-        # )
-        ax.plot(
-            lambdas,
-            -0.5 * one.(lambdas),
-            "-";
-            color="C0",
-            markersize=3,
-            label="\$N=2\$ (exact, \$T = 0\$)",
-        )
-    end
+    # ax.axvline(1.0; linestyle="--", color="dimgray", label="\$\\lambda^\\star = 1\$")
     for (i, N) in enumerate(min_order:max_order_plot)
-        c1nl_N_means = repeat([Inf], length(lambdas))
-        c1nl_N_stdevs = repeat([Inf], length(lambdas))
-        for (j, filename) in enumerate(filenames)
-            if N == 5 && j != 4
-                # Currently no data for N = 5, lambda != 2
-                continue
-            end
-            if j == 4
-                println("\nN = $N, lambda = $(lambdas[j]):")
-            end
-            f = jldopen("$filename.jld2", "r")
-            if j == 4 && N == 5
-                # Load N = 5 data for lambda = 2 (currently, mixed nevals and multi-k)
-                k1 = f["c1b0/N=5/neval=2.0e10/kgrid"][[1]]
-                k2 = f["c1c/N=5/neval=1.0e9/kgrid"][[1]]
-                k3 = f["c1d/N=5/neval=2.0e10/kgrid"][[1]]
-                @assert k1 == k2 == k3 == [0.0]
-                r1 = f["c1b0/N=5/neval=2.0e10/meas"][[1]]
-                r2 = f["c1c/N=5/neval=1.0e9/meas"][[1]]
-                r3 = f["c1d/N=5/neval=2.0e10/meas"][[1]]
-            else
-                # Load the data for each observable
-                this_kgrid = f["c1d/N=$(N)_unif/neval=$neval/kgrid"]
-                @assert this_kgrid == [0.0]
-                r1 = f["c1b0/N=$(N)_unif/neval=$neval/meas"]
-                r2 = f["c1c/N=$(N)_unif/neval=$neval/meas"]
-                r3 = f["c1d/N=$(N)_unif/neval=$neval/meas"]
-            end
-            c1nl_N_total = r1 + r2 + r3
-            # The c1b observable has no data for N = 2
-            if N > 2
-                if j == 4 && N == 5
-                    # Load N = 5 data for lambda = 2 (currently, mixed nevals and multi-k)
-                    k4 = f["c1b/N=5/neval=5.0e9/kgrid"][[1]]
-                    @assert k4 == [0.0]
-                    r4 = f["c1b/N=5/neval=5.0e9/meas"][[1]]
-                    c1nl_N_total += r4
-                else
-                    r4 = f["c1b/N=$(N)_unif/neval=$neval/meas"]
-                    c1nl_N_total += r4
-                end
-                if j == 4
-                    println(
-                        "c1b0_unif = $r1\nc1b_unif = $r4\nc1c_unif = $r2\nc1d_unif = $r3",
-                    )
-                end
-            else
-                if j == 4
-                    println("c1b0_unif = $r1\nc1c_unif = $r2\nc1d_unif = $r3")
-                end
-            end
-            if j == 4
-                println("c1nl_N_total = $c1nl_N_total")
-            end
-            close(f)  # close file
-            @assert length(c1nl_N_total) == 1
-
-            # Get means and error bars from the result up to this order
-            c1nl_N_means[j] = Measurements.value(c1nl_N_total[1])
-            c1nl_N_stdevs[j] = Measurements.uncertainty(c1nl_N_total[1])
-        end
-        # TODO: more points and consistent neval
-        label =
-            N == 5 ? "\$N=$N, N_{\\mathrm{eval}}=\\mathrm{5.0e9}\$ ($solver)" :
-            "\$N=$N\$ ($solver)"
-        ax.plot(lambdas, c1nl_N_means, "o-"; color="C$i", markersize=3, label=label)
-        ax.fill_between(
-            lambdas,
-            (c1nl_N_means - c1nl_N_stdevs),
-            (c1nl_N_means + c1nl_N_stdevs);
-            color="C$i",
-            alpha=0.3,
-        )
+        # Get means and error bars from the result up to this order
+        means = Measurements.value(mass_ratios_N_vs_lambda[i])
+        stdevs = Measurements.uncertainty(mass_ratios_N_vs_lambda[i])
+        ax.plot(lambdas, means, "o-"; color="C$i", markersize=3, label="\$N=$N\$ ($solver)")
+        ax.fill_between(lambdas, (means - stdevs), (means + stdevs); color="C$i", alpha=0.3)
     end
-    ax.set_xlim(0.5, 3.0)
-    ax.set_ylim(; bottom=-0.75)
+    ax.set_xlim(0.1, 2.0)
     ax.legend(; loc="best")
     ax.set_xlabel("\$\\lambda\$ (Ry)")
-    ax.set_ylabel(
-        "\$C^{(1)nl}(k=0,\\, \\lambda) \\,/\\, {\\epsilon}^{\\hspace{0.1em}2}_{\\mathrm{TF}}\$",
-    )
+    ax.set_ylabel("\$m^\\star / m\$")
     xloc = 1.325
     yloc = -0.54
     ydiv = -0.025
-    # xloc = 1.7
-    # yloc = -0.5
-    # ydiv = -0.05
-    ax.text(
-        xloc,
-        yloc,
-        "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta), N_{\\mathrm{eval}} = \\mathrm{$(5e9)},\$";
-        fontsize=14,
-    )
-    ax.text(
-        xloc,
-        yloc + ydiv,
-        "\${\\epsilon}_{\\mathrm{TF}}\\equiv\\frac{\\hbar^2 q^2_{\\mathrm{TF}}}{2 m_e}=2\\pi\\mathcal{N}_F\$ (a.u.)";
-        fontsize=12,
-    )
-    # plt.title("")
+    # ax.text(
+    #     xloc,
+    #     yloc,
+    #     "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta), N_{\\mathrm{eval}} = \\mathrm{$(5e9)},\$";
+    #     fontsize=14,
+    # )
+    # ax.text(
+    #     xloc,
+    #     yloc + ydiv,
+    #     "\${\\epsilon}_{\\mathrm{TF}}\\equiv\\frac{\\hbar^2 q^2_{\\mathrm{TF}}}{2 m_e}=2\\pi\\mathcal{N}_F\$ (a.u.)";
+    #     fontsize=12,
+    # )
     plt.tight_layout()
     fig.savefig(
-        "results/c1nl/c1nl_k=0_rs=$(rs)_" *
-        "beta_ef=$(beta)_neval=$(5e9)_" *
-        "$(intn_str)$(solver)_vs_lambda.pdf",
+        "../../results/effective_mass_ratio/effective_mass_ratio_rs=$(param.rs)_" *
+        "beta_ef=$(param.beta)_neval=$(neval)_$(intn_str)$(solver)_$(ct_string)_vs_lambda.pdf",
     )
     plt.close("all")
     return

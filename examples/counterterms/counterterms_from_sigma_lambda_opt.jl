@@ -26,7 +26,7 @@ function main()
     # mass2 = [1.0]
 
     # Total number of MCMC evaluations
-    neval = 1e9
+    neval = 1e10
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -59,10 +59,8 @@ function main()
         # For Z(k = 0)
         # kgrid = [0.0]
         # For μ & Z := Z(k = kF)
-        # kgrid = [para.kF]
-        # For μ & Z := Z(k = kF), Z(k = 0)
-        kgrid = [0.0, para.kF]
-        ngrid = [0, 1]
+        kgrid = [para.kF]
+        ngrid = [-1, 0, 1]
         # ngrid = [-1, 0]
 
         # Build diagrams
@@ -104,7 +102,7 @@ function main()
         if isnothing(sigma) == false
             println("Current working directory: $(pwd())")
             println("Saving data to JLD2...")
-            jldopen("data/data_Z$(ct_string)_opt.jld2", "a+"; compress=true) do f
+            jldopen("data/data_Z$(ct_string)_kF_opt.jld2", "a+"; compress=true) do f
                 key = "$(UEG.short(para))"
                 if haskey(f, key)
                     @warn("replacing existing data for $key")

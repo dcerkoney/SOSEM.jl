@@ -13,10 +13,16 @@ elseif haskey(ENV, "SOSEM_HOME")
 end
 
 # Physical params matching data for SOSEM observables
-order = [5]  # C^{(1)}_{N≤6} includes CTs up to 5th order
-rs = [1.0]
-mass2 = [1.0]
+# order = [5]  # C^{(1)}_{N≤6} includes CTs up to 5th order
+# rs = [1.0]
+# mass2 = [1.0]
+# beta = [40.0]
+
+# For lambda optimization
+order = [4]  # C^{(1)}_{N≤5} includes CTs up to 4th order
 beta = [40.0]
+rs = [2.0]
+mass2 = [0.1, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
 
 # Enable/disable interaction and chemical potential counterterms
 renorm_mu = true
@@ -34,7 +40,9 @@ if renorm_lambda
     ct_string *= "_lambda"
 end
 
-const filename = "data/data_Z$(ct_string).jld2"
+# const filename = "data/data_Z$(ct_string).jld2"
+# const filename = "data/data_Z$(ct_string)_kF.jld2"
+const filename = "data/data_Z$(ct_string)_opt.jld2"
 const parafilename = "data/para.csv"
 
 function zfactor(data, β)
