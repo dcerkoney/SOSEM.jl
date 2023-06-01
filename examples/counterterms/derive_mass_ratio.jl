@@ -19,13 +19,16 @@ mass2 = [1.0]
 beta = [40.0]
 
 # Momentum spacing for finite-difference derivative of Sigma (in units of kF)
-δK = 0.01
+δK = 0.001
+# δK = 0.01
 
 # We estimate the derivative wrt k using grid points kgrid[ikF] and kgrid[ikF + idk]
-idks = 1:30
+idks = 1:3
+# idks = 1:30
 
 # kgrid indices & spacings
-dks = δK * collect(idks)
+dks = [δK, 5δK, 10δK]
+# dks = δK * collect(idks)
 
 # Enable/disable interaction and chemical potential counterterms
 renorm_mu = true
@@ -44,7 +47,8 @@ if renorm_lambda
 end
 
 # const filename = "data_mass_ratio$(ct_string).jld2"
-const filename = "data_mass_ratio$(ct_string)_gridtest.jld2"
+# const filename = "data_mass_ratio$(ct_string)_gridtest.jld2"
+const filename = "data_mass_ratio$(ct_string).jld2"
 const parafilename = "para.csv"
 
 function zfactor(data, β)
@@ -62,6 +66,7 @@ function process_mass_ratio(datatuple, isSave; idk=1)
     para, ngrid, kgrid, data = datatuple
     printstyled(UEG.short(para); color=:yellow)
     println()
+    println(kgrid)
 
     # Max order in RPT calculation
     max_order = para.order
@@ -142,6 +147,13 @@ function process_mass_ratio(datatuple, isSave; idk=1)
     println()
     println(δs)
     println(δm)
+    for i in eachindex(δs)
+        println(" • δs_$i = $(δs[i])")
+    end
+    for i in eachindex(δm)
+        println(" • δm_$i = $(δm[i])")
+    end
+    return
 
     # The inverse Z-factor is (1 - δs[ξ])
     zinv = Measurement{Float64}[1; accumulate(+, δzi; init=1)]
