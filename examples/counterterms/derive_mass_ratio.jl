@@ -72,14 +72,6 @@ end
 const filename = "data/data_mass_ratio$(ct_string)_kF_gridtest.jld2"
 const parafilename = "data/para.csv"
 
-function zfactor(data, β)
-    return @. (imag(data[2, 1]) - imag(data[1, 1])) / (2π / β)
-end
-
-function mu(data)
-    return real(data[1, 1])
-end
-
 # function process_mass_ratio(datatuple, δzi, δμ, isSave)
 function process_mass_ratio(datatuple, isSave; idk=1)
     print("Processing mass ratio...")
