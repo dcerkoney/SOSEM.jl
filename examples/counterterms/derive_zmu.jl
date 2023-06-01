@@ -31,9 +31,9 @@ renorm_lambda = true
 # Remove Fock insertions?
 isFock = false
 
-# Which finite difference method to use?
-method = "backward"
-# method = "forward"
+# Select finite difference method
+# method = "backward"
+method = "forward"
 # method = "central"
 
 # Distinguish results with different counterterm schemes
@@ -47,7 +47,7 @@ end
 
 # const filename = "data/data_Z$(ct_string).jld2"
 # const filename = "data/data_Z$(ct_string)_kF.jld2"
-const filename = "data/data_Z$(ct_string)_opt.jld2"
+const filename = "data/data_Z$(ct_string)_kF_opt.jld2"
 const parafilename = "data/para.csv"
 
 function zfactor(data, β; method="backward", verbose=false)
@@ -78,16 +78,15 @@ end
 function process(datatuple, isSave; method="backward")
     print("processing...")
     df = UEG_MC.fromFile(parafilename)
-    para, ngrid, _, data = datatuple
+    para, ngrid, kgrid, data = datatuple
     printstyled(UEG.short(para); color=:yellow)
     println()
 
-    # Specialize Z-factor calculation based on ngrid
-    if ngrid == [-1, 0, 1]
-        z_factor(data, β; verbose=false) = zfactor(data, β; method=method, verbose=verbose)
-    elseif ngrid == [0, 1]
-        z_factor(data, β; verbose=false) = zfactor_old(data, β; verbose=verbose)
-    else
+    # Using Z = Z_kF for all k
+    @assert kgrid == [para.kF] "Expect kgrid = [kF]!"
+
+    # Specializing Z-factor calculation based on ngrid
+    if ngrid ∉ [[0, 1], [-1, 0, 1]]
         error("ngrid = $ngrid not supported!")
     end
 
@@ -97,11 +96,22 @@ function process(datatuple, isSave; method="backward")
     end
     _z = Dict()
     for (p, val) in data
-        _z[p] = z_factor(val, para.β; verbose=true) / (factorial(p[2]) * factorial(p[3]))
+        if ngrid == [-1, 0, 1]
+            zres = zfactor(val, para.β; method=method, verbose=true)
+        else
+            zres = zfactor_old(val, para.β; verbose=true)
+        end
+        _z[p] = zres / (factorial(p[2]) * factorial(p[3]))
     end
 
     for p in sort([k for k in keys(data)])
-        println("$p: μ = $(mu(data[p]))   z = $(z_factor(data[p], para.β))")
+        if ngrid == [-1, 0, 1]
+            zprint = zfactor(data[p], para.β; method=method)
+            println("$p: μ = $(mu(data[p]))   z = $zprint")
+        else
+            zprint = zfactor_old(data[p], para.β)
+            println("$p: μ = $(mu(data[p]))   z = $zprint")
+        end
     end
 
     dzi, _, _ = CounterTerm.sigmaCT(para.order, _mu, _z; isfock=isFock, verbose=1)

@@ -24,8 +24,8 @@ mass2 = [0.1, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
 δK = 0.005  # spacings n*δK = 0.15–0.3 not relevant for rs = 1.0 => reduce δK by half
 
 # We estimate the derivative wrt k using grid points kgrid[ikF] and kgrid[ikF + idk]
-idks = 1:30
-# idks = -15:15  # testing central difference
+# idks = 1:30
+idks = -15:15  # testing central difference
 
 # kgrid indices & spacings
 dks = δK * collect(idks)
