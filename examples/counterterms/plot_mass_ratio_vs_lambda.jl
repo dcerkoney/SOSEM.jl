@@ -80,7 +80,7 @@ function main()
             isFock=isFock,
         )
         # Load mass ratio data for each idk
-        savename_mass = "mass_ratio_from_sigma_kF_gridtest"
+        savename_mass = "data/mass_ratio_from_sigma_kF_gridtest"
         mass_ratios = []
         print("Loading data from $savename_mass...")
         param, ngrid, kgrid, mass_ratio = jldopen("$savename_mass.jld2", "r") do f

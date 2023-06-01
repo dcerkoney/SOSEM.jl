@@ -50,8 +50,8 @@ end
 
 function load_z_mu(
     param::UEG.ParaMC,
-    parafilename="para.csv",
-    ct_filename="examples/counterterms/data_Z.jld2",
+    parafilename="data/para.csv",
+    ct_filename="examples/counterterms/data/data_Z.jld2",
 )
     # Load μ from csv
     local ct_data

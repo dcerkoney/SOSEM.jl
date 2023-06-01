@@ -85,12 +85,12 @@ function main()
         )
 
         # Load mass ratio data for each idk
-        # savename_mass = "mass_ratio_from_sigma"
-        # savename_zinv = "inverse_zfactor"
-        # savename_zapprox = "zfactor_approx"
-        savename_mass = "mass_ratio_from_sigma_kF_gridtest"
-        savename_zinv = "inverse_zfactor_kF_gridtest"
-        savename_zapprox = "zfactor_approx_kF_gridtest"
+        # savename_mass = "data/mass_ratio_from_sigma"
+        # savename_zinv = "data/inverse_zfactor"
+        # savename_zapprox = "data/zfactor_approx"
+        savename_mass = "data/mass_ratio_from_sigma_kF_gridtest"
+        savename_zinv = "data/inverse_zfactor"
+        savename_zapprox = "data/zfactor_approx"
         local param
         mass_ratios = []
         print("Loading data from $savename_mass...")

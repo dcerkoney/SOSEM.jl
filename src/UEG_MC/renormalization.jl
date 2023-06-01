@@ -145,8 +145,8 @@ end
 """Load counterterm data from CSV file."""
 function load_z_mu(
     param::UEG.ParaMC;
-    parafilename="examples/counterterms/para.csv",
-    ct_filename="examples/counterterms/data_Z.jld2",
+    parafilename="examples/counterterms/data/para.csv",
+    ct_filename="examples/counterterms/data/data_Z.jld2",
 )
     # Load μ from csv
     local ct_data

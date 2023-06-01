@@ -34,8 +34,8 @@ if renorm_lambda
     ct_string *= "_lambda"
 end
 
-const filename = "data_Z$(ct_string).jld2"
-const parafilename = "para.csv"
+const filename = "data/data_Z$(ct_string).jld2"
+const parafilename = "data/para.csv"
 
 function zfactor(data, β)
     return @. (imag(data[2, 1]) - imag(data[1, 1])) / (2π / β)

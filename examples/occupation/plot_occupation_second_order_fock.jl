@@ -102,7 +102,7 @@ function main()
     end
 
     # Reexpand merged data in powers of 
-    ct_filename = "examples/counterterms/data_Z_$(ct_string).jld2"
+    ct_filename = "examples/counterterms/data/data_Z_$(ct_string).jld2"
     z, μ = UEG_MC.load_z_mu(param; ct_filename=ct_filename)
     δz, δμ = CounterTerm.sigmaCT(2, μ, z; isfock=false, verbose=1)
     # Test manual renormalization with exact lowest-order chemical potential

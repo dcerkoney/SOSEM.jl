@@ -108,9 +108,9 @@ function main()
         if isnothing(sigma) == false
             println("Current working directory: $(pwd())")
             println("Saving data to JLD2...")
-            jldopen("data_mass_ratio$(ct_string)_k0_gridtest.jld2", "a+"; compress=true) do f
-	    #jldopen("data_mass_ratio$(ct_string)_gridtest.jld2", "a+"; compress=true) do f
-	    #jldopen("data_mass_ratio$(ct_string)_kF_gridtest.jld2", "a+"; compress=true) do f
+            jldopen("data/data_mass_ratio$(ct_string)_k0_gridtest.jld2", "a+"; compress=true) do f
+	    #jldopen("data/data_mass_ratio$(ct_string)_gridtest.jld2", "a+"; compress=true) do f
+	    #jldopen("data/data_mass_ratio$(ct_string)_kF_gridtest.jld2", "a+"; compress=true) do f
                 key = "$(UEG.short(para))"
                 if haskey(f, key)
                     @warn("replacing existing data for $key")

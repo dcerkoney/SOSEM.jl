@@ -69,12 +69,12 @@ function main()
     signstrs = ["++", "--", "+-", "-+"]
     for signstr in signstrs
         # Load mass ratio data for each idk
-        # savename_mass = "mass_ratio_from_sigma"
-        # savename_zinv = "inverse_zfactor"
-        # savename_zapprox = "zfactor_approx"
-        savename_mass = "mass_ratio_from_sigma_gridtest_$(signstr)"
-        savename_zinv = "inverse_zfactor_gridtest_$(signstr)"
-        savename_zapprox = "zfactor_approx_gridtest_$(signstr)"
+        # savename_mass = "data/mass_ratio_from_sigma"
+        # savename_zinv = "data/inverse_zfactor"
+        # savename_zapprox = "data/zfactor_approx"
+        savename_mass = "data/mass_ratio_from_sigma_gridtest_$(signstr)"
+        savename_zinv = "data/inverse_zfactor"
+        savename_zapprox = "data/zfactor_approx"
         local param
         mass_ratios = []
         print("Loading data from $savename_mass...")

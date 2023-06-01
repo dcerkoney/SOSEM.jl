@@ -194,7 +194,7 @@ function main()
             end
         else
             # Reexpand merged data in powers of μ
-            ct_filename = "examples/counterterms/data_Z$(ct_string).jld2"
+            ct_filename = "examples/counterterms/data/data_Z$(ct_string).jld2"
             z, μ = UEG_MC.load_z_mu(param; ct_filename=ct_filename)
             # Add Taylor factors to CT data
             for (p, v) in z

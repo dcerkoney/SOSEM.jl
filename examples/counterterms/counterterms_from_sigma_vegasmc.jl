@@ -91,8 +91,8 @@ function main()
         if isnothing(sigma) == false
             println("Current working directory: $(pwd())")
             println("Saving data to JLD2...")
-            jldopen("data_Z$(ct_string)_vmc.jld2", "a+"; compress=true) do f
-                # jldopen("data_Z.jld2", "a+") do f
+            jldopen("data/data_Z$(ct_string)_vmc.jld2", "a+"; compress=true) do f
+                # jldopen("data/data_Z.jld2", "a+") do f
                 key = "$(UEG.short(para))_orders=$(orders)"
                 if haskey(f, key)
                     @warn("replacing existing data for $key")

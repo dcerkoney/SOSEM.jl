@@ -43,9 +43,9 @@ if renorm_lambda
     ct_string *= "_lambda"
 end
 
-# const filename = "data_mass_ratio$(ct_string).jld2"
-const filename = "data_mass_ratio$(ct_string)_gridtest.jld2"
-const parafilename = "para.csv"
+# const filename = "data/data_mass_ratio$(ct_string).jld2"
+const filename = "data/data_mass_ratio$(ct_string)_gridtest.jld2"
+const parafilename = "data/para.csv"
 
 function zfactor(data, β)
     return @. (imag(data[2, 1]) - imag(data[1, 1])) / (2π / β)
@@ -68,7 +68,7 @@ function process_mass_ratio(datatuple, isSave; idk=1)
     println("Max order: ", max_order)
 
     # Reexpand merged data in powers of μ
-    ct_filename = "data_Z$(ct_string).jld2"
+    ct_filename = "data/data_Z$(ct_string).jld2"
     z, μ = UEG_MC.load_z_mu(para; ct_filename=ct_filename, parafilename=parafilename)
     # Add Taylor factors to CT data
     for (p, v) in z
@@ -186,9 +186,9 @@ function process_mass_ratio(datatuple, isSave; idk=1)
         if isSave
             println("Current working directory: $(pwd())")
             println("Saving data to JLD2...")
-            # jldopen("mass_ratio_from_sigma.jld2", "a+"; compress=true) do f
+            # jldopen("data/mass_ratio_from_sigma.jld2", "a+"; compress=true) do f
             jldopen(
-                "mass_ratio_from_sigma_gridtest_$(signstr).jld2",
+                "data/mass_ratio_from_sigma_gridtest_$(signstr).jld2",
                 "a+";
                 compress=true,
             ) do f
@@ -199,7 +199,7 @@ function process_mass_ratio(datatuple, isSave; idk=1)
                 end
                 return f[key] = (para, ngrid, kgrid, mass_ratios)
             end
-            # jldopen("inverse_zfactor.jld2", "a+"; compress=true) do f
+            # jldopen("data/inverse_zfactor.jld2", "a+"; compress=true) do f
             jldopen("inverse_zfactor_gridtest_$(signstr).jld2", "a+"; compress=true) do f
                 key = "$(UEG.short(para))"
                 if haskey(f, key)
@@ -208,7 +208,7 @@ function process_mass_ratio(datatuple, isSave; idk=1)
                 end
                 return f[key] = (para, ngrid, kgrid, zinv)
             end
-            # jldopen("zfactor_approx.jld2", "a+"; compress=true) do f
+            # jldopen("data/zfactor_approx.jld2", "a+"; compress=true) do f
             jldopen("zfactor_approx_gridtest_$(signstr).jld2", "a+"; compress=true) do f
                 key = "$(UEG.short(para))"
                 if haskey(f, key)
