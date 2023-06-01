@@ -18,13 +18,15 @@ function main()
     # order = [5]  # C^{(1)}_{N≤6} includes CTs up to 5th order
     order = [4]  # C^{(1)}_{N≤5} includes CTs up to 4th order
     beta = [40.0]
-    rs = [1.0, 2.0, 5.0]
+    # rs = [1.0, 2.0, 5.0]
+    rs = [2.0]
+    mass2 = [1.5, 1.75, 2.0]
     # rs = [1.0]
     # mass2 = [1.0]
 
     # Using mass2 from optimization of C⁽¹⁾ⁿˡ(k = 0)
     # TODO: Optimize specifically for ReΣ_N(kF, ik0) convergence vs N
-    c1nl_mass2_optima = Dict{Float64,Float64}(1.0 => 1.0, 2.0 => 0.4, 5.0 => 0.1375)
+    # c1nl_mass2_optima = Dict{Float64,Float64}(1.0 => 1.0, 2.0 => 0.4, 5.0 => 0.1375)
 
     # Total number of MCMC evaluations
     neval = 1e11
@@ -46,15 +48,15 @@ function main()
     end
 
     # Get self-energy data needed for the chemical potential and Z-factor measurements
-    # for (_rs, _mass2, _beta, _order) in Iterators.product(rs, mass2, beta, order)
-    for (_rs, _beta, _order) in Iterators.product(rs, beta, order)
-        @assert haskey(c1nl_mass2_optima, _rs) "Missing optimized mass2 for rs = $_rs"
+    for (_rs, _mass2, _beta, _order) in Iterators.product(rs, mass2, beta, order)
+    # for (_rs, _beta, _order) in Iterators.product(rs, beta, order)
+        # @assert haskey(c1nl_mass2_optima, _rs) "Missing optimized mass2 for rs = $_rs"
         para = UEG.ParaMC(;
             order=_order,
             rs=_rs,
             beta=_beta,
-            mass2=c1nl_mass2_optima[_rs],
-            # mass2=_mass2,
+            # mass2=c1nl_mass2_optima[_rs],
+            mass2=_mass2,
             isDynamic=false,
             isFock=isFock,
         )
@@ -64,7 +66,7 @@ function main()
         # kgrid = [0.0]
         # For μ & Z := Z(k = kF)
         kgrid = [para.kF]
-        ngrid = [0, 1]
+        ngrid = [-1, 0, 1]
         # ngrid = [-1, 0]
 
         # Build diagrams
@@ -107,9 +109,8 @@ function main()
             println("Current working directory: $(pwd())")
             println("Saving data to JLD2...")
             # jldopen("data/data_Z$(ct_string)_k0.jld2", "a+"; compress=true) do f
-            jldopen("data/data_Z$(ct_string).jld2", "a+"; compress=true) do f
-                #jldopen("data/data_Z$(ct_string)_kF.jld2", "a+"; compress=true) do f
-                # jldopen("data/data_Z.jld2", "a+") do f
+            # jldopen("data/data_Z$(ct_string).jld2", "a+"; compress=true) do f
+            jldopen("data/data_Z$(ct_string)_kF.jld2", "a+"; compress=true) do f
                 key = "$(UEG.short(para))"
                 if haskey(f, key)
                     @warn("replacing existing data for $key")
