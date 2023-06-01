@@ -30,8 +30,10 @@ function main()
     beta = 40.0
     mass2 = 1.0
     solver = :vegasmc
-    expand_bare_interactions = 1  # single V[V_λ] scheme
-    # expand_bare_interactions = 0  # bare V, V (non-reexpanded) scheme
+    # expand_bare_interactions = 1          # single V[V_λ] scheme
+    # expand_bare_interactions = 0          # bare V, V (non-reexpanded) scheme
+    intn_schemes = [0, 1]  # compare schemes
+    intn_scheme_strings = ["\$V, V\$", "\$V, V[V_\\lambda]\$"]
 
     # neval = 1e10
     neval = 1e9
@@ -60,14 +62,6 @@ function main()
     plotparam =
         UEG.ParaMC(; order=max_order, rs=rs, beta=beta, mass2=mass2, isDynamic=false)
 
-    # Distinguish results with fixed vs re-expanded bare interactions
-    intn_str = ""
-    if expand_bare_interactions == 2
-        intn_str = "no_bare_"
-    elseif expand_bare_interactions == 1
-        intn_str = "one_bare_"
-    end
-
     # Distinguish results with different counterterm schemes
     ct_string = (renorm_mu || renorm_lambda) ? "_with_ct" : ""
     if renorm_mu
@@ -76,55 +70,6 @@ function main()
     if renorm_lambda
         ct_string *= "_lambda"
     end
-
-    # Use LaTex fonts for plots
-    plt.rc("text"; usetex=true)
-    plt.rc("font"; family="serif")
-
-    # Load the order 3-4 results from JLD2 (and μ data from csv, if applicable)
-    # if max_order == 5
-    #     max_together = 4
-    # else
-    #     max_together = max_order
-    # end
-    savename =
-        "results/data/c1bL_k=$(extK_load)_n=$(max_order)_rs=$(rs)_" *
-        "beta_ef=$(beta)_lambda=$(mass2)_" *
-        "neval=$(neval)_$(intn_str)$(solver)$(ct_string)"
-    settings, param, extK, partitions, res = jldopen("$savename.jld2", "a+") do f
-        key = "$(UEG.short(plotparam))"
-        return f[key]
-    end
-    @assert extK == 0.0
-
-    # # Load the fixed order 5 result from JLD2
-    # local kgrid5, res5, partitions5
-    # if max_order == 5
-    #     savename5 =
-    #         "results/data/c1bL_n=$(max_order)_rs=$(rs)_" *
-    #         "beta_ef=$(beta)_lambda=$(mass2)_" *
-    #         "neval=$(neval5)_$(intn_str)$(solver)$(ct_string)"
-    #     settings5, param5, kgrid5, partitions5, res5 = jldopen("$savename5.jld2", "a+") do f
-    #         key = "$(UEG.short(plotparam))"
-    #         return f[key]
-    #     end
-    # end
-
-    # Convert results to a Dict of measurements at each order with interaction counterterms merged
-    data = UEG_MC.restodict(res, partitions)
-    for (k, v) in data
-        data[k] = v / (factorial(k[2]) * factorial(k[3]))
-    end
-    # # Add 5th order results to data dict
-    # if max_order == 5
-    #     data5 = UEG_MC.restodict(res5, partitions5)
-    #     for (k, v) in data5
-    #         data5[k] = v / (factorial(k[2]) * factorial(k[3]))
-    #     end
-    #     merge!(data, data5)
-    # end
-    merged_data = CounterTerm.mergeInteraction(data)
-    println([k for (k, _) in merged_data])
 
     if plot_rpa_fl
         # Non-dimensionalize bare and RPA+FL non-local moments
@@ -146,106 +91,9 @@ function main()
             sosem_lo.get("delta_rpa+fl_b_err_vegas_N=1e+07.npy")[1] / eTF_lo^2
     end
 
-    # Reexpand merged data in powers of μ
-    ct_filename = "examples/counterterms/data_Z$(ct_string).jld2"
-    z, μ = UEG_MC.load_z_mu(param; ct_filename=ct_filename)
-    # Add Taylor factors to CT data
-    for (p, v) in z
-        z[p] = v / (factorial(p[2]) * factorial(p[3]))
-    end
-    for (p, v) in μ
-        μ[p] = v / (factorial(p[2]) * factorial(p[3]))
-    end
-    δz, δμ = CounterTerm.sigmaCT(max_order - n_min, μ, z; verbose=1)
-    println("Computed δμ: ", δμ)
-    c1bL = UEG_MC.chemicalpotential_renormalization_sosem(
-        merged_data,
-        δμ;
-        lowest_order=3,  # there is no second order for this observable
-        min_order=min_order,
-        max_order=max(max_order, max_order_plot),
-    )
-    # Test manual renormalization with exact lowest-order chemical potential
-    if max_order >= 4
-        # NOTE: For this observable, there is no second-order
-        δμ1_exact = UEG_MC.delta_mu1(param)  # = ReΣ₁[λ](kF, 0)
-        # C⁽¹ᵇ⁾₄ = 2(C⁽¹ᵇ⁾ᴸ_{4,0} + δμ₁ C⁽¹ᵇ⁾ᴸ_{3,1})
-        c1b4_manual =
-            2 *
-            (merged_data[(3, 0)] + merged_data[(4, 0)] + δμ1_exact * merged_data[(3, 1)])
-        c1b4L = 2 * (c1bL[3] + c1bL[4])
-        stdscores = stdscore.(c1b4L, c1b4_manual)
-        worst_score = argmax(abs, stdscores)
-        println("Exact δμ₁: ", δμ1_exact)
-        println("Computed δμ₁: ", δμ[1])
-        println(
-            "Worst standard score for total result to 4th " *
-            "order (auto vs exact+manual): $worst_score",
-        )
-    end
-
-    # Aggregate the full results for C⁽¹ᶜ⁾ up to order N
-    c1bL_total = UEG_MC.aggregate_orders(c1bL)
-
-    # partitions = collect(Iterators.flatten(partitions_list))
-
-    println(settings)
-    println(UEG.paraid(param))
-    println(res)
-    println(partitions)
-    # println(res_list)
-    # println(partitions_list)
-
-    if save
-        savename =
-            "results/data/rs=$(param.rs)_beta_ef=$(param.beta)_" *
-            "lambda=$(param.mass2)_$(intn_str)$(solver)$(ct_string)"
-        f = jldopen("$savename.jld2", "a+"; compress=true)
-        # NOTE: no bare result for c1b observable (accounted for in c1b0)
-        for N in min_order_plot:max_order
-            # Add RPA & RPA+FL results to data group
-            if N == 2
-                if plot_rpa_fl
-                    if haskey(f, "c1b_k=0")
-                        if haskey(f["c1b_k=0"], "RPA") &&
-                           haskey(f["c1b_k=0/RPA"], "neval=$(1e7)")
-                            @warn("replacing existing data for RPA, neval=$(1e7)")
-                            delete!(f["c1b_k=0/RPA"], "neval=$(1e7)")
-                        end
-                        if haskey(f["c1b_k=0"], "RPA+FL") &&
-                           haskey(f["c1b_k=0/RPA+FL"], "neval=$(1e7)")
-                            @warn("replacing existing data for RPA+FL, neval=$(1e7)")
-                            delete!(f["c1b_k=0/RPA+FL"], "neval=$(1e7)")
-                        end
-                    end
-                    # RPA
-                    meas_rpa = measurement.(delta_c1b_rpa, delta_c1b_rpa_err)
-                    # meas_rpa = measurement.(c1b_rpa, c1b_rpa_err)
-                    f["c1b_k=0/RPA/neval=$(1e7)/meas"] = meas_rpa
-                    f["c1b_k=0/RPA/neval=$(1e7)/param"] = param
-                    # RPA+FL
-                    meas_rpa_fl = measurement.(delta_c1b_rpa_fl, delta_c1b_rpa_fl_err)
-                    # meas_rpa_fl = measurement.(c1b_rpa_fl, c1b_rpa_fl_err)
-                    f["c1b_k=0/RPA+FL/neval=$(1e7)/meas"] = meas_rpa_fl
-                    f["c1b_k=0/RPA+FL/neval=$(1e7)/param"] = param
-                end
-            else
-                # num_eval = N == 5 ? neval5 : neval34
-                num_eval = neval
-                if haskey(f, "c1b_k=0") &&
-                   haskey(f["c1b_k=0"], "N=$N") &&
-                   haskey(f["c1b_k=0/N=$N"], "neval=$num_eval")
-                    @warn("replacing existing data for N=$N, neval=$num_eval")
-                    delete!(f["c1b_k=0/N=$N"], "neval=$num_eval")
-                end
-                # NOTE: Since C⁽¹ᵇ⁾ᴸ = C⁽¹ᵇ⁾ᴿ for the UEG, the
-                #       full class (b) moment is C⁽¹ᵇ⁾ = 2C⁽¹ᵇ⁾ᴸ.
-                f["c1b_k=0/N=$N/neval=$num_eval/meas"] = 2 * c1bL_total[N]
-                f["c1b_k=0/N=$N/neval=$num_eval/settings"] = settings
-                f["c1b_k=0/N=$N/neval=$num_eval/param"] = param
-            end
-        end
-    end
+    # Use LaTex fonts for plots
+    plt.rc("text"; usetex=true)
+    plt.rc("font"; family="serif")
 
     # Plot results vs order N
     fig, ax = plt.subplots()
@@ -275,24 +123,209 @@ function main()
             alpha=0.3,
         )
     end
-    # Get means and error bars from the results vs order
-    # NOTE: Since C⁽¹ᵇ⁾ᴸ = C⁽¹ᵇ⁾ᴿ for the UEG, the
-    #       full class (b) moment is C⁽¹ᵇ⁾ = 2C⁽¹ᵇ⁾ᴸ.
-    means =
-        [2 * Measurements.value.(c1bL_total[N][1]) for N in min_order:max_order_plot]
-    stdevs = [
-        2 * Measurements.uncertainty.(c1bL_total[N][1]) for
-        N in min_order:max_order_plot
-    ]
-    # Data gets noisy above 3rd loop order
-    marker = "o-"
-    ax.plot(orders, means, marker; markersize=4, color="C0", label="RPT ($solver)")
-    ax.fill_between(orders, means - stdevs, means + stdevs; color="C0", alpha=0.4)
+    for (expand_bare_interactions, intn_scheme_str) in
+        zip(intn_schemes, intn_scheme_strings)
+
+        # Distinguish results with fixed vs re-expanded bare interactions
+        intn_str = ""
+        if expand_bare_interactions == 2
+            intn_str = "no_bare_"
+        elseif expand_bare_interactions == 1
+            intn_str = "one_bare_"
+        end
+
+        # Use LaTex fonts for plots
+        plt.rc("text"; usetex=true)
+        plt.rc("font"; family="serif")
+
+        # Load the order 3-4 results from JLD2 (and μ data from csv, if applicable)
+        # if max_order == 5
+        #     max_together = 4
+        # else
+        #     max_together = max_order
+        # end
+        savename =
+            "results/data/c1bL_k=$(extK_load)_n=$(max_order)_rs=$(rs)_" *
+            "beta_ef=$(beta)_lambda=$(mass2)_" *
+            "neval=$(neval)_$(intn_str)$(solver)$(ct_string)"
+        settings, param, extK, partitions, res = jldopen("$savename.jld2", "a+") do f
+            key = "$(UEG.short(plotparam))"
+            return f[key]
+        end
+        @assert extK == 0.0
+
+        # # Load the fixed order 5 result from JLD2
+        # local kgrid5, res5, partitions5
+        # if max_order == 5
+        #     savename5 =
+        #         "results/data/c1bL_n=$(max_order)_rs=$(rs)_" *
+        #         "beta_ef=$(beta)_lambda=$(mass2)_" *
+        #         "neval=$(neval5)_$(intn_str)$(solver)$(ct_string)"
+        #     settings5, param5, kgrid5, partitions5, res5 = jldopen("$savename5.jld2", "a+") do f
+        #         key = "$(UEG.short(plotparam))"
+        #         return f[key]
+        #     end
+        # end
+
+        # Convert results to a Dict of measurements at each order with interaction counterterms merged
+        data = UEG_MC.restodict(res, partitions)
+        for (k, v) in data
+            data[k] = v / (factorial(k[2]) * factorial(k[3]))
+        end
+        # # Add 5th order results to data dict
+        # if max_order == 5
+        #     data5 = UEG_MC.restodict(res5, partitions5)
+        #     for (k, v) in data5
+        #         data5[k] = v / (factorial(k[2]) * factorial(k[3]))
+        #     end
+        #     merge!(data, data5)
+        # end
+        merged_data = CounterTerm.mergeInteraction(data)
+        println([k for (k, _) in merged_data])
+
+        # Reexpand merged data in powers of μ
+        ct_filename = "examples/counterterms/data_Z$(ct_string).jld2"
+        z, μ = UEG_MC.load_z_mu(param; ct_filename=ct_filename)
+        # Add Taylor factors to CT data
+        for (p, v) in z
+            z[p] = v / (factorial(p[2]) * factorial(p[3]))
+        end
+        for (p, v) in μ
+            μ[p] = v / (factorial(p[2]) * factorial(p[3]))
+        end
+        δz, δμ = CounterTerm.sigmaCT(max_order - n_min, μ, z; verbose=1)
+        println("Computed δμ: ", δμ)
+        c1bL = UEG_MC.chemicalpotential_renormalization_sosem(
+            merged_data,
+            δμ;
+            lowest_order=3,  # there is no second order for this observable
+            min_order=min_order,
+            max_order=max(max_order, max_order_plot),
+        )
+        # Test manual renormalization with exact lowest-order chemical potential
+        if max_order >= 4
+            # NOTE: For this observable, there is no second-order
+            δμ1_exact = UEG_MC.delta_mu1(param)  # = ReΣ₁[λ](kF, 0)
+            # C⁽¹ᵇ⁾₄ = 2(C⁽¹ᵇ⁾ᴸ_{4,0} + δμ₁ C⁽¹ᵇ⁾ᴸ_{3,1})
+            c1b4_manual =
+                2 * (
+                    merged_data[(3, 0)] +
+                    merged_data[(4, 0)] +
+                    δμ1_exact * merged_data[(3, 1)]
+                )
+            c1b4L = 2 * (c1bL[3] + c1bL[4])
+            stdscores = stdscore.(c1b4L, c1b4_manual)
+            worst_score = argmax(abs, stdscores)
+            println("Exact δμ₁: ", δμ1_exact)
+            println("Computed δμ₁: ", δμ[1])
+            println(
+                "Worst standard score for total result to 4th " *
+                "order (auto vs exact+manual): $worst_score",
+            )
+        end
+
+        # Aggregate the full results for C⁽¹ᶜ⁾ up to order N
+        c1bL_total = UEG_MC.aggregate_orders(c1bL)
+
+        # partitions = collect(Iterators.flatten(partitions_list))
+
+        println(settings)
+        println(UEG.paraid(param))
+        println(res)
+        println(partitions)
+        # println(res_list)
+        # println(partitions_list)
+
+        if save
+            savename =
+                "results/data/rs=$(param.rs)_beta_ef=$(param.beta)_" *
+                "lambda=$(param.mass2)_$(intn_str)$(solver)$(ct_string)"
+            f = jldopen("$savename.jld2", "a+"; compress=true)
+            # NOTE: no bare result for c1b observable (accounted for in c1b0)
+            for N in min_order_plot:max_order
+                # Add RPA & RPA+FL results to data group
+                if N == 2
+                    if plot_rpa_fl
+                        if haskey(f, "c1b_k=0")
+                            if haskey(f["c1b_k=0"], "RPA") &&
+                               haskey(f["c1b_k=0/RPA"], "neval=$(1e7)")
+                                @warn("replacing existing data for RPA, neval=$(1e7)")
+                                delete!(f["c1b_k=0/RPA"], "neval=$(1e7)")
+                            end
+                            if haskey(f["c1b_k=0"], "RPA+FL") &&
+                               haskey(f["c1b_k=0/RPA+FL"], "neval=$(1e7)")
+                                @warn("replacing existing data for RPA+FL, neval=$(1e7)")
+                                delete!(f["c1b_k=0/RPA+FL"], "neval=$(1e7)")
+                            end
+                        end
+                        # RPA
+                        meas_rpa = measurement.(delta_c1b_rpa, delta_c1b_rpa_err)
+                        # meas_rpa = measurement.(c1b_rpa, c1b_rpa_err)
+                        f["c1b_k=0/RPA/neval=$(1e7)/meas"] = meas_rpa
+                        f["c1b_k=0/RPA/neval=$(1e7)/param"] = param
+                        # RPA+FL
+                        meas_rpa_fl = measurement.(delta_c1b_rpa_fl, delta_c1b_rpa_fl_err)
+                        # meas_rpa_fl = measurement.(c1b_rpa_fl, c1b_rpa_fl_err)
+                        f["c1b_k=0/RPA+FL/neval=$(1e7)/meas"] = meas_rpa_fl
+                        f["c1b_k=0/RPA+FL/neval=$(1e7)/param"] = param
+                    end
+                else
+                    # num_eval = N == 5 ? neval5 : neval34
+                    num_eval = neval
+                    if haskey(f, "c1b_k=0") &&
+                       haskey(f["c1b_k=0"], "N=$N") &&
+                       haskey(f["c1b_k=0/N=$N"], "neval=$num_eval")
+                        @warn("replacing existing data for N=$N, neval=$num_eval")
+                        delete!(f["c1b_k=0/N=$N"], "neval=$num_eval")
+                    end
+                    # NOTE: Since C⁽¹ᵇ⁾ᴸ = C⁽¹ᵇ⁾ᴿ for the UEG, the
+                    #       full class (b) moment is C⁽¹ᵇ⁾ = 2C⁽¹ᵇ⁾ᴸ.
+                    f["c1b_k=0/N=$N/neval=$num_eval/meas"] = 2 * c1bL_total[N]
+                    f["c1b_k=0/N=$N/neval=$num_eval/settings"] = settings
+                    f["c1b_k=0/N=$N/neval=$num_eval/param"] = param
+                end
+            end
+        end
+
+        # Get means and error bars from the results vs order
+        # NOTE: Since C⁽¹ᵇ⁾ᴸ = C⁽¹ᵇ⁾ᴿ for the UEG, the
+        #       full class (b) moment is C⁽¹ᵇ⁾ = 2C⁽¹ᵇ⁾ᴸ.
+        means =
+            [2 * Measurements.value.(c1bL_total[N][1]) for N in min_order:max_order_plot]
+        stdevs = [
+            2 * Measurements.uncertainty.(c1bL_total[N][1]) for
+            N in min_order:max_order_plot
+        ]
+
+        # Check convergence
+        if expand_bare_interactions == 1
+            m_prev = means[1]
+            println("Percent difference btw. successive orders:")
+            for (N, m) in enumerate(means[2:end])
+                println("N=$N:\t", 100 * abs((m - m_prev) / m_prev))
+                m_prev = m
+            end
+        end
+
+        # Data gets noisy above 3rd loop order
+        marker = "o-"
+        ic = expand_bare_interactions  # 0, 1
+        ax.plot(
+            orders,
+            means,
+            marker;
+            markersize=4,
+            color="C$ic",
+            label="$(intn_scheme_str) ($solver)",
+        )
+        # ax.plot(orders, means, marker; markersize=4, color="C$ic", label="RPT ($solver)")
+        ax.fill_between(orders, means - stdevs, means + stdevs; color="C$ic", alpha=0.4)
+    end
     ax.legend(; loc="best")
     ax.set_xticks(orders)
     ax.set_xlim(minimum(orders), maximum(orders))
     ax.set_xlabel("Perturbation order \$N\$")
-    ax.set_ylabel("\$C^{(1b)}(k=0) \\,/\\, {\\epsilon}^{\\hspace{0.1em}2}_{\\mathrm{TF}}\$")
+    ax.set_ylabel("\$C^{(1b)}(k=0) \\,/\\, {\\epsilon}^{2}_{\\mathrm{TF}}\$")
     xloc = 1.6
     yloc = -0.085
     ydiv = -0.025
@@ -315,22 +348,23 @@ function main()
     #     "\${\\epsilon}_{\\mathrm{TF}}\\equiv\\frac{\\hbar^2 q^2_{\\mathrm{TF}}}{2 m_e}=2\\pi\\mathcal{N}_F\$ (a.u.)";
     #     fontsize=12,
     # )
-    if expand_bare_interactions == 0
-        plt.title("Using fixed bare Coulomb interactions \$V_1\$, \$V_2\$")
-    elseif expand_bare_interactions == 1
-        plt.title(
-            "Using single re-expanded Coulomb interaction \$V_1[V_\\lambda]\$, \$V_2\$",
-        )
-    elseif expand_bare_interactions == 2
-        plt.title(
-            "Using re-expanded Coulomb interactions \$V_1[V_\\lambda]\$, \$V_2[V_\\lambda]\$",
-        )
-    end
+    # if expand_bare_interactions == 0
+    #     plt.title("Using fixed bare Coulomb interactions \$V_1\$, \$V_2\$")
+    # elseif expand_bare_interactions == 1
+    #     plt.title(
+    #         "Using single re-expanded Coulomb interaction \$V_1[V_\\lambda]\$, \$V_2\$",
+    #     )
+    # elseif expand_bare_interactions == 2
+    #     plt.title(
+    #         "Using re-expanded Coulomb interactions \$V_1[V_\\lambda]\$, \$V_2[V_\\lambda]\$",
+    #     )
+    # end
     plt.tight_layout()
     fig.savefig(
-        "results/c1b/c1b_k=0_vs_N_rs=$(param.rs)_" *
-        "beta_ef=$(param.beta)_lambda=$(param.mass2)_" *
-        "neval=$(neval)_$(intn_str)$(solver)$(ct_string)_total.pdf",
+        "results/c1b/c1b_k=0_vs_N_rs=$(rs)_" *
+        "beta_ef=$(beta)_lambda=$(mass2)_" *
+        "neval=$(neval)_$(solver)$(ct_string)_comparison.pdf",
+        # "neval=$(neval)_$(intn_str)$(solver)$(ct_string)_total.pdf",
     )
     plt.close("all")
     return

@@ -87,8 +87,8 @@ function main()
     plot = true
 
     # Save to JLD2?
-    save = false
-    # save = true
+    # save = false
+    save = true
 
     # UEG parameters for MC integration
     loadparam = ParaMC(;

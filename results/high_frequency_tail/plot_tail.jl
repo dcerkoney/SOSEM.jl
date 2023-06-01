@@ -381,13 +381,13 @@ function main()
         wns / param.EF,
         imag(sigma_g0w0_wn_dynamic_2kF),
         "k";
-        label="\$G_0 W_0\$ (\$rs=1\$)",
+        label="\$G_0 W_0\$ (\$r_s=1\$)",
     )
     ax.plot(
         wn2s / param.EF,
         imag(sigma2_g0w0_wn_dynamic_2kF),
         "red";
-        label="\$G_0 W_0\$ (\$rs=2\$)",
+        label="\$G_0 W_0\$ (\$r_s=2\$)",
     )
     ax.plot(
         wns / param.EF,
@@ -440,12 +440,12 @@ function main()
     fig, ax = plt.subplots()
     # k = kF
     # ax.plot(wns / param.EF, param.EF * imag(sigma_g0w0_wn_dynamic_kF), "k"; label="\$G_0 W_0\$")
-    ax.plot(wns / param.EF, imag(sigma_g0w0_wn_dynamic_kF), "k"; label="\$G_0 W_0\$ (\$rs=1\$)")
+    ax.plot(wns / param.EF, imag(sigma_g0w0_wn_dynamic_kF), "k"; label="\$G_0 W_0\$ (\$r_s=1\$)")
     ax.plot(
         wn2s / param.EF,
         imag(sigma2_g0w0_wn_dynamic_kF),
         "red";
-        label="\$G_0 W_0\$ (\$rs=2\$)",
+        label="\$G_0 W_0\$ (\$r_s=2\$)",
     )
     ax.plot(
         wns / param.EF,
@@ -498,12 +498,12 @@ function main()
     fig, ax = plt.subplots()
     # k = 0
     # ax.plot(wns / param.EF, imag(sigma_g0w0_wn_dynamic_k0), "k"; label="\$G_0 W_0\$")
-    ax.plot(wns / param.EF, imag(sigma_g0w0_wn_dynamic_k0), "k"; label="\$G_0 W_0\$ (\$rs=1\$)")
+    ax.plot(wns / param.EF, imag(sigma_g0w0_wn_dynamic_k0), "k"; label="\$G_0 W_0\$ (\$r_s=1\$)")
     ax.plot(
         wn2s / param.EF,
         imag(sigma2_g0w0_wn_dynamic_k0),
         "red";
-        label="\$G_0 W_0\$ (\$rs=2\$)",
+        label="\$G_0 W_0\$ (\$r_s=2\$)",
     )
     ax.plot(
         wns / param.EF,

@@ -61,9 +61,9 @@ function main()
 
         ######### calculate Z factor ######################
         # For Z(k = 0)
-        kgrid = [0.0]
+        # kgrid = [0.0]
         # For μ & Z := Z(k = kF)
-        # kgrid = [para.kF]
+        kgrid = [para.kF]
         ngrid = [0, 1]
         # ngrid = [-1, 0]
 
@@ -106,8 +106,9 @@ function main()
         if isnothing(sigma) == false
             println("Current working directory: $(pwd())")
             println("Saving data to JLD2...")
-            jldopen("data_Z$(ct_string)_k0.jld2", "a+"; compress=true) do f
-	    #jldopen("data_Z$(ct_string)_kF.jld2", "a+"; compress=true) do f
+            # jldopen("data_Z$(ct_string)_k0.jld2", "a+"; compress=true) do f
+            jldopen("data_Z$(ct_string).jld2", "a+"; compress=true) do f
+                #jldopen("data_Z$(ct_string)_kF.jld2", "a+"; compress=true) do f
                 # jldopen("data_Z.jld2", "a+") do f
                 key = "$(UEG.short(para))"
                 if haskey(f, key)
