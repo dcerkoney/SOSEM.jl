@@ -60,9 +60,9 @@ function main()
 
         ######### calculate mass ratio ######################
         # k_points near k = 0
-        kgrid = para.kF * (δK * collect(-15:15))  # testing central difference
+        # kgrid = para.kF * (δK * collect(-15:15))  # testing central difference
         # k-points near k = kF
-        # kgrid = para.kF * (1 .+ δK * collect(0:30))
+        kgrid = para.kF * (1 .+ δK * collect(-15:15))  # testing central difference
         ngrid = [0]
 
         # Build diagrams
