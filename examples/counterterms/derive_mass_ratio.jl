@@ -25,7 +25,8 @@ mass2 = [0.1, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
 
 # We estimate the derivative wrt k using grid points kgrid[ikF] and kgrid[ikF + idk]
 # idks = 1:30
-idks = -15:15  # testing central difference
+idks = 1:15
+# idks = -15:15  # TODO: test central difference method
 
 # kgrid indices & spacings
 dks = δK * collect(idks)
@@ -78,15 +79,23 @@ function process_mass_ratio(datatuple, isSave; idk=1)
     # df = UEG_MC.fromFile(parafilename)
     para, ngrid, kgrid, data = datatuple
     printstyled(UEG.short(para); color=:yellow)
-    println()
-    println(kgrid)
+    # println()
+    # println(kgrid)
+
+    # # Get k=0 index
+    # ik0 = searchsortedfirst(kgrid, 0.0)
+    # println("ik0 = $ik0")
+
+    # Get Fermi index
+    ikF = searchsortedfirst(kgrid, para.kF)
+    println("ikF = $ikF")
 
     # Max order in RPT calculation
     max_order = para.order
     println("Max order: ", max_order)
 
     # Reexpand merged data in powers of μ
-    ct_filename = "data/data_Z$(ct_string)_opt.jld2"
+    ct_filename = "data/data_Z$(ct_string)_kF_opt.jld2"
     # ct_filename = "data/data_Z$(ct_string)_kF.jld2"
     # ct_filename = "data/data_Z$(ct_string)_k0.jld2"
     # ct_filename = "data/data_Z$(ct_string).jld2"
@@ -114,9 +123,9 @@ function process_mass_ratio(datatuple, isSave; idk=1)
         _data[k] = v / (factorial(k[2]) * factorial(k[3]))
     end
     merged_data = CounterTerm.mergeInteraction(_data)
-    println()
-    println([k for (k, _) in merged_data])
-    println(merged_data)
+    # println()
+    # println([k for (k, _) in merged_data])
+    # println(merged_data)
 
     # Renormalize self-energy data (ngrid, kgrid) to get Sigma to order N in RPT
     Σ_renorm = CounterTerm.chemicalpotential_renormalization(max_order, merged_data, δμ)
@@ -126,8 +135,8 @@ function process_mass_ratio(datatuple, isSave; idk=1)
     # Aggregate the full results for Σₓ up to order N
     # Σ_total = UEG_MC.aggregate_orders(Σ_renorm)
 
-    println()
-    println(Σ_renorm)
+    # println()
+    # println(Σ_renorm)
     # println(Σ_total)
 
     # Compute shifts δm and δs for each order n in RPT
@@ -140,19 +149,18 @@ function process_mass_ratio(datatuple, isSave; idk=1)
         # NOTE: n1 = 0, k1 = kF, k2 = kF * (1 + δK), k2 - k1 = kF * δK
         # idk = 1
         @assert idk ∈ idks
-        @assert kgrid[1] ≈ para.kF
-        @assert kgrid[2] ≈ para.kF + para.kF * δK
-        @assert kgrid[1 + idk] - kgrid[1] ≈ para.kF * dks[idk]
+        @assert kgrid[ikF] ≈ para.kF
+        @assert kgrid[ikF + 1] ≈ para.kF + para.kF * δK
+        @assert kgrid[ikF + idk] - kgrid[ikF] ≈ para.kF * dks[idk]
         # ds_dk = (real(Σ_n[1, 1]) - real(Σ_n[1, 1 + idk])) / (kgrid[1] - kgrid[1 + idk])
-        ds_dk = (real(Σ_n[1, 1 + idk]) - real(Σ_n[1, 1])) / (kgrid[1 + idk] - kgrid[1])
+        ds_dk =
+            (real(Σ_n[1, ikF + idk]) - real(Σ_n[1, ikF])) / (kgrid[ikF + idk] - kgrid[ikF])
         dm = (para.me / para.kF) * ds_dk
         # println("ds_dk = ", ds_dk)
         # Use existing Z-factor data
         ds = δzi[n]
         # Recompute Z-factor from new Σ run
         # ds = (para.β / 2π) * (imag(Σ_n[2, 1]) - imag(Σ_n[1, 1])) # = zfactor(Σ_n, para.β) = δ(1/z)
-        # push!(δm, dm)
-        # push!(δs, ds)
         # NOTE: Extra minus sign on definition of Σ
         push!(δm, -dm)
         push!(δs, -ds)
@@ -170,7 +178,6 @@ function process_mass_ratio(datatuple, isSave; idk=1)
     for i in eachindex(δm)
         println(" • δm_$i = $(δm[i])")
     end
-    return
 
     # The inverse Z-factor is (1 - δs[ξ])
     zinv = Measurement{Float64}[1; accumulate(+, δzi; init=1)]

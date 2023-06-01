@@ -1,8 +1,10 @@
+using CodecZlib
 using ElectronLiquid
 using ElectronGas
 using Interpolations
 using JLD2
 using Measurements
+using Parameters
 using PyCall
 using SOSEM
 
@@ -19,20 +21,21 @@ end
 
 function main()
     # Change to project directory
-    if haskey(ENV, "SOSEM_CEPH")
-        cd(ENV["SOSEM_CEPH"])
-    elseif haskey(ENV, "SOSEM_HOME")
-        cd(ENV["SOSEM_HOME"])
-    end
+    # if haskey(ENV, "SOSEM_CEPH")
+    #     cd(ENV["SOSEM_CEPH"])
+    # elseif haskey(ENV, "SOSEM_HOME")
+    #     cd(ENV["SOSEM_HOME"])
+    # end
 
     rs = 2.0
     beta = 40.0
-    neval = 1e9
-    lambdas = [0.1, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
+    neval = 1e10
+    # lambdas = [0.1, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
+    lambdas = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
     # lambdas = [1.0, 3.0]
     solver = :mcmc
 
-    min_order = 1
+    min_order = 0
     max_order = 4
 
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
@@ -59,7 +62,22 @@ function main()
     end
 
     # Use derivative estimate with δK = dks[idk] (grid points kgrid[ikF] and kgrid[ikF + idk])
-    idk = 3  # From lambda = 0.4 stationarity test (δK = 0.015)
+    idk = 3  # From lambda = 0.4 stationarity test (δK = 0.015kF)
+    # idk = 6  # Try the same grid spacing as rs=1 (δK = 0.03kF)
+    # idk = 8  # From lambda = 0.4 stationarity test (δK_4 = 0.04kF)
+
+    # Momentum spacing for finite-difference derivative of Sigma (in units of para.kF)
+    δK = 0.005  # spacings n*δK = 0.15–0.3 not relevant for rs = 1.0 => reduce δK by half
+
+    # We estimate the derivative wrt k using grid points kgrid[ikF] and kgrid[ikF + idk]
+    # idks = 1:30
+    idks = 1:15
+    # idks = -15:15  # TODO: test central difference method
+
+    # kgrid indices & spacings
+    dks = δK * collect(idks)
+
+    dk = dks[idk]
 
     # Use LaTex fonts for plots
     plt.rc("text"; usetex=true)
@@ -89,43 +107,60 @@ function main()
         println("done!")
         @assert param.order == max_order
     end
-    mass_ratios_N_vs_lambda = zip(mass_ratios_lambda_vs_N...)
+    @assert allequal(length(row) for row in mass_ratios_lambda_vs_N)
+    mass_ratios_N_vs_lambda = [
+        [mass_ratios_lambda_vs_N[i][j] for i in eachindex(mass_ratios_lambda_vs_N)] for
+        j in eachindex(mass_ratios_lambda_vs_N[1])
+    ]
+
+    # mass_ratios_N_vs_lambda = collect(eachrow(reduce(hcat, mass_ratios_lambda_vs_N)))
+    # mass_ratios_N_vs_lambda = collect(zip(mass_ratios_lambda_vs_N...))
     println("mass_ratios_lambda_vs_N:\n$mass_ratios_lambda_vs_N")
     println("\nmass_ratios_N_vs_lambda:\n$mass_ratios_N_vs_lambda")
 
     # Plot the results for each order ξ vs lambda
     fig, ax = plt.subplots()
     # ax.axvline(1.0; linestyle="--", color="dimgray", label="\$\\lambda^\\star = 1\$")
-    for (i, N) in enumerate(min_order:max_order_plot)
+    # for (i, N) in enumerate(0:4)
+    for (i, N) in enumerate(0:4)
+        N == 0 && continue  # Ignore zeroth order
         # Get means and error bars from the result up to this order
-        means = Measurements.value(mass_ratios_N_vs_lambda[i])
-        stdevs = Measurements.uncertainty(mass_ratios_N_vs_lambda[i])
-        ax.plot(lambdas, means, "o-"; color="C$i", markersize=3, label="\$N=$N\$ ($solver)")
+        means = Measurements.value.(mass_ratios_N_vs_lambda[i])
+        stdevs = Measurements.uncertainty.(mass_ratios_N_vs_lambda[i])
+        ax.plot(
+            lambdas,
+            means,
+            "o-";
+            color="C$i",
+            markersize=3,
+            label="\$N=$N\$ ($solver)",
+        )
         ax.fill_between(lambdas, (means - stdevs), (means + stdevs); color="C$i", alpha=0.3)
     end
-    ax.set_xlim(0.1, 2.0)
-    ax.legend(; loc="best")
+    # ax.set_xlim(0.1, 2.0)
+    ax.set_ylim(0.85, 1.06)
+    ax.legend(; loc="lower right")
     ax.set_xlabel("\$\\lambda\$ (Ry)")
     ax.set_ylabel("\$m^\\star / m\$")
-    xloc = 1.325
-    yloc = -0.54
-    ydiv = -0.025
-    # ax.text(
-    #     xloc,
-    #     yloc,
-    #     "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta), N_{\\mathrm{eval}} = \\mathrm{$(5e9)},\$";
-    #     fontsize=14,
-    # )
-    # ax.text(
-    #     xloc,
-    #     yloc + ydiv,
-    #     "\${\\epsilon}_{\\mathrm{TF}}\\equiv\\frac{\\hbar^2 q^2_{\\mathrm{TF}}}{2 m_e}=2\\pi\\mathcal{N}_F\$ (a.u.)";
-    #     fontsize=12,
-    # )
+    xloc = 1.0
+    yloc = 1.0375
+    ydiv = -0.02
+    ax.text(
+        xloc,
+        yloc,
+        "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta)\$";
+        fontsize=14,
+    )
+    ax.text(
+        xloc,
+        yloc + ydiv,
+        "\$N_{\\mathrm{eval}} = \\mathrm{$(neval)}, \\delta K = $(dk) k_F\$";
+        fontsize=14,
+    )
     plt.tight_layout()
     fig.savefig(
         "../../results/effective_mass_ratio/effective_mass_ratio_rs=$(param.rs)_" *
-        "beta_ef=$(param.beta)_neval=$(neval)_$(intn_str)$(solver)_$(ct_string)_vs_lambda.pdf",
+        "beta_ef=$(param.beta)_neval=$(neval)_$(intn_str)$(solver)_$(ct_string)_deltaK=$(dk)kF_vs_lambda.pdf",
     )
     plt.close("all")
     return
