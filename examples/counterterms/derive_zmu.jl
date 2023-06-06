@@ -21,10 +21,19 @@ end
 # For lambda optimization
 order = [4]  # C^{(1)}_{N≤5} includes CTs up to 4th order
 beta = [40.0]
-rs = [2.0]
+# rs = [2.0]
+# mass2 = [1.75]
 # mass2 = [1.5, 1.75, 2.0]
-mass2 = [1.75]
 # mass2 = [0.1, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
+### rs = 3 ###
+# rs = [3.0]
+# mass2 = [2.0, 2.5, 3.0, 3.5, 4.0]
+### rs = 4 ###
+# rs = [4.0]
+# mass2 = [3.0, 3.5, 4.0, 4.5, 5.0]
+### rs = 5 ###
+rs = [5.0]
+mass2 = [4.0, 4.5, 5.0, 5.5, 6.0]
 
 # Enable/disable interaction and chemical potential counterterms
 renorm_mu = true
@@ -32,11 +41,6 @@ renorm_lambda = true
 
 # Remove Fock insertions?
 isFock = false
-
-# Select finite difference method
-# method = "backward"
-method = "forward"
-# method = "central"
 
 # Distinguish results with different counterterm schemes
 ct_string = (renorm_mu || renorm_lambda) ? "_with_ct" : ""
@@ -48,36 +52,23 @@ if renorm_lambda
 end
 
 # const filename = "data/data_Z$(ct_string).jld2"
-const filename = "data/data_Z$(ct_string)_kF.jld2"
-# const filename = "data/data_Z$(ct_string)_kF_opt.jld2"
+# const filename = "data/data_Z$(ct_string)_kF.jld2"
+const filename = "data/data_Z$(ct_string)_kF_opt.jld2"
 const parafilename = "data/para.csv"
 
-function zfactor(data, β; method="backward", verbose=false)
-    @assert method in ["backward", "forward", "central"]
-    @assert size(data)[1] == 3 "Expect ngrid = [-1, 0, 1]!"
-    verbose && println("Calculating zfactor shift using $method FD method")
-    if method == "backward"
-        dsigma_dw = @. (imag(data[2, 1]) - imag(data[1, 1])) / (2π / β)  # [-1, 0]
-    elseif method == "forward"
-        dsigma_dw = @. (imag(data[3, 1]) - imag(data[2, 1])) / (2π / β)  # [0, 1]
-    else # method == "central"
-        dsigma_dw = @. (imag(data[3, 1]) - imag(data[1, 1])) / (4π / β)  # [-1, 1]
-    end
-    return dsigma_dw
-end
-
-function zfactor_old(data, β; verbose=false)
-    @assert size(data)[1] == 2 "Expect ngrid = [0, 1]!"
-    verbose && println("Calculating zfactor shift using forward FD method")
-    # return @. (imag(data[2, 1]) - imag(data[1, 1])) / (2π / β)  # [-1, 0]
-    return @. (imag(data[3, 1]) - imag(data[2, 1])) / (2π / β)  # [0, 1]
+"""
+Calculate the Z-factor shift using finite-difference methods 
+(assumes the first two grid points of data in dimension 1 are [-1, 0] or [0, 1]).
+"""
+function zfactor(data, β)
+    return @. (imag(data[2, 1]) - imag(data[1, 1])) / (2π / β)
 end
 
 function mu(data)
     return real(data[1, 1])
 end
 
-function process(datatuple, isSave; method="backward")
+function process(datatuple, isSave)
     print("processing...")
     df = UEG_MC.fromFile(parafilename)
     para, ngrid, kgrid, data = datatuple
@@ -85,11 +76,16 @@ function process(datatuple, isSave; method="backward")
     println()
 
     # Using Z = Z_kF for all k
-    @assert kgrid == [para.kF] "Expect kgrid = [kF]!"
+    @assert kgrid == [para.kF] "Expect kgrid = [kF], kgrid = $kgrid is not supported!"
 
     # Specializing Z-factor calculation based on ngrid
-    if ngrid ∉ [[0, 1], [-1, 0, 1]]
-        error("ngrid = $ngrid not supported!")
+    if ngrid ∉ [[-1, 0], [0, 1], [-1, 0, 1]]
+        error("Expect ngrid = [-1, 0] or [-1, 0, 1], ngrid = $ngrid is not supported!")
+    end
+    if ngrid == [0, 1]
+        @warn "ngrid = $ngrid is deprecated, use [-1, 0] instead!"
+    elseif ngrid == [-1, 0, 1]
+        @warn "Using [-1, 0] data for Z-factor calculation, ignoring last grid point!"
     end
 
     _mu = Dict()
@@ -98,22 +94,11 @@ function process(datatuple, isSave; method="backward")
     end
     _z = Dict()
     for (p, val) in data
-        if ngrid == [-1, 0, 1]
-            zres = zfactor(val, para.β; method=method, verbose=true)
-        else
-            zres = zfactor_old(val, para.β; verbose=true)
-        end
-        _z[p] = zres / (factorial(p[2]) * factorial(p[3]))
+        _z[p] = zfactor(val, para.β) / (factorial(p[2]) * factorial(p[3]))
     end
 
     for p in sort([k for k in keys(data)])
-        if ngrid == [-1, 0, 1]
-            zprint = zfactor(data[p], para.β; method=method)
-            println("$p: μ = $(mu(data[p]))   z = $zprint")
-        else
-            zprint = zfactor_old(data[p], para.β)
-            println("$p: μ = $(mu(data[p]))   z = $zprint")
-        end
+        println("$p: μ = $(mu(data[p]))   z = $(zfactor(data[p], para.β))")
     end
 
     dzi, _, _ = CounterTerm.sigmaCT(para.order, _mu, _z; isfock=isFock, verbose=1)
@@ -174,7 +159,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         kF = para.kF
         for key in keys(f)
             if UEG.paraid(f[key][1]) == UEG.paraid(para)
-                process(f[key], isSave; method=method)
+                process(f[key], isSave)
             end
         end
     end

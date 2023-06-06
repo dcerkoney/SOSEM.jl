@@ -27,12 +27,21 @@ function main()
     #     cd(ENV["SOSEM_HOME"])
     # end
 
-    rs = 2.0
+    # rs = 2.0
     beta = 40.0
     neval = 1e10
     # lambdas = [0.1, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
-    lambdas = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
+    # lambdas = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
     # lambdas = [1.0, 3.0]
+    ### rs = 3 ###
+    # rs = 3.0
+    # lambdas = [2.0, 2.5, 3.0, 3.5, 4.0]
+    ### rs = 4 ###
+    # rs = 4.0
+    # lambdas = [3.0, 3.5, 4.0, 4.5, 5.0]
+    ### rs = 5 ###
+    rs = 5.0
+    lambdas = [4.0, 4.5, 5.0, 5.5, 6.0]
     solver = :mcmc
 
     min_order = 0
@@ -62,8 +71,8 @@ function main()
     end
 
     # Use derivative estimate with δK = dks[idk] (grid points kgrid[ikF] and kgrid[ikF + idk])
-    idk = 3  # From lambda = 0.4 stationarity test (δK = 0.015kF)
-    # idk = 6  # Try the same grid spacing as rs=1 (δK = 0.03kF)
+    # idk = 3  # From lambda = 0.4 stationarity test (δK = 0.015kF)
+    idk = 6  # Try the same grid spacing as rs=1 (δK = 0.03kF)
     # idk = 8  # From lambda = 0.4 stationarity test (δK_4 = 0.04kF)
 
     # Momentum spacing for finite-difference derivative of Sigma (in units of para.kF)
@@ -138,13 +147,28 @@ function main()
         ax.fill_between(lambdas, (means - stdevs), (means + stdevs); color="C$i", alpha=0.3)
     end
     # ax.set_xlim(0.1, 2.0)
-    ax.set_ylim(0.85, 1.06)
+    if rs == 3.0
+        yloc = 1.0375
+        ydiv = -0.02
+        ax.set_ylim(0.9, 1.06)
+    elseif rs == 4.0
+        yloc = 1.0275
+        ydiv = -0.0125
+        ax.set_ylim(0.95, 1.04)
+    elseif rs == 5.0
+        yloc = 1.005
+        ydiv = -0.003
+        ax.set_ylim(0.9875, 1.01)
+    else
+        yloc = 1.0375
+        ydiv = -0.02
+        ax.set_ylim(0.85, 1.06)
+    end
     ax.legend(; loc="lower right")
     ax.set_xlabel("\$\\lambda\$ (Ry)")
     ax.set_ylabel("\$m^\\star / m\$")
-    xloc = 1.0
-    yloc = 1.0375
-    ydiv = -0.02
+    # xloc = 1.0
+    xloc = rs
     ax.text(
         xloc,
         yloc,

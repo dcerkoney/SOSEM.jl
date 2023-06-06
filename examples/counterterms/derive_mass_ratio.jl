@@ -17,10 +17,19 @@ end
 ############################################
 order = [4]  # C^{(1)}_{N≤5} includes CTs up to 3rd order
 beta = [40.0]
-rs = [2.0]
+# rs = [2.0]
+# mass2 = [1.75]
 # mass2 = [1.5, 1.75, 2.0]
-mass2 = [1.75]
 # mass2 = [0.1, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
+### rs = 3 ###
+# rs = [3.0]
+# mass2 = [2.0, 2.5, 3.0, 3.5, 4.0]
+### rs = 4 ###
+# rs = [4.0]
+# mass2 = [3.0, 3.5, 4.0, 4.5, 5.0]
+### rs = 5 ###
+rs = [5.0]
+mass2 = [4.0, 4.5, 5.0, 5.5, 6.0]
 
 # Momentum spacing for finite-difference derivative of Sigma (in units of para.kF)
 δK = 0.005  # spacings n*δK = 0.15–0.3 not relevant for rs = 1.0 => reduce δK by half
@@ -28,7 +37,6 @@ mass2 = [1.75]
 # We estimate the derivative wrt k using grid points kgrid[ikF] and kgrid[ikF + idk]
 # idks = 1:30
 idks = 1:15
-# idks = -15:15  # TODO: test central difference method
 
 # kgrid indices & spacings
 dks = δK * collect(idks)
@@ -76,8 +84,10 @@ const filename = "data/data_mass_ratio$(ct_string)_kF_gridtest.jld2"
 const parafilename = "data/para.csv"
 
 # function process_mass_ratio(datatuple, δzi, δμ, isSave)
-function process_mass_ratio(datatuple, isSave; idk=1)
+function process_mass_ratio(datatuple, isSave; idk=1, method=:forward)
     print("Processing mass ratio...")
+    @assert idk ∈ idks
+    @assert method in [:forward, :central]
     # df = UEG_MC.fromFile(parafilename)
     para, ngrid, kgrid, data = datatuple
     printstyled(UEG.short(para); color=:yellow)
@@ -97,8 +107,8 @@ function process_mass_ratio(datatuple, isSave; idk=1)
     println("Max order: ", max_order)
 
     # Reexpand merged data in powers of μ
-    # ct_filename = "data/data_Z$(ct_string)_kF_opt.jld2"
-    ct_filename = "data/data_Z$(ct_string)_kF.jld2"
+    ct_filename = "data/data_Z$(ct_string)_kF_opt.jld2"
+    # ct_filename = "data/data_Z$(ct_string)_kF.jld2"
     # ct_filename = "data/data_Z$(ct_string)_k0.jld2"
     # ct_filename = "data/data_Z$(ct_string).jld2"
     z, μ = UEG_MC.load_z_mu(para; ct_filename=ct_filename, parafilename=parafilename)
@@ -154,9 +164,21 @@ function process_mass_ratio(datatuple, isSave; idk=1)
         @assert kgrid[ikF] ≈ para.kF
         @assert kgrid[ikF + 1] ≈ para.kF + para.kF * δK
         @assert kgrid[ikF + idk] - kgrid[ikF] ≈ para.kF * dks[idk]
-        # ds_dk = (real(Σ_n[1, 1]) - real(Σ_n[1, 1 + idk])) / (kgrid[1] - kgrid[1 + idk])
-        ds_dk =
-            (real(Σ_n[1, ikF + idk]) - real(Σ_n[1, ikF])) / (kgrid[ikF + idk] - kgrid[ikF])
+
+        # Forward difference method
+        if method == :forward
+            ds_dk =
+                (real(Σ_n[1, ikF + idk]) - real(Σ_n[1, ikF])) /
+                (kgrid[ikF + idk] - kgrid[ikF])
+        else # central difference method
+            @assert kgrid[ikF - 1] ≈ para.kF - para.kF * δK
+            @assert kgrid[ikF] - kgrid[ikF - idk] ≈ para.kF * dks[idk]
+            # TODO: test central difference method for ds_dk
+            ds_dk =
+                (real(Σ_n[1, ikF + idk]) - real(Σ_n[1, ikF - idk])) /
+                (kgrid[ikF + idk] - kgrid[ikF - idk])
+        end
+
         dm = (para.me / para.kF) * ds_dk
         # println("ds_dk = ", ds_dk)
         # Use existing Z-factor data
