@@ -42,6 +42,7 @@ Manifest.toml
 *.dvi
 
 # Misc directories
+archives
 backups
 submit
 notes
