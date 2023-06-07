@@ -26,6 +26,59 @@ function load_csv(filename)
     return xdata, ydata
 end
 
+function get_Fs(rs)
+    if rs > 5
+        return get_Fs_DMC(rs)
+    else
+        return get_Fs_PW(rs)
+    end
+end
+
+"""
+Get the symmetric l=0 Fermi-liquid parameter F⁰ₛ from DMC data of 
+Moroni, Ceperley & Senatore (1995) [Phys. Rev. Lett. 75, 689].
+"""
+function get_Fs_DMC(rs)
+    SOSEM.@todo
+end
+
+"""
+Get the symmetric l=0 Fermi-liquid parameter F⁰ₛ via interpolation of the 
+compressibility ratio data of Perdew & Wang (1992) [Phys. Rev. B 45, 13244].
+"""
+function get_Fs_PW(rs)
+    if rs ∉ [1, 5]
+        @warn "The Perdew-Wang interpolation for Fs may " *
+              "be inaccurate outside the metallic regime!"
+    end
+    kappa0_over_kappa = 1.0025 - 0.1721rs - 0.0036rs^2
+    # F⁰ₛ = κ₀/κ - 1
+    return kappa0_over_kappa - 1.0
+end
+
+function get_sigma_rpa(param::ParaMC)
+    
+end
+
+function get_sigma_rpa_fl(param::ParaMC)
+    # Σ = SelfEnergy.G0W0(
+    #     para;
+    #     Euv=100 * para.EF,
+    #     maxK=8 * para.kF,
+    #     Nk=16,
+    #     order=8,
+    #     minK=1e-8 * para.kF,
+    #     int_type=:ko_const,
+    #     Fs=-fp,
+    #     Fa=-0.0,
+    # )
+    # zz = SelfEnergy.zfactor(Σ)
+
+    # sigdyn, sigint = SelfEnergy.G0W0(param.basic, Λgrid; int_type=:ko_const, Fs=-1)
+    # ds_dw = SelfEnergy.zfactor(sigdyn, param)
+    return sigdyn, sigint
+end
+
 function main()
     # Change to project directory
     if haskey(ENV, "SOSEM_CEPH")
@@ -440,7 +493,12 @@ function main()
     fig, ax = plt.subplots()
     # k = kF
     # ax.plot(wns / param.EF, param.EF * imag(sigma_g0w0_wn_dynamic_kF), "k"; label="\$G_0 W_0\$")
-    ax.plot(wns / param.EF, imag(sigma_g0w0_wn_dynamic_kF), "k"; label="\$G_0 W_0\$ (\$r_s=1\$)")
+    ax.plot(
+        wns / param.EF,
+        imag(sigma_g0w0_wn_dynamic_kF),
+        "k";
+        label="\$G_0 W_0\$ (\$r_s=1\$)",
+    )
     ax.plot(
         wn2s / param.EF,
         imag(sigma2_g0w0_wn_dynamic_kF),
@@ -498,7 +556,12 @@ function main()
     fig, ax = plt.subplots()
     # k = 0
     # ax.plot(wns / param.EF, imag(sigma_g0w0_wn_dynamic_k0), "k"; label="\$G_0 W_0\$")
-    ax.plot(wns / param.EF, imag(sigma_g0w0_wn_dynamic_k0), "k"; label="\$G_0 W_0\$ (\$r_s=1\$)")
+    ax.plot(
+        wns / param.EF,
+        imag(sigma_g0w0_wn_dynamic_k0),
+        "k";
+        label="\$G_0 W_0\$ (\$r_s=1\$)",
+    )
     ax.plot(
         wn2s / param.EF,
         imag(sigma2_g0w0_wn_dynamic_k0),

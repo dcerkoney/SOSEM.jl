@@ -22,14 +22,14 @@ beta = [40.0]
 # mass2 = [1.5, 1.75, 2.0]
 # mass2 = [0.1, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
 ### rs = 3 ###
-# rs = [3.0]
-# mass2 = [2.0, 2.5, 3.0, 3.5, 4.0]
+# rs = 3.0
+# mass2 = [1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 3.5, 4.0, 5.0, 6.0]
 ### rs = 4 ###
-# rs = [4.0]
-# mass2 = [3.0, 3.5, 4.0, 4.5, 5.0]
+# rs = 4.0
+# mass2 = [2.0, 2.25, 2.5, 2.75, 3.0, 3.5, 4.0, 4.5, 5.0, 6.0, 7.0]
 ### rs = 5 ###
-rs = [5.0]
-mass2 = [4.0, 4.5, 5.0, 5.5, 6.0]
+rs = 5.0
+mass2 = [3.0, 3.25, 3.5, 3.75, 4.0, 4.5, 5.0, 5.5, 6.0, 7.0, 8.0]
 
 # Momentum spacing for finite-difference derivative of Sigma (in units of para.kF)
 δK = 0.005  # spacings n*δK = 0.15–0.3 not relevant for rs = 1.0 => reduce δK by half
@@ -40,6 +40,9 @@ idks = 1:15
 
 # kgrid indices & spacings
 dks = δK * collect(idks)
+
+# Which finite difference method for numerical k derivative?
+method = :forward
 
 ############################################
 ############################################
@@ -303,7 +306,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 println("Found matching key, processing...")
                 # process_mass_ratio(f[key], isSave)
                 for idk in idks
-                    mass_ratio = process_mass_ratio(f[key], isSave; idk=idk)
+                    mass_ratio = process_mass_ratio(f[key], isSave; idk=idk, method=method)
                     push!(mass_ratios, mass_ratio)
                 end
                 println("done!")

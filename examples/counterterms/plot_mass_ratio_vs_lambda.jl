@@ -27,21 +27,21 @@ function main()
     #     cd(ENV["SOSEM_HOME"])
     # end
 
-    # rs = 2.0
     beta = 40.0
     neval = 1e10
+    # rs = 2.0
     # lambdas = [0.1, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
     # lambdas = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
     # lambdas = [1.0, 3.0]
     ### rs = 3 ###
     # rs = 3.0
-    # lambdas = [2.0, 2.5, 3.0, 3.5, 4.0]
+    # lambdas = [1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 3.5, 4.0, 5.0, 6.0]
     ### rs = 4 ###
     # rs = 4.0
-    # lambdas = [3.0, 3.5, 4.0, 4.5, 5.0]
+    # lambdas = [2.0, 2.25, 2.5, 2.75, 3.0, 3.5, 4.0, 4.5, 5.0, 6.0, 7.0]
     ### rs = 5 ###
     rs = 5.0
-    lambdas = [4.0, 4.5, 5.0, 5.5, 6.0]
+    lambdas = [3.0, 3.25, 3.5, 3.75, 4.0, 4.5, 5.0, 5.5, 6.0, 7.0, 8.0]
     solver = :mcmc
 
     min_order = 0
@@ -71,9 +71,9 @@ function main()
     end
 
     # Use derivative estimate with δK = dks[idk] (grid points kgrid[ikF] and kgrid[ikF + idk])
+    idk = 1
     # idk = 3  # From lambda = 0.4 stationarity test (δK = 0.015kF)
-    idk = 6  # Try the same grid spacing as rs=1 (δK = 0.03kF)
-    # idk = 8  # From lambda = 0.4 stationarity test (δK_4 = 0.04kF)
+    # idk = 6  # Try the same grid spacing as rs=1 (δK = 0.03kF)
 
     # Momentum spacing for finite-difference derivative of Sigma (in units of para.kF)
     δK = 0.005  # spacings n*δK = 0.15–0.3 not relevant for rs = 1.0 => reduce δK by half

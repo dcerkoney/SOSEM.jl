@@ -27,11 +27,15 @@ function main()
     end
 
     rs = 1.0
-    beta = 40.0
     mass2 = 1.0
+    # rs = 2.0
+    # mass2 = 0.4
+    beta = 40.0
     solver = :vegasmc
     # expand_bare_interactions = 1          # single V[V_λ] scheme
     # expand_bare_interactions = 0          # bare V, V (non-reexpanded) scheme
+    # intn_schemes = [1]  # compare schemes
+    # intn_scheme_strings = ["\$V, V[V_\\lambda]\$"]
     intn_schemes = [0, 1]  # compare schemes
     intn_scheme_strings = ["\$V, V\$", "\$V, V[V_\\lambda]\$"]
 
@@ -41,8 +45,10 @@ function main()
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
     n_min = 3  # True minimal loop order for this observable
     min_order = 3
+    # max_order = 5
     max_order = 6
     min_order_plot = 2
+    # max_order_plot = 5
     max_order_plot = 6
     @assert max_order ≥ 3
 
@@ -302,7 +308,12 @@ function main()
             m_prev = means[1]
             println("Percent difference btw. successive orders:")
             for (N, m) in enumerate(means[2:end])
-                println("N=$N:\t", 100 * abs((m - m_prev) / m_prev))
+                this_order = N + min_order
+                prev_order = this_order - 1
+                println(
+                    "N=$(prev_order),$(this_order):\t",
+                    100 * abs((m - m_prev) / m_prev),
+                )
                 m_prev = m
             end
         end
@@ -326,28 +337,39 @@ function main()
     ax.set_xlim(minimum(orders), maximum(orders))
     ax.set_xlabel("Perturbation order \$N\$")
     ax.set_ylabel("\$C^{(1b)}(k=0) \\,/\\, {\\epsilon}^{2}_{\\mathrm{TF}}\$")
-    xloc = 1.6
-    yloc = -0.085
-    ydiv = -0.025
-    # ax.text(
-    #     xloc,
-    #     yloc,
-    #     "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
-    #     fontsize=14,
-    # )
-    # ax.text(
-    #     xloc,
-    #     yloc + ydiv,
-    #     "\$\\lambda = $(mass2)\\epsilon_{\\mathrm{Ry}},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)},\$";
-    #     # "\$\\lambda = \\frac{\\epsilon_{\\mathrm{Ry}}}{10},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)},\$";
-    #     fontsize=14,
-    # )
-    # ax.text(
-    #     xloc,
-    #     yloc + 2 * ydiv,
-    #     "\${\\epsilon}_{\\mathrm{TF}}\\equiv\\frac{\\hbar^2 q^2_{\\mathrm{TF}}}{2 m_e}=2\\pi\\mathcal{N}_F\$ (a.u.)";
-    #     fontsize=12,
-    # )
+    xloc = 3.25
+    if rs == 1.0
+        yloc = -0.1675
+        ydiv = -0.0125
+    elseif rs == 2.0
+        yloc = -0.25
+        ydiv = -0.025
+    else
+        yloc = Inf
+        ydiv = 0.0
+    end
+    # xloc = 1.6
+    # yloc = -0.085
+    # ydiv = -0.025
+    ax.text(
+        xloc,
+        yloc,
+        "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
+        fontsize=14,
+    )
+    ax.text(
+        xloc,
+        yloc + ydiv,
+        "\$\\lambda = $(mass2)\\epsilon_{\\mathrm{Ry}},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)},\$";
+        # "\$\\lambda = \\frac{\\epsilon_{\\mathrm{Ry}}}{10},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)},\$";
+        fontsize=14,
+    )
+    ax.text(
+        xloc,
+        yloc + 2 * ydiv,
+        "\${\\epsilon}_{\\mathrm{TF}}\\equiv\\frac{\\hbar^2 q^2_{\\mathrm{TF}}}{2 m_e}=2\\pi\\mathcal{N}_F\$ (a.u.)";
+        fontsize=12,
+    )
     # if expand_bare_interactions == 0
     #     plt.title("Using fixed bare Coulomb interactions \$V_1\$, \$V_2\$")
     # elseif expand_bare_interactions == 1

@@ -30,8 +30,8 @@ function main()
     beta = 40.0
     mass2 = 1.0
     solver = :vegasmc
-    # expand_bare_interactions = 1          # single V[V_λ] scheme
-    expand_bare_interactions = 0          # bare V, V (non-reexpanded) scheme
+    # expand_bare_interactions = 0          # bare V, V (non-reexpanded) scheme
+    expand_bare_interactions = 1          # single V[V_λ] scheme
 
     # neval = 1e10
     neval = 1e9
@@ -140,28 +140,35 @@ function main()
     ax.set_ylabel(
         "\$\\left(C^{(1a)} + C^{(1b)}(k=0)\\right) \\,/\\, {\\epsilon}^{2}_{\\mathrm{TF}}\$",
     )
-    xloc = 1.6
-    yloc = -0.085
-    ydiv = -0.025
-    # ax.text(
-    #     xloc,
-    #     yloc,
-    #     "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
-    #     fontsize=14,
-    # )
-    # ax.text(
-    #     xloc,
-    #     yloc + ydiv,
-    #     "\$\\lambda = $(mass2)\\epsilon_{\\mathrm{Ry}},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)},\$";
-    #     # "\$\\lambda = \\frac{\\epsilon_{\\mathrm{Ry}}}{10},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)},\$";
-    #     fontsize=14,
-    # )
-    # ax.text(
-    #     xloc,
-    #     yloc + 2 * ydiv,
-    #     "\${\\epsilon}_{\\mathrm{TF}}\\equiv\\frac{\\hbar^2 q^2_{\\mathrm{TF}}}{2 m_e}=2\\pi\\mathcal{N}_F\$ (a.u.)";
-    #     fontsize=12,
-    # )
+    xloc = 3.65
+    if rs == 1.0
+        # yloc = 0.93
+        # ydiv = -0.0075
+        yloc = 0.94
+        ydiv = -0.01
+    else
+        yloc = Inf
+        ydiv = 0.0
+    end
+    ax.text(
+        xloc,
+        yloc,
+        "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
+        fontsize=14,
+    )
+    ax.text(
+        xloc,
+        yloc + ydiv,
+        "\$\\lambda = $(mass2)\\epsilon_{\\mathrm{Ry}},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)},\$";
+        # "\$\\lambda = \\frac{\\epsilon_{\\mathrm{Ry}}}{10},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)},\$";
+        fontsize=14,
+    )
+    ax.text(
+        xloc,
+        yloc + 2 * ydiv,
+        "\${\\epsilon}_{\\mathrm{TF}}\\equiv\\frac{\\hbar^2 q^2_{\\mathrm{TF}}}{2 m_e}=2\\pi\\mathcal{N}_F\$ (a.u.)";
+        fontsize=12,
+    )
     # if expand_bare_interactions == 0
     #     plt.title("Using fixed bare Coulomb interactions \$V_1\$, \$V_2\$")
     # elseif expand_bare_interactions == 1
