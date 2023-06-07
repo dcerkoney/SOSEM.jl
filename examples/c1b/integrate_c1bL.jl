@@ -23,11 +23,11 @@ function main()
     settings = DiagGen.Settings{DiagGen.Observable}(
         DiagGen.c1bL;
         min_order=3,  # no (2,0,0) partition for this observable (Γⁱ₃ > Γ₀),
-        max_order=3,
-        # max_order=5,
+        # max_order=3,
+        max_order=5,
         verbosity=DiagGen.quiet,
         expand_bare_interactions=1,  # testing single V[V_λ] scheme
-        # expand_bare_interactions=false,
+        # expand_bare_interactions=0,  # V, V scheme (no re-expand)
         filter=[NoHartree],
         interaction=[FeynmanDiagram.Interaction(ChargeCharge, Instant)],  # Yukawa-type interaction
         # interaction=[FeynmanDiagram.Interaction(ChargeCharge, Dynamic)],  # TODO: test RPA-type interaction
@@ -65,7 +65,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 1e10
+    neval = 5e10
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -86,7 +86,6 @@ function main()
     for d in diagtrees
         DiagGen.checktree(d, settings)
     end
-    return
 
     # Bin external momenta, performing a single integration
     res = UEG_MC.integrate_nonlocal_with_ct(
