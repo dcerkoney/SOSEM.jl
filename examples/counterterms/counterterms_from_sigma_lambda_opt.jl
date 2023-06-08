@@ -18,16 +18,22 @@ function main()
     # order = [5]  # C^{(1)}_{N≤6} includes CTs up to 5th order
     order = [4]  # C^{(1)}_{N≤5} includes CTs up to 4th order
     beta = [40.0]
+
     # rs = [3.0]
     # mass2 = [1.0, 1.25, 1.5, 1.75, 5.0, 6.0]
     # mass2 = [2.0, 2.5, 3.0, 3.5, 4.0]
+    # mass2 = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75]
+
     # rs = [4.0]
     # mass2 = [2.0, 2.25, 2.5, 2.75, 6.0, 7.0]
     # mass2 = [3.0, 3.5, 4.0, 4.5, 5.0]
+    # mass2 = [0.25, 0.5, 0.75, 1.0, 1.5, 2.0]
+
     rs = [5.0]
-    mass2 = [3.0, 3.25, 3.5, 3.75, 7.0, 8.0]
+    # mass2 = [3.0, 3.25, 3.5, 3.75, 7.0, 8.0]
     # mass2 = [4.0, 4.5, 5.0, 5.5, 6.0]
-    
+    mass2 = [0.1, 0.25, 0.5, 0.75, 1.0, 2.0]
+
     # mass2 = [0.1, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
     # mass2 = [0.1, 0.2, 0.3, 0.4, 0.5, 1.0, 1.5, 2.0]
     # rs = [1.0]
@@ -66,9 +72,9 @@ function main()
         ######### calculate Z factor ######################
         # For Z(k = 0)
         # kgrid = [0.0]
+
         # For μ & Z := Z(k = kF)
         kgrid = [para.kF]
-        # ngrid = [-1, 0, 1]
         ngrid = [-1, 0]  # switching to [-1, 0] for improved FT effects
 
         # Build diagrams
