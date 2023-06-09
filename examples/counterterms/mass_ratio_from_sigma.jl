@@ -17,15 +17,12 @@ function main()
     # Physical params matching data for SOSEM observables
     order = [4]  # C^{(1)}_{N≤5} includes CTs up to 3rd order
     beta = [40.0]
-    #rs = [1.0, 2.0, 5.0]
-    rs = [2.0]
-    mass2 = [1.5, 1.75, 2.0]
+    rs = [3.0]
+    mass2 = [1.5]
+    # rs = [2.0]
+    # mass2 = [1.5, 1.75, 2.0]
     # rs = [1.0]
     # mass2 = [1.0]
-
-    # Using mass2 from optimization of C⁽¹⁾ⁿˡ(k = 0)
-    # TODO: Optimize specifically for ReΣ_N(para.kF, ik0) convergence vs N
-    # c1nl_mass2_optima = Dict{Float64,Float64}(1.0 => 1.0, 2.0 => 0.4, 5.0 => 0.1375)
 
     # Momentum spacing for finite-difference derivative of Sigma (in units of para.kF)
     δK = 0.005  # spacings n*δK = 0.15–0.3 not relevant for rs = 1.0 => reduce δK by half
@@ -52,13 +49,10 @@ function main()
 
     # Get self-energy data needed for the chemical potential and Z-factor measurements
     for (_rs, _mass2, _beta, _order) in Iterators.product(rs, mass2, beta, order)
-    # for (_rs, _beta, _order) in Iterators.product(rs, beta, order)
-        # @assert haskey(c1nl_mass2_optima, _rs) "Missing optimized mass2 for rs = $_rs"
         para = UEG.ParaMC(;
             order=_order,
             rs=_rs,
             beta=_beta,
-            # mass2=c1nl_mass2_optima[_rs],
             mass2=_mass2,
             isDynamic=false,
             isFock=isFock,
@@ -67,6 +61,7 @@ function main()
         ######### calculate mass ratio ######################
         # k_points near k = 0
         # kgrid = para.kF * (δK * collect(-15:15))
+
         # k-points near k = kF
         kgrid = para.kF * (1 .+ δK * collect(-15:15))
         ngrid = [0]
