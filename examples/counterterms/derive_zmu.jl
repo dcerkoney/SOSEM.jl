@@ -21,19 +21,22 @@ end
 # For lambda optimization
 order = [4]  # C^{(1)}_{N≤5} includes CTs up to 4th order
 beta = [40.0]
+rs = [3.0]
+mass2 = [1.5]
+
 # rs = [2.0]
 # mass2 = [1.75]
 # mass2 = [1.5, 1.75, 2.0]
 # mass2 = [0.1, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
 ### rs = 3 ###
 # rs = 3.0
-# mass2 = [1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 3.5, 4.0, 5.0, 6.0]
+# mass2 = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 3.5, 4.0, 5.0, 6.0]
 ### rs = 4 ###
 # rs = 4.0
-# mass2 = [2.0, 2.25, 2.5, 2.75, 3.0, 3.5, 4.0, 4.5, 5.0, 6.0, 7.0]
+# mass2 = [0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 2.25, 2.5, 2.75, 3.0, 3.5, 4.0, 4.5, 5.0, 6.0, 7.0]
 ### rs = 5 ###
-rs = 5.0
-mass2 = [3.0, 3.25, 3.5, 3.75, 4.0, 4.5, 5.0, 5.5, 6.0, 7.0, 8.0]
+# rs = 5.0
+# mass2 = [0.1, 0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 3.25, 3.5, 3.75, 4.0, 4.5, 5.0, 5.5, 6.0, 7.0, 8.0]
 
 # Enable/disable interaction and chemical potential counterterms
 renorm_mu = true
@@ -52,8 +55,8 @@ if renorm_lambda
 end
 
 # const filename = "data/data_Z$(ct_string).jld2"
-# const filename = "data/data_Z$(ct_string)_kF.jld2"
-const filename = "data/data_Z$(ct_string)_kF_opt.jld2"
+const filename = "data/data_Z$(ct_string)_kF.jld2"
+# const filename = "data/data_Z$(ct_string)_kF_opt.jld2"
 const parafilename = "data/para.csv"
 
 """

@@ -26,14 +26,14 @@ function main()
         cd("$(ENV["SOSEM_HOME"])/examples/counterterms")
     end
 
-    rs = 2.0
+    rs = 3.0
     # rslist = [2.0]
     # rslist = [1.0, 2.0, 5.0]
     beta = 40.0
     # mass2 = 1.0
     # mass2list = [1.5, 1.75, 2.0]
-    # mass2list = [1.5]
-    mass2list = [1.75]
+    mass2list = [1.5]
+    # mass2list = [1.75]
     solver = :mcmc
     # solver = :vegasmc
 
@@ -172,29 +172,35 @@ function main()
         max_stationary_idk_1 = max_idks[2]
         max_stationary_idk_max_order = max_idks[end]
 
-        # Fix index at lambda = 1.5 manually
-        if mass2 == 1.5
-            @warn "Manually fixing max_stationary_idk = 3 for λ = 1.5"
-            max_stationary_idk = 3
-        end
-
         println("\nmax_idks = $max_idks")
         println("Total maximum stationary index: $max_stationary_idk")
 
         # Get exact zero-temperature first order (HF) result
         fock_mass_ratio_ex = mass_ratio_screened_fock(param)
 
+        # Get maximum T=0 compatible index
+        max_zt_compatible_idk = 1
+        for (idk, mass_ratio) in enumerate(mass_ratios)
+            top = mass_ratio[2].val + mass_ratio[2].err
+            bottom = mass_ratio[2].val - mass_ratio[2].err
+            # This k-index agrees with the zero-temperature value to within 1σ
+            if (bottom < fock_mass_ratio_ex < top)
+                max_zt_compatible_idk = idk
+            end
+        end
+        println("Maximum T=0 compatible index: $max_zt_compatible_idk")
+
         # Plot first order vs δK and compare to exact zero temperature result
         fig, ax = plt.subplots()
         ax.axvline(
-            dks[max_stationary_idk];
-            label="Total maximum stationary \$\\delta K = $(dks[max_stationary_idk]) k_F\$",
+            dks[max_zt_compatible_idk];
+            label="Max \$T=0\$ compatible \$\\delta K = $(dks[max_zt_compatible_idk]) k_F\$",
             color="k",
             linestyle="--",
         )
         ax.axvline(
-            dks[max_stationary_idk_1];
-            label="Maximum stationary \$\\delta K = $(dks[max_stationary_idk_1]) k_F\$ (\$N = 1\$)",
+            dks[max_stationary_idk];
+            label="Max stationary \$\\delta K = $(dks[max_stationary_idk]) k_F\$",
             color="gray",
             linestyle="--",
         )
@@ -205,10 +211,14 @@ function main()
         # xloc = 0.095
         # yloc = 0.916
         # ydiv = -0.001
-        ### lambda = 1.5 ###
-        xloc = 0.03
-        yloc = 0.97
-        ydiv = -0.003
+        ### rs = 2, lambda = 1.5 ###
+        # xloc = 0.03
+        # yloc = 0.97
+        # ydiv = -0.003
+        ### rs = 3, lambda = 1.5 ###
+        xloc = 0.04
+        yloc = 0.97675
+        ydiv = -0.00025
         ### lambda = 1.75 ###
         # xloc = 0.03
         # yloc = 0.964
@@ -237,14 +247,14 @@ function main()
         # Plot max order vs δK
         fig, ax = plt.subplots()
         ax.axvline(
-            dks[max_stationary_idk];
-            label="Total maximum stationary \$\\delta K = $(dks[max_stationary_idk]) k_F\$",
+            dks[max_zt_compatible_idk];
+            label="Max \$T=0\$ compatible \$\\delta K = $(dks[max_zt_compatible_idk]) k_F\$",
             color="k",
             linestyle="--",
         )
         ax.axvline(
-            dks[max_stationary_idk_max_order];
-            label="Maximum stationary \$\\delta K = $(dks[max_stationary_idk_max_order]) k_F\$ (\$N = $max_order\$)",
+            dks[max_stationary_idk];
+            label="Max stationary \$\\delta K = $(dks[max_stationary_idk]) k_F\$",
             color="gray",
             linestyle="--",
         )
@@ -253,10 +263,14 @@ function main()
         ax.set_ylabel("\$\\left(m^\\star / m\\right)_$(max_order)\$")
         # xloc = 0.125
         # yloc = 0.931
-        ### lambda = 1.5 ###
-        xloc = 0.0325
-        yloc = 0.93
-        ydiv = -0.01
+        ### rs = 2, lambda = 1.5 ###
+        # xloc = 0.0325
+        # yloc = 0.93
+        # ydiv = -0.01
+        ### rs = 3, lambda = 1.5 ###
+        xloc = 0.04
+        yloc = 0.9605
+        ydiv = -0.001
         ### lambda = 1.75 ###
         # xloc = 0.03
         # yloc = 0.960
@@ -273,7 +287,8 @@ function main()
             "\$\\lambda = $(mass2)\\epsilon_{\\mathrm{Ry}},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)}\$";
             fontsize=14,
         )
-        ax.legend(; loc="best")
+        ax.legend(; loc="lower right")
+        # ax.legend(; loc="best")
         fig.tight_layout()
         fig.savefig(
             "../../results/effective_mass_ratio/mass_ratio_N=$(max_order)_vs_dK_" *
@@ -284,17 +299,15 @@ function main()
 
         fig, ax = plt.subplots()
         orders = 0:max_order
-        # for idk in idks
-        for idk in [max_stationary_idk]
-        # for idk in [5]
-            # # Ignore non-stationary data
-            # if idk > max_stationary_idk
-            #     break
-            # end
+        # Using maximum stationary δK scheme
+        scheme_max_idks = [max_stationary_idk]
+        scheme_strs = ["Max stationary"]
+        # scheme_max_idks = [max_zt_compatible_idk, max_stationary_idk]
+        # scheme_strs = ["Max \$T=0\$ compatible", "Max stationary"]
+        for (idk, scheme_str) in zip(scheme_max_idks, scheme_strs)
             means, stdevs = Measurements.value.(mass_ratios[idk]),
             Measurements.uncertainty.(mass_ratios[idk])
-            println("\nEffective mass ratios at δK = $(dks[max_stationary_idk]):")
-            # println("\nEffective mass ratios at δK = $(dks[5]):")
+            println("\nEffective mass ratios at δK = $(dks[idk]):")
             for o in eachindex(orders)
                 println(" • (m⋆/m)_$(orders[o]) = $(mass_ratios[idk][o])")
             end
@@ -304,7 +317,7 @@ function main()
                 stdevs;
                 capsize=4,
                 zorder=10 * idk,
-                label="\$\\delta K = $(dks[idk]) k_F\$",
+                label="$scheme_str \$\\delta K = $(dks[idk]) k_F\$",
             )
         end
         # xloc = 1.2
@@ -317,14 +330,16 @@ function main()
         # xloc = 0.2
         # yloc = 0.97
         # ydiv = -0.0125
+        # xloc = 1.5
+        # yloc = 0.99
+        # ydiv = -0.0075
         xloc = 1.5
-        yloc = 0.99
-        ydiv = -0.0075
+        yloc = 0.995
+        ydiv = -0.005
         ax.text(
             xloc,
             yloc,
             "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta), \\delta K = $(dks[max_stationary_idk]) k_F,\$";
-            # "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta), \\delta K = $(dks[5]) k_F,\$";
             fontsize=14,
         )
         ax.text(
@@ -336,23 +351,20 @@ function main()
         ax.text(
             xloc,
             yloc + 2 * ydiv,
-            # "\$m^\\star / m \\approx 0.9328(22)\$";
-            # "\$m^\\star / m \\approx 0.9317(48)\$";
             "\$m^\\star / m \\approx $(round(mass_ratios[max_stationary_idk][end].val; digits=4)) \\pm $(round(mass_ratios[max_stationary_idk][end].err; digits=4))\$";
-            # "\$m^\\star / m \\approx $(round(mass_ratios[5][end].val; digits=4)) \\pm $(round(mass_ratios[5][end].err; digits=4))\$";
             fontsize=14,
         )
         ax.set_xlabel("\$N\$")
         ax.set_ylabel("\$m^\\star / m\$")
         ax.set_xticks(orders)
         ax.set_xticklabels(orders)
-        # ax.set_ylim(0.8, nothing)
-        # ax.legend(; loc="lower right", ncol=2)
-        # ax.legend(; loc="best", ncol=2)
+        # ax.legend(; loc="best")
+        # ax.legend(; loc="lower left")
         fig.tight_layout()
         fig.savefig(
             "../../results/effective_mass_ratio/effective_mass_ratio_rs=$(param.rs)_beta_ef=$(param.beta)_" *
-            "lambda=$(param.mass2)_neval=$(neval)_$(solver)_$(ct_string)_kF_gridtest.pdf",
+            "lambda=$(param.mass2)_neval=$(neval)_$(solver)_$(ct_string)_kF.pdf",
+            # "lambda=$(param.mass2)_neval=$(neval)_$(solver)_$(ct_string)_kF_gridtest.pdf",
             # "lambda=$(param.mass2)_neval=$(neval)_$(solver)_$(ct_string).pdf",
         )
 
@@ -382,7 +394,8 @@ function main()
         fig.tight_layout()
         fig.savefig(
             "../../results/effective_mass_ratio/inverse_zfactor_rs=$(param.rs)_beta_ef=$(param.beta)_" *
-            "lambda=$(param.mass2)_neval=$(neval)_$(solver)_$(ct_string)_kF_gridtest.pdf",
+            "lambda=$(param.mass2)_neval=$(neval)_$(solver)_$(ct_string)_kF.pdf",
+            # "lambda=$(param.mass2)_neval=$(neval)_$(solver)_$(ct_string)_kF_gridtest.pdf",
             # "lambda=$(param.mass2)_neval=$(neval)_$(solver)_$(ct_string).pdf",
         )
 
@@ -412,7 +425,8 @@ function main()
         fig.tight_layout()
         fig.savefig(
             "../../results/effective_mass_ratio/zfactor_approximation_rs=$(param.rs)_beta_ef=$(param.beta)_" *
-            "lambda=$(param.mass2)_neval=$(neval)_$(solver)_$(ct_string)_kF_gridtest.pdf",
+            "lambda=$(param.mass2)_neval=$(neval)_$(solver)_$(ct_string)_kF.pdf",
+            # "lambda=$(param.mass2)_neval=$(neval)_$(solver)_$(ct_string)_kF_gridtest.pdf",
             # "lambda=$(param.mass2)_neval=$(neval)_$(solver)_$(ct_string).pdf",
         )
         plt.close("all")
