@@ -57,7 +57,7 @@ function get_Fs_PW(rs)
 end
 
 function get_sigma_rpa(param::ParaMC)
-    
+    SOSEM.@todo
 end
 
 function get_sigma_rpa_fl(param::ParaMC)
@@ -76,7 +76,8 @@ function get_sigma_rpa_fl(param::ParaMC)
 
     # sigdyn, sigint = SelfEnergy.G0W0(param.basic, Λgrid; int_type=:ko_const, Fs=-1)
     # ds_dw = SelfEnergy.zfactor(sigdyn, param)
-    return sigdyn, sigint
+    # return sigdyn, sigint
+    SOSEM.@todo
 end
 
 function main()
@@ -111,9 +112,6 @@ function main()
     plt.rc("text"; usetex=true)
     plt.rc("font"; family="serif")
 
-    # colors = ["orchid", "cornflowerblue", "turquoise", "chartreuse", "greenyellow"]
-    # markers = ["-", "-", "-", "-", "-"]
-
     # Distinguish results with fixed vs re-expanded bare interactions
     intn_str = ""
     if expand_bare_interactions == 2
@@ -124,14 +122,15 @@ function main()
 
     # Filename for new JLD2 format
     filename =
-        "results/data/rs=$(rs)_beta_ef=$(beta)_" *
-        "lambda=$(mass2)_$(intn_str)$(solver)_with_ct_mu_lambda"
+    # "results/data/rs=$(rs)_beta_ef=$(beta)_" *
+        "archives/rs=$(rs)_beta_ef=$(beta)_lambda=$(mass2)_" *
+        "$(intn_str)$(solver)_with_ct_mu_lambda_archive1"
 
     # Load SOSEM data
-    local param, kgrid, k_kf_grid, c1l_N_mean, c1l_N_total, c1nl_N_total
+    local param1, kgrid, k_kf_grid, c1l_N_mean, c1l_N_total, c1nl_N_total
     # Load the data for each observable
     f = jldopen("$filename.jld2", "r")
-    param = f["c1d/N=$N/neval=$neval_c1d/param"]
+    param1 = f["c1d/N=$N/neval=$neval_c1d/param"]
     kgrid = f["c1d/N=$N/neval=$neval_c1d/kgrid"]
     c1l_N_total = f["c1l/N=$N/neval=$neval_c1l/meas"]
     if N == 2
@@ -149,7 +148,7 @@ function main()
     close(f)  # close file
 
     # Get dimensionless k-grid (k / kF)
-    k_kf_grid = kgrid / param.kF
+    k_kf_grid = kgrid / param1.kF
 
     # Get means and error bars from the result up to this order
     c1l_N_mean, c1l_N_stdev =
@@ -158,7 +157,7 @@ function main()
         Measurements.value.(c1nl_N_total), Measurements.uncertainty.(c1nl_N_total)
     @assert length(k_kf_grid) == length(c1nl_N_means) == length(c1nl_N_stdevs)
 
-    println(param)
+    println(param1)
     println(kgrid)
     println(c1l_N_mean)
     println(c1l_N_stdev)
@@ -166,9 +165,14 @@ function main()
     println(c1nl_N_stdevs)
 
     # Get the G0W0 self-energy and corresponding DLR grid from the ElectronGas package
-    sigma_tau_dynamic, sigma_tau_instant = SelfEnergy.G0W0(param.basic)
-    # SelfEnergy.G0W0(param.basic; minK=1e-8 * param.kF, maxK=30 * param.kF)
-    # sigma_tau_dynamic, sigma_tau_instant = SelfEnergy.G0W0(param.basic)
+    # NOTE: Here we need to be careful to generate Σ_G0W0 for the *bare* theory, i.e.,
+    #       to use an ElectronGas.Parameter object where Λs (mass2) is zero!
+    bparam1 = Parameter.rydbergUnit(1 / param1.beta, param1.rs, param1.dim)
+    sigma_tau_dynamic, sigma_tau_instant = SelfEnergy.G0W0(bparam1)
+    # sigma_tau_dynamic, sigma_tau_instant = SelfEnergy.G0W0(param1.basic)
+
+    # SelfEnergy.G0W0(param1.basic; minK=1e-8 * param1.kF, maxK=30 * param1.kF)
+    # sigma_tau_dynamic, sigma_tau_instant = SelfEnergy.G0W0(param1.basic)
     sigma_dlr_dynamic = to_dlr(sigma_tau_dynamic)
     dlr = sigma_dlr_dynamic.mesh[1].dlr
     kgrid_g0w0 = sigma_dlr_dynamic.mesh[2]
@@ -177,19 +181,21 @@ function main()
     # Grid indices where k ≈ kF
     ikF = searchsortedfirst(k_kf_grid, 1.0)
     i2kF = searchsortedfirst(k_kf_grid, 2.0)
-    ikF_g0w0 = searchsortedfirst(kgrid_g0w0, param.kF)
-    i2kF_g0w0 = searchsortedfirst(kgrid_g0w0, 2param.kF)
+    ikF_g0w0 = searchsortedfirst(kgrid_g0w0, param1.kF)
+    i2kF_g0w0 = searchsortedfirst(kgrid_g0w0, 2 * param1.kF)
+    println("0.0 ", k_kf_grid[1])
     println(k_kf_grid[ikF - 1], " ", k_kf_grid[ikF])
     println(k_kf_grid[i2kF - 1], " ", k_kf_grid[i2kF])
-    println(kgrid_g0w0[ikF_g0w0 - 1] / param.kF, " ", kgrid_g0w0[ikF_g0w0] / param.kF)
-    println(kgrid_g0w0[i2kF_g0w0 - 1] / param.kF, " ", kgrid_g0w0[i2kF_g0w0] / param.kF)
+    println(kgrid_g0w0[ikF_g0w0 - 1] / param1.kF, " ", kgrid_g0w0[ikF_g0w0] / param1.kF)
+    println(kgrid_g0w0[i2kF_g0w0 - 1] / param1.kF, " ", kgrid_g0w0[i2kF_g0w0] / param1.kF)
+    
     # Get the static and dynamic components of the self-energy
     sigma_g0w0_static = sigma_tau_instant[1, :]
-    # sigma_g0w0_wn_dynamic = (param.β / 2π) * to_imfreq(sigma_dlr_dynamic)
-    # sigma_g0w0_wn_dynamic = (2π / param.β) * to_imfreq(sigma_dlr_dynamic)
-    # sigma_g0w0_wn_dynamic = ((2π)^3 / param.β) * to_imfreq(sigma_dlr_dynamic)
+    # sigma_g0w0_wn_dynamic = (param1.β / 2π) * to_imfreq(sigma_dlr_dynamic)
+    # sigma_g0w0_wn_dynamic = (2π / param1.β) * to_imfreq(sigma_dlr_dynamic)
+    # sigma_g0w0_wn_dynamic = ((2π)^3 / param1.β) * to_imfreq(sigma_dlr_dynamic)
     # sigma_g0w0_wn_dynamic = (2π)^3 * to_imfreq(sigma_dlr_dynamic)
-    # sigma_g0w0_wn_dynamic = param.β * to_imfreq(sigma_dlr_dynamic)
+    # sigma_g0w0_wn_dynamic = param1.β * to_imfreq(sigma_dlr_dynamic)
     sigma_g0w0_wn_dynamic = to_imfreq(sigma_dlr_dynamic)
 
     # The static part is real, so we can discard it for the present tail fit
@@ -197,44 +203,55 @@ function main()
     # @assert all(abs.(imag(sigma_g0w0_static)) .≤ 1e-8)
     # @assert all(abs.(imag(sigma_g0w0_static)) .≤ 1e-10)
 
+    # Nondimensionalize frequencies / first order moments by eTF/eTF^2
+    eTF = param1.qTF^2 / (2 * param1.me)
+
     # Positive Matsubara frequencies
     wns = dlr.ωn[dlr.ωn .≥ 0]
+    wntildes = wns / eTF
     println(wns)
 
     # Self-energies at k = 0 and k = kF
-    sigma_g0w0_wn_dynamic_k0 = sigma_g0w0_wn_dynamic[:, 1][dlr.ωn .≥ 0]
-    sigma_g0w0_wn_dynamic_kF = sigma_g0w0_wn_dynamic[:, ikF_g0w0][dlr.ωn .≥ 0]
-    sigma_g0w0_wn_dynamic_2kF = sigma_g0w0_wn_dynamic[:, i2kF_g0w0][dlr.ωn .≥ 0]
+    sigma_g0w0_wn_dynamic_k0 = sigma_g0w0_wn_dynamic[:, 1][dlr.ωn .≥ 0] / eTF
+    sigma_g0w0_wn_dynamic_kF = sigma_g0w0_wn_dynamic[:, ikF_g0w0][dlr.ωn .≥ 0] / eTF
+    sigma_g0w0_wn_dynamic_2kF = sigma_g0w0_wn_dynamic[:, i2kF_g0w0][dlr.ωn .≥ 0] / eTF
 
     ############################################################
-    # ParaMC for rs=2
-    param2 = ParaMC(; rs=2.0, beta=beta, mass2=mass2, isDynamic=false)
+    # Parameter for rs=2
+    # NOTE: Here we need to be careful to generate Σ_G0W0 for the *bare* theory, i.e.,
+    #       to use an ElectronGas.Parameter object where Λs (mass2) is zero!
+    bparam2 = Parameter.rydbergUnit(1 / beta, 2.0, 3)  # (dimensionless T, rs, dim)
+    eTF_rs2 = bparam2.qTF^2 / (2 * bparam2.me)
 
     # Get the G0W0 self-energy and corresponding DLR grid from the ElectronGas package
-    sigma2_tau_dynamic, sigma2_tau_instant = SelfEnergy.G0W0(param2.basic)
-    # SelfEnergy.G0W0(param2.basic; minK=1e-8 * param2.kF, maxK=30 * param2.kF)
-    # sigma2_tau_dynamic, sigma2_tau_instant = SelfEnergy.G0W0(param2.basic)
+    sigma2_tau_dynamic, sigma2_tau_instant = SelfEnergy.G0W0(bparam2)
+    # SelfEnergy.G0W0(bparam2.basic; minK=1e-8 * bparam2.kF, maxK=30 * bparam2.kF)
+    # sigma2_tau_dynamic, sigma2_tau_instant = SelfEnergy.G0W0(bparam2.basic)
     sigma2_dlr_dynamic = to_dlr(sigma2_tau_dynamic)
     dlr2 = sigma2_dlr_dynamic.mesh[1].dlr
     kgrid2_g0w0 = sigma2_dlr_dynamic.mesh[2]
     println(kgrid2_g0w0)
 
     # Grid indices where k ≈ kF
-    ikF2_g0w0 = searchsortedfirst(kgrid2_g0w0, param2.kF)
-    i2kF2_g0w0 = searchsortedfirst(kgrid2_g0w0, 2 * param2.kF)
-    println(kgrid2_g0w0[ikF2_g0w0 - 1] / param2.kF, " ", kgrid2_g0w0[ikF2_g0w0] / param2.kF)
+    ikF2_g0w0 = searchsortedfirst(kgrid2_g0w0, bparam2.kF)
+    i2kF2_g0w0 = searchsortedfirst(kgrid2_g0w0, 2 * bparam2.kF)
     println(
-        kgrid2_g0w0[i2kF2_g0w0 - 1] / param2.kF,
+        kgrid2_g0w0[ikF2_g0w0 - 1] / bparam2.kF,
         " ",
-        kgrid2_g0w0[i2kF2_g0w0] / param2.kF,
+        kgrid2_g0w0[ikF2_g0w0] / bparam2.kF,
+    )
+    println(
+        kgrid2_g0w0[i2kF2_g0w0 - 1] / bparam2.kF,
+        " ",
+        kgrid2_g0w0[i2kF2_g0w0] / bparam2.kF,
     )
     # Get the static and dynamic components of the self-energy
     sigma2_g0w0_static = sigma2_tau_instant[1, :]
-    # sigma_g0w0_wn_dynamic = (param2.β / 2π) * to_imfreq(sigma2_dlr_dynamic)
-    # sigma_g0w0_wn_dynamic = (2π / param2.β) * to_imfreq(sigma2_dlr_dynamic)
-    # sigma_g0w0_wn_dynamic = ((2π)^3 / param2.β) * to_imfreq(sigma2_dlr_dynamic)
+    # sigma_g0w0_wn_dynamic = (bparam2.β / 2π) * to_imfreq(sigma2_dlr_dynamic)
+    # sigma_g0w0_wn_dynamic = (2π / bparam2.β) * to_imfreq(sigma2_dlr_dynamic)
+    # sigma_g0w0_wn_dynamic = ((2π)^3 / bparam2.β) * to_imfreq(sigma2_dlr_dynamic)
     # sigma_g0w0_wn_dynamic = (2π)^3 * to_imfreq(sigma2_dlr_dynamic)
-    # sigma_g0w0_wn_dynamic = param2.β * to_imfreq(sigma2_dlr_dynamic)
+    # sigma_g0w0_wn_dynamic = bparam2.β * to_imfreq(sigma2_dlr_dynamic)
     sigma2_g0w0_wn_dynamic = to_imfreq(sigma2_dlr_dynamic)
 
     # The static part is real, so we can discard it for the present tail fit
@@ -244,160 +261,113 @@ function main()
 
     # Positive Matsubara frequencies
     wn2s = dlr2.ωn[dlr2.ωn .≥ 0]
+    wn2tildes = wn2s / eTF_rs2
+    println(wn2s)
 
     # Self-energies at k = 0 and k = kF
-    sigma2_g0w0_wn_dynamic_k0 = sigma2_g0w0_wn_dynamic[:, 1][dlr2.ωn .≥ 0]
-    sigma2_g0w0_wn_dynamic_kF = sigma2_g0w0_wn_dynamic[:, ikF_g0w0][dlr2.ωn .≥ 0]
-    sigma2_g0w0_wn_dynamic_2kF = sigma2_g0w0_wn_dynamic[:, i2kF_g0w0][dlr2.ωn .≥ 0]
+    sigma2_g0w0_wn_dynamic_k0 = sigma2_g0w0_wn_dynamic[:, 1][dlr2.ωn .≥ 0] / eTF
+    sigma2_g0w0_wn_dynamic_kF = sigma2_g0w0_wn_dynamic[:, ikF_g0w0][dlr2.ωn .≥ 0] / eTF
+    sigma2_g0w0_wn_dynamic_2kF = sigma2_g0w0_wn_dynamic[:, i2kF_g0w0][dlr2.ωn .≥ 0] / eTF
+
+    tail2_fit_k0 = -(c1l_N_mean + c1nl_N_means[1]) ./ wntildes
+    tail2_fit_k0_err = (c1l_N_stdev + c1nl_N_stdevs[1]) ./ wntildes
     ############################################################
 
-    # Put back dimensions in C⁽¹⁾
-    eTF2 = param.qTF^4 / (2 * param.me)^2
-
     @assert kgrid[1] == 0.0
-    @assert kgrid[ikF] ≈ param.kF
+    @assert kgrid[ikF] ≈ param1.kF
 
-    # The high-frequency tail of ImΣ(iωₙ) is -C⁽¹⁾ / ωₙ
-    tail_fit_k0 = -eTF2 * (c1l_N_mean + c1nl_N_means[1]) ./ wns
-    tail_fit_kF = -eTF2 * (c1l_N_mean + c1nl_N_means[ikF]) ./ wns
-    tail_fit_2kF = -eTF2 * (c1l_N_mean + c1nl_N_means[i2kF]) ./ wns
-    tail_fit_k0_err = eTF2 * (c1l_N_stdev + c1nl_N_stdevs[1]) ./ wns
-    tail_fit_kF_err = eTF2 * (c1l_N_stdev + c1nl_N_stdevs[ikF]) ./ wns
-    tail_fit_2kF_err = eTF2 * (c1l_N_stdev + c1nl_N_stdevs[i2kF]) ./ wns
-
-    # Get RPA value of the local moment at this rs
-    k_kf_grid_rpa, c1l_rpa_over_rs2 = load_csv("$vzn_dir/c1l_over_rs2_rpa.csv")
-    P = sortperm(k_kf_grid_rpa)
-    c1l_rpa_over_rs2_interp =
-        linear_interpolation(k_kf_grid_rpa[P], c1l_rpa_over_rs2[P]; extrapolation_bc=Line())
-    eTF = param.qTF^2 / (2 * param.me)
-    c1l_rpa = c1l_rpa_over_rs2_interp(param.rs) * param.rs^2
-    c1l_rpa_over_eTF2 = c1l_rpa * (param.EF / eTF)^2
-    println("C⁽¹⁾ˡ (RPA, rs = $(param.rs)): $c1l_rpa")
-    println("C⁽¹⁾ˡ / eTF² (RPA, rs = $(param.rs)): $c1l_rpa_over_eTF2")
-
-    # # Non-dimensionalize bare and RPA+FL non-local moments
-    sosem_lo = np.load("results/data/soms_rs=$(rs)_beta_ef=40.0.npz")
-    # rs_lo = rs
-    # sosem_lo = np.load("results/data/soms_rs=$(rs_lo)_beta_ef=40.0.npz")
-    # # Non-dimensionalize rs = 2 quadrature results by Thomas-Fermi energy
-    # param_lo = Parameter.atomicUnit(0, rs_lo)    # (dimensionless T, rs)
-    # eTF_lo = param_lo.qTF^2 / (2 * param_lo.me)
-
-    # Bare and RPA(+FL) results (stored in Hartree a.u.)
-    k_kf_grid_quad = np.linspace(0.0, 3.0; num=600)
-    ikF_quad = searchsortedfirst(k_kf_grid_quad, 1.0)
-    i2kF_quad = searchsortedfirst(k_kf_grid_quad, 2.0)
-    c1nl_lo =
-        (sosem_lo.get("bare_b") + sosem_lo.get("bare_c") + sosem_lo.get("bare_d")) / eTF^2
-    c1nl_rpa =
-        (sosem_lo.get("rpa_b") + sosem_lo.get("bare_c") + sosem_lo.get("bare_d")) / eTF^2
-    c1nl_rpa_fl =
-        (sosem_lo.get("rpa+fl_b") + sosem_lo.get("bare_c") + sosem_lo.get("bare_d")) / eTF^2
-    # RPA(+FL) means are error bars
-    c1nl_rpa_means, c1nl_rpa_stdevs =
-        Measurements.value.(c1nl_rpa), Measurements.uncertainty.(c1nl_rpa)
-
-    # Tail fit using RPA results
-    rpa_tail_fit_k0 = -eTF^2 * (c1l_rpa_over_eTF2 + c1nl_rpa_means[1]) ./ wns / 2
-    rpa_tail_fit_k0_err = -eTF^2 * c1nl_rpa_stdevs[1] ./ wns / 2
-    rpa_tail_fit_kF = -eTF^2 * (c1l_rpa_over_eTF2 + c1nl_rpa_means[ikF_quad]) ./ wns / 2
-    rpa_tail_fit_kF_err = -eTF^2 * c1nl_rpa_stdevs[ikF_quad] ./ wns / 2
-    rpa_tail_fit_2kF = -eTF^2 * (c1l_rpa_over_eTF2 + c1nl_rpa_means[i2kF_quad]) ./ wns / 2
-    rpa_tail_fit_2kF_err = -eTF^2 * c1nl_rpa_stdevs[i2kF_quad] ./ wns / 2
-
-    # TODO: Double-check factors and units!
-
-    # # Put back dimensions in C⁽¹⁾
-    # eTF = param.qTF^2 / (2 * param.me)
-    # eTF2 = param.qTF^4 / (2 * param.me)^2
-
-    # @assert kgrid[1] == 0.0
-    # @assert kgrid[ikF] ≈ param.kF
-
-    # # The high-frequency tail of ImΣ(iωₙ) is -C⁽¹⁾ / ωₙ,
-    # # where we convert back to the dimensionful result for C⁽¹⁾
-    # tail_fit_k0 = -eTF2 * (c1l_N_mean + c1nl_N_means[1]) ./ wns
-    # tail_fit_kF = -eTF2 * (c1l_N_mean + c1nl_N_means[ikF]) ./ wns
-    # tail_fit_2kF = -eTF2 * (c1l_N_mean + c1nl_N_means[i2kF]) ./ wns
-    # tail_fit_k0_err = eTF2 * (c1l_N_stdev + c1nl_N_stdevs[1]) ./ wns
-    # tail_fit_kF_err = eTF2 * (c1l_N_stdev + c1nl_N_stdevs[ikF]) ./ wns
-    # tail_fit_2kF_err = eTF2 * (c1l_N_stdev + c1nl_N_stdevs[i2kF]) ./ wns
+    # The high-frequency tail of ImΣ(iωₙ) is -C⁽¹⁾ / ωₙ.
+    # Here we non-dimensionalize the self-energy and tails in units of eTF
+    tail_fit_k0 = -(c1l_N_mean + c1nl_N_means[1]) ./ wntildes
+    tail_fit_kF = -(c1l_N_mean + c1nl_N_means[ikF]) ./ wntildes
+    tail_fit_2kF = -(c1l_N_mean + c1nl_N_means[i2kF]) ./ wntildes
+    tail_fit_k0_err = (c1l_N_stdev + c1nl_N_stdevs[1]) ./ wntildes
+    tail_fit_kF_err = (c1l_N_stdev + c1nl_N_stdevs[ikF]) ./ wntildes
+    tail_fit_2kF_err = (c1l_N_stdev + c1nl_N_stdevs[i2kF]) ./ wntildes
+    # tail_fit_k0 = -eTF^2 * (c1l_N_mean + c1nl_N_means[1]) ./ wns
+    # tail_fit_kF = -eTF^2 * (c1l_N_mean + c1nl_N_means[ikF]) ./ wns
+    # tail_fit_2kF = -eTF^2 * (c1l_N_mean + c1nl_N_means[i2kF]) ./ wns
+    # tail_fit_k0_err = eTF^2 * (c1l_N_stdev + c1nl_N_stdevs[1]) ./ wns
+    # tail_fit_kF_err = eTF^2 * (c1l_N_stdev + c1nl_N_stdevs[ikF]) ./ wns
+    # tail_fit_2kF_err = eTF^2 * (c1l_N_stdev + c1nl_N_stdevs[i2kF]) ./ wns
 
     # # Get RPA value of the local moment at this rs
     # k_kf_grid_rpa, c1l_rpa_over_rs2 = load_csv("$vzn_dir/c1l_over_rs2_rpa.csv")
     # P = sortperm(k_kf_grid_rpa)
     # c1l_rpa_over_rs2_interp =
     #     linear_interpolation(k_kf_grid_rpa[P], c1l_rpa_over_rs2[P]; extrapolation_bc=Line())
-    # c1l_rpa_over_rs2 = c1l_rpa_over_rs2_interp(param.rs)
-    # # c1l_rpa_over_EF2 = c1l_rpa_over_rs2_interp(param.rs) * param.rs^2
-    # # Convert back to dimensionful result (units of EF to Rydberg a.u.)
-    # alpha = (4 / 9π)^(1 / 3)
-    # c1l_rpa_vzn = c1l_rpa_over_rs2 / alpha^2
-    # # c1l_rpa_vzn = c1l_rpa_over_EF2 * param.EF
-    # # c1l_rpa_vzn = c1l_rpa_over_EF2 * (param.EF / eTF)^2
-    # # TODO: Check units --- is this a bug in VZN scripts?
-    # # c1l_rpa_vzn = c1l_rpa_over_EF2 * (param.EF / eTF)^2
-    # # println("C⁽¹⁾ˡ / EF² (RPA, rs = $(param.rs)): $c1l_rpa_over_EF2")
-    # # println("C⁽¹⁾ˡ / EF (RPA, rs = $(param.rs)): $c1l_rpa_over_EF2")
-    # println("(VZN) C⁽¹⁾ˡ (RPA, rs = $(param.rs)): $c1l_rpa_vzn")
-    # println("C⁽¹⁾ˡ_N (RPT, rs = $(param.rs)): $(c1l_N_mean * eTF2)")
+    # c1l_rpa = c1l_rpa_over_rs2_interp(param1.rs) * param1.rs^2
+    # c1l_rpa_over_eTF2 = c1l_rpa * (param1.EF / eTF)^2
+
+    # Get RPA value of the local moment at this rs
+    k_kf_grid_rpa, c1l_rpa_over_rs2 = load_csv("$vzn_dir/c1l_over_rs2_rpa.csv")
+    P = sortperm(k_kf_grid_rpa)
+    c1l_rpa_over_rs2_interp =
+        linear_interpolation(k_kf_grid_rpa[P], c1l_rpa_over_rs2[P]; extrapolation_bc=Line())
+    c1l_rpa = c1l_rpa_over_rs2_interp(param1.rs) * param1.rs^2 * param1.EF^2
+    c1l_rpa_over_eTF2 = c1l_rpa / eTF^2
+    # c1l_rpa_over_eTF2 = c1l_rpa * (param1.EF / eTF)^2
 
     # # Non-dimensionalize bare and RPA+FL non-local moments
     # sosem_lo = np.load("results/data/soms_rs=$(rs)_beta_ef=40.0.npz")
+    rs_lo = rs
+    sosem_lo = np.load("results/data/soms_rs=$(rs_lo)_beta_ef=40.0.npz")
+    # Non-dimensionalize rs = 2 quadrature results by Thomas-Fermi energy
+    param_lo = Parameter.atomicUnit(0, rs_lo)    # (dimensionless T, rs)
+    eTF_lo = param_lo.qTF^2 / (2 * param_lo.me)
+    # Bare and RPA(+FL) results (stored in Hartree a.u.)
+    k_kf_grid_quad = np.linspace(0.0, 3.0; num=600)
+    ikF_quad = searchsortedfirst(k_kf_grid_quad, 1.0)
+    i2kF_quad = searchsortedfirst(k_kf_grid_quad, 2.0)
+    c1nl_lo =
+        (sosem_lo.get("bare_b") + sosem_lo.get("bare_c") + sosem_lo.get("bare_d")) /
+        eTF_lo^2
+    # (sosem_lo.get("bare_b") + sosem_lo.get("bare_c") + sosem_lo.get("bare_d")) / eTF^2
+    c1nl_rpa =
+        (sosem_lo.get("rpa_b") + sosem_lo.get("bare_c") + sosem_lo.get("bare_d")) / eTF_lo^2
+    # (sosem_lo.get("rpa_b") + sosem_lo.get("bare_c") + sosem_lo.get("bare_d")) / eTF^2
+    c1nl_rpa_fl =
+        (sosem_lo.get("rpa+fl_b") + sosem_lo.get("bare_c") + sosem_lo.get("bare_d")) /
+        eTF_lo^2
+    # (sosem_lo.get("rpa+fl_b") + sosem_lo.get("bare_c") + sosem_lo.get("bare_d")) / eTF^2
+    # RPA(+FL) means are error bars
+    c1nl_rpa_means, c1nl_rpa_stdevs =
+        Measurements.value.(c1nl_rpa), Measurements.uncertainty.(c1nl_rpa)
+    println(1, " ", k_kf_grid_quad[1], " ", c1nl_rpa[1])
+    println(ikF_quad, " ", k_kf_grid_quad[ikF_quad], " ", c1nl_rpa[ikF_quad])
+    println(i2kF_quad, " ", k_kf_grid_quad[i2kF_quad], " ", c1nl_rpa[i2kF_quad])
+    # return
 
-    # # NOTE: Additional factors of 2 due to Hartree to Rydberg a.u. conversion!
-    # factor_hartree_to_rydberg = 2.0
+    # Get local RPA moment from HEG SOMS data for comparison
+    c1l_rpa_hartrees = sosem_lo.get("rpa_a_T=0")[1]
+    # TODO: Fix overall sign error on local moment in get_heg_som.py
+    c1l_rpa_hartrees *= -1.0
+    c1l_rpa_over_eTF2_v2 = c1l_rpa_hartrees / eTF_lo^2
+    c1l_rpa_v2 = 4 * c1l_rpa_hartrees
+    @assert c1l_rpa_over_eTF2_v2 ≈ c1l_rpa_v2 / eTF^2
+    println("C⁽¹⁾ˡ (RPA, rs = $(param1.rs)): $c1l_rpa")
+    println("C⁽¹⁾ˡ / eTF² (RPA, rs = $(param1.rs)): $c1l_rpa_over_eTF2")
+    println("(SOM) C⁽¹⁾ˡ (RPA, rs = $(param1.rs)): $c1l_rpa_v2")
+    println("(SOM) C⁽¹⁾ˡ / eTF² (RPA, rs = $(param1.rs)): $c1l_rpa_over_eTF2_v2")
+    # return
 
-    # # rs_lo = rs
-    # # sosem_lo = np.load("results/data/soms_rs=$(rs_lo)_beta_ef=40.0.npz")
-    # # # Non-dimensionalize rs = 2 quadrature results by Thomas-Fermi energy
-    # # param_lo = Parameter.atomicUnit(0, rs_lo)    # (dimensionless T, rs)
-    # # eTF_lo = param_lo.qTF^2 / (2 * param_lo.me)
-
-    # # # Get local RPA moment from HEG SOMS data instead
-    # # c1l_rpa_hartrees = sosem_lo.get("rpa_a_T=0")[1]
-    # # # TODO: Fix overall sign error on local moment in get_heg_som.py
-    # # c1l_rpa_hartrees *= -1.0
-    # # c1l_rpa = c1l_rpa_hartrees * factor_hartree_to_rydberg
-    # # println("(SOM) C⁽¹⁾ˡ (RPA, rs = $(param.rs)): $c1l_rpa")
-
-    # # Bare and RPA(+FL) results (stored in Hartree a.u.)
-    # k_kf_grid_quad = np.linspace(0.0, 3.0; num=600)
-    # ikF_quad = searchsortedfirst(k_kf_grid_quad, 1.0)
-    # i2kF_quad = searchsortedfirst(k_kf_grid_quad, 2.0)
-    # # Load bare and RPA(+FL) results (stored in Hartree a.u.)
-    # c1nl_lo_hartrees =
-    #     sosem_lo.get("bare_b") + sosem_lo.get("bare_c") + sosem_lo.get("bare_d")
-    # c1nl_rpa_hartrees =
-    #     sosem_lo.get("rpa_b") + sosem_lo.get("bare_c") + sosem_lo.get("bare_d")
-    # c1nl_rpa_fl_hartrees =
-    #     sosem_lo.get("rpa+fl_b") + sosem_lo.get("bare_c") + sosem_lo.get("bare_d")
-    # c1nl_lo = c1nl_lo_hartrees * factor_hartree_to_rydberg
-    # c1nl_rpa = c1nl_rpa_hartrees * factor_hartree_to_rydberg
-    # c1nl_rpa_fl = c1nl_rpa_fl_hartrees * factor_hartree_to_rydberg
-    # # RPA(+FL) means are error bars
-    # c1nl_rpa_means, c1nl_rpa_stdevs =
-    #     Measurements.value.(c1nl_rpa), Measurements.uncertainty.(c1nl_rpa)
-
-    # # Tail fit using RPA results
-    # # rpa_tail_fit_k0 = -(c1l_rpa + c1nl_rpa_means[1]) ./ wns
-    # # rpa_tail_fit_kF = -(c1l_rpa + c1nl_rpa_means[ikF_quad]) ./ wns
-    # # rpa_tail_fit_2kF = -(c1l_rpa + c1nl_rpa_means[i2kF_quad]) ./ wns
-    # rpa_tail_fit_k0 = -(c1l_rpa_vzn + c1nl_rpa_means[1]) ./ wns
-    # rpa_tail_fit_kF = -(c1l_rpa_vzn + c1nl_rpa_means[ikF_quad]) ./ wns
-    # rpa_tail_fit_2kF = -(c1l_rpa_vzn + c1nl_rpa_means[i2kF_quad]) ./ wns
-    # rpa_tail_fit_k0_err = c1nl_rpa_stdevs[1] ./ wns
-    # rpa_tail_fit_kF_err = c1nl_rpa_stdevs[ikF_quad] ./ wns
-    # rpa_tail_fit_2kF_err = c1nl_rpa_stdevs[i2kF_quad] ./ wns
+    # Tail fit using RPA results
+    rpa_tail_fit_k0 = -(c1l_rpa_over_eTF2 + c1nl_rpa_means[1]) ./ wntildes
+    rpa_tail_fit_k0_err = c1nl_rpa_stdevs[1] ./ wntildes
+    rpa_tail_fit_kF = -(c1l_rpa_over_eTF2 + c1nl_rpa_means[ikF_quad]) ./ wntildes
+    rpa_tail_fit_kF_err = c1nl_rpa_stdevs[ikF_quad] ./ wntildes
+    rpa_tail_fit_2kF = -(c1l_rpa_over_eTF2 + c1nl_rpa_means[i2kF_quad]) ./ wntildes
+    rpa_tail_fit_2kF_err = c1nl_rpa_stdevs[i2kF_quad] ./ wntildes
+    # rpa_tail_fit_k0 = -eTF^2 * (c1l_rpa_over_eTF2 + c1nl_rpa_means[1]) ./ wns / 2
+    # rpa_tail_fit_k0_err = -eTF^2 * c1nl_rpa_stdevs[1] ./ wns / 2
+    # rpa_tail_fit_kF = -eTF^2 * (c1l_rpa_over_eTF2 + c1nl_rpa_means[ikF_quad]) ./ wns / 2
+    # rpa_tail_fit_kF_err = -eTF^2 * c1nl_rpa_stdevs[ikF_quad] ./ wns / 2
+    # rpa_tail_fit_2kF = -eTF^2 * (c1l_rpa_over_eTF2 + c1nl_rpa_means[i2kF_quad]) ./ wns / 2
+    # rpa_tail_fit_2kF_err = -eTF^2 * c1nl_rpa_stdevs[i2kF_quad] ./ wns / 2
 
     println()
     println(c1l_N_mean)
     println(c1nl_N_means[ikF])
-
-    # println()
-    # println(c1l_N_mean + c1nl_N_means[1])
-    # println(c1l_N_mean + c1nl_N_means[ikF])
 
     # k = 0
     println()
@@ -429,28 +399,28 @@ function main()
     # Compare ImΣ_{G0W0}(iωₙ) and -C⁽¹⁾_N / ωₙ at k = 2kF
     fig, ax = plt.subplots()
     # k = 2kF
-    # ax.plot(wns / param.EF, param.EF * imag(sigma_g0w0_wn_dynamic_kF), "k"; label="\$G_0 W_0\$")
+    # ax.plot(wns / param1.EF, param1.EF * imag(sigma_g0w0_wn_dynamic_kF), "k"; label="\$G_0 W_0\$")
     ax.plot(
-        wns / param.EF,
-        imag(sigma_g0w0_wn_dynamic_2kF),
+        wns / param1.EF,
+        imag(sigma_g0w0_wn_dynamic_2kF) / eTF,
         "k";
         label="\$G_0 W_0\$ (\$r_s=1\$)",
     )
     ax.plot(
-        wn2s / param.EF,
-        imag(sigma2_g0w0_wn_dynamic_2kF),
+        wn2s / bparam2.EF,
+        imag(sigma2_g0w0_wn_dynamic_2kF) / eTF_rs2,
         "red";
         label="\$G_0 W_0\$ (\$r_s=2\$)",
     )
     ax.plot(
-        wns / param.EF,
+        wns / param1.EF,
         rpa_tail_fit_2kF,
         "C0";
         # linestyle="--",
         label="\$-C^{(1)}_{RPA} / \\omega_n\$",
     )
     ax.fill_between(
-        wns / param.EF,
+        wns / param1.EF,
         rpa_tail_fit_2kF - rpa_tail_fit_2kF_err,
         rpa_tail_fit_2kF + rpa_tail_fit_2kF_err;
         color="C0",
@@ -458,14 +428,14 @@ function main()
     )
     # ax.plot(wns / param.EF, sigma_g0w0_dynamic_kF, "C1"; label="\$k = k_F (RPA)\$")
     ax.plot(
-        wns / param.EF,
+        wns / param1.EF,
         tail_fit_2kF,
         "C1";
         # linestyle="--",
         label="\$-C^{(1)}_N / \\omega_n\$",
     )
     ax.fill_between(
-        wns / param.EF,
+        wns / param1.EF,
         tail_fit_2kF - tail_fit_2kF_err,
         tail_fit_2kF + tail_fit_2kF_err;
         color="C1",
@@ -475,12 +445,15 @@ function main()
     # ax.set_xlim(0, 200)
     # ax.set_xlim(0, maximum(wns) / param.EF)
     ax.set_xlim(0, 100)
+    # ax.set_xlim(0, 500)
     # ax.set_xlim(10, 500)
     # ax.set_ylim(; bottom=-0.003, top=0)
     ax.set_ylim(; bottom=-0.125, top=0)
     ax.legend(; loc="lower right")
     ax.set_xlabel("\$\\omega_n / \\epsilon_F\$")
-    ax.set_ylabel("\$\\mathrm{Im}\\Sigma(k = 2k_F, i\\omega_n)\$")
+    ax.set_ylabel(
+        "\$\\mathrm{Im}\\Sigma(k = 2k_F, i\\omega_n) / \\epsilon_{\\mathrm{TF}}\$",
+    )
     plt.tight_layout()
     fig.savefig(
         "results/high_frequency_tail/sigma_g0w0_tail_comparison_" *
@@ -494,26 +467,26 @@ function main()
     # k = kF
     # ax.plot(wns / param.EF, param.EF * imag(sigma_g0w0_wn_dynamic_kF), "k"; label="\$G_0 W_0\$")
     ax.plot(
-        wns / param.EF,
-        imag(sigma_g0w0_wn_dynamic_kF),
+        wns / param1.EF,
+        imag(sigma_g0w0_wn_dynamic_kF) / eTF,
         "k";
         label="\$G_0 W_0\$ (\$r_s=1\$)",
     )
     ax.plot(
-        wn2s / param.EF,
-        imag(sigma2_g0w0_wn_dynamic_kF),
+        wn2s / bparam2.EF,
+        imag(sigma2_g0w0_wn_dynamic_kF) / eTF_rs2,
         "red";
         label="\$G_0 W_0\$ (\$r_s=2\$)",
     )
     ax.plot(
-        wns / param.EF,
+        wns / param1.EF,
         rpa_tail_fit_kF,
         "C0";
         # linestyle="--",
         label="\$-C^{(1)}_{RPA} / \\omega_n\$",
     )
     ax.fill_between(
-        wns / param.EF,
+        wns / param1.EF,
         rpa_tail_fit_kF - rpa_tail_fit_kF_err,
         rpa_tail_fit_kF + rpa_tail_fit_kF_err;
         color="C0",
@@ -521,14 +494,14 @@ function main()
     )
     # ax.plot(wns / param.EF, sigma_g0w0_dynamic_kF, "C1"; label="\$k = k_F (RPA)\$")
     ax.plot(
-        wns / param.EF,
+        wns / param1.EF,
         tail_fit_kF,
         "C1";
         # linestyle="--",
         label="\$-C^{(1)}_N / \\omega_n\$",
     )
     ax.fill_between(
-        wns / param.EF,
+        wns / param1.EF,
         tail_fit_kF - tail_fit_kF_err,
         tail_fit_kF + tail_fit_kF_err;
         color="C1",
@@ -538,12 +511,13 @@ function main()
     # ax.set_xlim(0, 200)
     # ax.set_xlim(0, maximum(wns) / param.EF)
     ax.set_xlim(0, 100)
+    # ax.set_xlim(0, 500)
     # ax.set_xlim(10, 500)
     # ax.set_ylim(; bottom=-0.003, top=0)
     ax.set_ylim(; bottom=-0.125, top=0)
     ax.legend(; loc="lower right")
     ax.set_xlabel("\$\\omega_n / \\epsilon_F\$")
-    ax.set_ylabel("\$\\mathrm{Im}\\Sigma(k = k_F, i\\omega_n)\$")
+    ax.set_ylabel("\$\\mathrm{Im}\\Sigma(k = k_F, i\\omega_n) / \\epsilon_{\\mathrm{TF}}\$")
     plt.tight_layout()
     fig.savefig(
         "results/high_frequency_tail/sigma_g0w0_tail_comparison_" *
@@ -557,42 +531,42 @@ function main()
     # k = 0
     # ax.plot(wns / param.EF, imag(sigma_g0w0_wn_dynamic_k0), "k"; label="\$G_0 W_0\$")
     ax.plot(
-        wns / param.EF,
-        imag(sigma_g0w0_wn_dynamic_k0),
+        wns / param1.EF,
+        -imag(sigma_g0w0_wn_dynamic_k0) / eTF,
         "k";
         label="\$G_0 W_0\$ (\$r_s=1\$)",
     )
+    # ax.plot(
+    #     wn2s / bparam2.EF,
+    #     imag(sigma2_g0w0_wn_dynamic_k0) / eTF_rs2,
+    #     "red";
+    #     label="\$G_0 W_0\$ (\$r_s=2\$)",
+    # )
     ax.plot(
-        wn2s / param.EF,
-        imag(sigma2_g0w0_wn_dynamic_k0),
-        "red";
-        label="\$G_0 W_0\$ (\$r_s=2\$)",
-    )
-    ax.plot(
-        wns / param.EF,
-        rpa_tail_fit_k0,
+        wns / param1.EF,
+        -rpa_tail_fit_k0,
         "C0";
         # linestyle="--",
-        label="\$-C^{(1)}_{RPA} / \\omega_n\$",
+        label="\$C^{(1)}_{RPA} / \\omega_n\$",
     )
     ax.fill_between(
-        wns / param.EF,
-        rpa_tail_fit_k0 - rpa_tail_fit_k0_err,
-        rpa_tail_fit_k0 + rpa_tail_fit_k0_err;
+        wns / param1.EF,
+        -(rpa_tail_fit_k0 - rpa_tail_fit_k0_err),
+        -(rpa_tail_fit_k0 + rpa_tail_fit_k0_err);
         color="C0",
         alpha=0.4,
     )
     ax.plot(
-        wns / param.EF,
-        tail_fit_k0,
+        wns / param1.EF,
+        -tail_fit_k0,
         "C1";
         # linestyle="--",
-        label="\$-C^{(1)}_N / \\omega_n\$",
+        label="\$C^{(1)}_N / \\omega_n\$",
     )
     ax.fill_between(
-        wns / param.EF,
-        tail_fit_k0 - tail_fit_k0_err,
-        tail_fit_k0 + tail_fit_k0_err;
+        wns / param1.EF,
+        -(tail_fit_k0 - tail_fit_k0_err),
+        -(tail_fit_k0 + tail_fit_k0_err);
         color="C1",
         alpha=0.4,
     )
@@ -600,17 +574,21 @@ function main()
     # ax.set_xlim(0, 200)
     # ax.set_xlim(0, maximum(wns) / param.EF)
     ax.set_xlim(0, 100)
+    # ax.set_xlim(0, 500)
     # ax.set_xlim(10, 500)
     # ax.set_ylim(; bottom=-0.003, top=0)
-    ax.set_ylim(; bottom=-0.125, top=0)
-    ax.legend(; loc="lower right")
+    ax.set_xlim(0, 50)
+    ax.set_ylim(; bottom=0, top=0.06)
+    # ax.set_ylim(; bottom=-0.06, top=0)
+    ax.legend(; loc="best")
     ax.set_xlabel("\$\\omega_n / \\epsilon_F\$")
-    ax.set_ylabel("\$\\mathrm{Im}\\Sigma(k = 0, i\\omega_n)\$")
+    ax.set_ylabel("\$-\\mathrm{Im}\\Sigma(k = 0, i\\omega_n) / \\epsilon_{\\mathrm{TF}}\$")
     plt.tight_layout()
     fig.savefig(
         "results/high_frequency_tail/sigma_g0w0_tail_comparison_" *
         "N=$(N)_rs=$(rs)_beta_ef=$(beta)_" *
-        "lambda=$(mass2)_neval=$(neval)_$(solver)_k=0.pdf",
+        "lambda=$(mass2)_neval=$(neval)_$(solver)_k=0_small.pdf",
+        # "lambda=$(mass2)_neval=$(neval)_$(solver)_k=0.pdf",
     )
     plt.close("all")
 

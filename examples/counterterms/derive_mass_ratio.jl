@@ -17,32 +17,34 @@ end
 ############################################
 order = [4]  # C^{(1)}_{N≤5} includes CTs up to 3rd order
 beta = [40.0]
+rs = [3.0]
+mass2 = [1.5]
+
 # rs = [2.0]
 # mass2 = [1.75]
 # mass2 = [1.5, 1.75, 2.0]
 # mass2 = [0.1, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
 ### rs = 3 ###
 # rs = 3.0
-# mass2 = [1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 3.5, 4.0, 5.0, 6.0]
+# mass2 = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 3.5, 4.0, 5.0, 6.0]
 ### rs = 4 ###
 # rs = 4.0
-# mass2 = [2.0, 2.25, 2.5, 2.75, 3.0, 3.5, 4.0, 4.5, 5.0, 6.0, 7.0]
+# mass2 = [0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 2.25, 2.5, 2.75, 3.0, 3.5, 4.0, 4.5, 5.0, 6.0, 7.0]
 ### rs = 5 ###
-rs = 5.0
-mass2 = [3.0, 3.25, 3.5, 3.75, 4.0, 4.5, 5.0, 5.5, 6.0, 7.0, 8.0]
+# rs = 5.0
+# mass2 = [0.1, 0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 3.25, 3.5, 3.75, 4.0, 4.5, 5.0, 5.5, 6.0, 7.0, 8.0]
 
 # Momentum spacing for finite-difference derivative of Sigma (in units of para.kF)
 δK = 0.005  # spacings n*δK = 0.15–0.3 not relevant for rs = 1.0 => reduce δK by half
 
 # We estimate the derivative wrt k using grid points kgrid[ikF] and kgrid[ikF + idk]
-# idks = 1:30
 idks = 1:15
 
 # kgrid indices & spacings
 dks = δK * collect(idks)
 
 # Which finite difference method for numerical k derivative?
-method = :forward
+method = :central
 
 ############################################
 ############################################
@@ -110,8 +112,8 @@ function process_mass_ratio(datatuple, isSave; idk=1, method=:forward)
     println("Max order: ", max_order)
 
     # Reexpand merged data in powers of μ
-    ct_filename = "data/data_Z$(ct_string)_kF_opt.jld2"
-    # ct_filename = "data/data_Z$(ct_string)_kF.jld2"
+    # ct_filename = "data/data_Z$(ct_string)_kF_opt.jld2"
+    ct_filename = "data/data_Z$(ct_string)_kF.jld2"
     # ct_filename = "data/data_Z$(ct_string)_k0.jld2"
     # ct_filename = "data/data_Z$(ct_string).jld2"
     z, μ = UEG_MC.load_z_mu(para; ct_filename=ct_filename, parafilename=parafilename)

@@ -35,13 +35,17 @@ function main()
     # lambdas = [1.0, 3.0]
     ### rs = 3 ###
     # rs = 3.0
-    # lambdas = [1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 3.5, 4.0, 5.0, 6.0]
+    # lambdas = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0]
+    # lambdas = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 3.5, 4.0, 5.0, 6.0]
     ### rs = 4 ###
     # rs = 4.0
-    # lambdas = [2.0, 2.25, 2.5, 2.75, 3.0, 3.5, 4.0, 4.5, 5.0, 6.0, 7.0]
+    # lambdas = [0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 2.25, 2.5, 2.75, 3.0]
+    # lambdas = [0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 2.25, 2.5, 2.75, 3.0, 3.5, 4.0, 4.5, 5.0, 6.0]
     ### rs = 5 ###
     rs = 5.0
-    lambdas = [3.0, 3.25, 3.5, 3.75, 4.0, 4.5, 5.0, 5.5, 6.0, 7.0, 8.0]
+    lambdas = [0.25, 0.5, 0.75, 1.0, 2.0, 3.0]
+    # lambdas = [0.1, 0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 3.25, 3.5, 3.75, 4.0, 4.5, 5.0, 5.5, 6.0]
+    # lambdas = [0.1, 0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
     solver = :mcmc
 
     min_order = 0
@@ -71,9 +75,10 @@ function main()
     end
 
     # Use derivative estimate with δK = dks[idk] (grid points kgrid[ikF] and kgrid[ikF + idk])
-    idk = 1
+    # idk = 1
     # idk = 3  # From lambda = 0.4 stationarity test (δK = 0.015kF)
     # idk = 6  # Try the same grid spacing as rs=1 (δK = 0.03kF)
+    idk = 15
 
     # Momentum spacing for finite-difference derivative of Sigma (in units of para.kF)
     δK = 0.005  # spacings n*δK = 0.15–0.3 not relevant for rs = 1.0 => reduce δK by half
@@ -129,46 +134,53 @@ function main()
 
     # Plot the results for each order ξ vs lambda
     fig, ax = plt.subplots()
-    # ax.axvline(1.0; linestyle="--", color="dimgray", label="\$\\lambda^\\star = 1\$")
+    if rs == 3.0
+        ax.axvline(1.0; linestyle="--", color="dimgray", label="\$\\lambda^\\star = 1\$")
+    elseif rs == 4.0
+        ax.axvline(1.0; linestyle="--", color="dimgray", label="\$\\lambda^\\star = 1\$")
+    elseif rs == 5.0
+        ax.axvline(0.875; linestyle="--", color="dimgray", label="\$\\lambda^\\star = 0.875\$")
+    end
     # for (i, N) in enumerate(0:4)
     for (i, N) in enumerate(0:4)
         N == 0 && continue  # Ignore zeroth order
         # Get means and error bars from the result up to this order
         means = Measurements.value.(mass_ratios_N_vs_lambda[i])
         stdevs = Measurements.uncertainty.(mass_ratios_N_vs_lambda[i])
-        ax.plot(
-            lambdas,
-            means,
-            "o-";
-            color="C$i",
-            markersize=3,
-            label="\$N=$N\$ ($solver)",
-        )
+        ax.plot(lambdas, means, "o-"; color="C$i", markersize=3, label="\$N=$N\$ ($solver)")
         ax.fill_between(lambdas, (means - stdevs), (means + stdevs); color="C$i", alpha=0.3)
     end
     # ax.set_xlim(0.1, 2.0)
     if rs == 3.0
         yloc = 1.0375
         ydiv = -0.02
-        ax.set_ylim(0.9, 1.06)
+        ax.set_ylim(0.89, 1.06)
     elseif rs == 4.0
-        yloc = 1.0275
-        ydiv = -0.0125
-        ax.set_ylim(0.95, 1.04)
+        yloc = 1.0375
+        ydiv = -0.02
+        ax.set_ylim(0.89, 1.06)
+        # yloc = 1.0275
+        # ydiv = -0.0125
+        # ax.set_ylim(0.95, 1.04)
     elseif rs == 5.0
-        yloc = 1.005
-        ydiv = -0.003
-        ax.set_ylim(0.9875, 1.01)
+        yloc = 1.0375
+        ydiv = -0.02
+        ax.set_ylim(0.89, 1.06)
+        # yloc = 1.0275
+        # ydiv = -0.0125
+        # ax.set_ylim(0.95, 1.04)
     else
         yloc = 1.0375
         ydiv = -0.02
         ax.set_ylim(0.85, 1.06)
     end
+    ax.set_xlim(0.125, 3.125)
     ax.legend(; loc="lower right")
     ax.set_xlabel("\$\\lambda\$ (Ry)")
     ax.set_ylabel("\$m^\\star / m\$")
-    # xloc = 1.0
-    xloc = rs
+    # xloc = rs
+    # xloc = 2.0
+    xloc = 1.25
     ax.text(
         xloc,
         yloc,
