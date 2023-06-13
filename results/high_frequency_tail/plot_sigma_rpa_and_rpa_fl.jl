@@ -231,34 +231,6 @@ function get_rpa_moments(param::Parameter.Para; k=0.0)
     # Non-dimensionalize bare and RPA+FL non-local moments (stored in Hartree a.u.!)
     sosem_hartrees = np.load("results/data/soms_rs=$(rs)_beta_ef=40.0.npz")
 
-    # Momentum grid for HEG SOMS data
-    kgrid = np.linspace(0.0, 3.0 * param.kF; num=600)
-
-    # RPA kgrid and results (stored in Hartree a.u.)
-    c1nl_rpa = (
-        sosem_hartrees.get("rpa_b") +
-        sosem_hartrees.get("bare_c") +
-        sosem_hartrees.get("bare_d")
-    )
-    # Error bar comes from δC⁽¹ᵇ⁾_{RPA} only
-    c1nl_rpa_err = sosem_hartrees.get("rpa_b_err")
-
-    # Hartree to Rydberg conversions:
-    # • Zeroth-order:
-    #       [c0] = [E] ⟹ c0 E_H = c0 E_Ry * (E_H / E_Ry) = 2 c0 E_Ry
-    # • First-order:
-    #       [c1nl] = [c1l] = [E]² ⟹ c1nl (E_H)² = c1nl (E_Ry)² * (E_H / E_Ry)² = 4 c1nl (E_Ry)²
-    c1nl_rpa *= 4
-    c1nl_rpa_err *= 4
-
-    # Linearly interpolate data to evaluate exactly at momentum k
-    c1nl_rpa_interp = linear_interpolation(kgrid, c1nl_rpa; extrapolation_bc=Line())
-    c1nl_rpa_err_interp = linear_interpolation(kgrid, c1nl_rpa_err; extrapolation_bc=Line())
-
-    # RPA(+FL) means and error bars
-    c1nl_rpa_mean = c1nl_rpa_interp(k)
-    c1nl_rpa_stdev = c1nl_rpa_err_interp(k)
-
     # Get local RPA moment from HEG SOMS data for comparison
     c1l_rpa_hartrees = sosem_hartrees.get("rpa_a_T=0")[1]  # singleton array
     # TODO: Fix overall sign error on local moment in get_heg_som.py
@@ -269,19 +241,11 @@ function get_rpa_moments(param::Parameter.Para; k=0.0)
     # Compare heg_soms and VZN results for RPA local moment
     println("(VZN) C⁽¹⁾ˡ (RPA, rs = $(rs)): $c1l_rpa_vzn")
     println("(SOM) C⁽¹⁾ˡ (RPA, rs = $(rs)): $c1l_rpa")
-    println(
-        "(SOM) C⁽¹⁾ⁿˡ(k = $(k)) (RPA, rs = $(rs)): $(c1nl_rpa_mean) ± $(c1nl_rpa_stdev)",
-    )
+    println("Relative error (SOM vs VZN): $(abs(c1l_rpa - c1l_rpa_vzn) / c1l_rpa_vzn)")
 
-    # NOTE: Mixing VZN and SOSEM data here
-    # TODO: Benchmark local RPA moment against VZN to check our systematic errors!
-    # rpa_c1 = c1l_rpa_over_eTF2_vzn + c1nl_rpa_mean
-    # rpa_c1_err = c1nl_rpa_stdevs[1]
-
-    # Tail fit to -ImΣ using RPA results
-    rpa_c1 = c1l_rpa + c1nl_rpa_mean
-    rpa_c1_err = c1nl_rpa_stdev
-    return rpa_c1, rpa_c1_err
+    # G₀W₀ asymptotics => all local tail!
+    return c1l_rpa
+    # return c1l_rpa_vzn
 end
 
 function get_rpa_fl_moments(param::Parameter.Para; k=0.0)
@@ -292,34 +256,6 @@ function get_rpa_fl_moments(param::Parameter.Para; k=0.0)
     # Non-dimensionalize bare and RPA+FL non-local moments (stored in Hartree a.u.!)
     sosem_hartrees = np.load("results/data/soms_rs=$(rs)_beta_ef=40.0.npz")
 
-    # Momentum grid for HEG SOMS data
-    kgrid = np.linspace(0.0, 3.0 * param.kF; num=600)
-
-    # Bare and RPA(+FL) results (stored in Hartree a.u.)
-    c1nl_rpa_fl =
-        sosem_hartrees.get("rpa+fl_b") +
-        sosem_hartrees.get("bare_c") +
-        sosem_hartrees.get("bare_d")
-    # Error bar comes from δC⁽¹ᵇ⁾_{RPA+FL} only
-    c1nl_rpa_fl_err = sosem_hartrees.get("rpa+fl_b_err")
-
-    # Hartree to Rydberg conversions:
-    # • Zeroth-order:
-    #       [c0] = [E] ⟹ c0 E_H = c0 E_Ry * (E_H / E_Ry) = 2 c0 E_Ry
-    # • First-order:
-    #       [c1nl] = [c1l] = [E]² ⟹ c1nl (E_H)² = c1nl (E_Ry)² * (E_H / E_Ry)² = 4 c1nl (E_Ry)²
-    c1nl_rpa_fl *= 4
-    c1nl_rpa_fl_err *= 4
-
-    # Linearly interpolate data to evaluate exactly at momentum k
-    c1nl_rpa_fl_interp = linear_interpolation(kgrid, c1nl_rpa_fl; extrapolation_bc=Line())
-    c1nl_rpa_fl_err_interp =
-        linear_interpolation(kgrid, c1nl_rpa_fl_err; extrapolation_bc=Line())
-
-    # RPA(+FL) means and error bars
-    c1nl_rpa_fl_mean = c1nl_rpa_fl_interp(k)
-    c1nl_rpa_fl_stdev = c1nl_rpa_fl_err_interp(k)
-
     # Get local RPA+FL moment from HEG SOMS data (no VZN data available!)
     c1l_rpa_fl_hartrees = sosem_hartrees.get("rpa+fl_a_T=0")[1]  # singleton array
     # TODO: Fix overall sign error on local moment in get_heg_som.py
@@ -329,14 +265,9 @@ function get_rpa_fl_moments(param::Parameter.Para; k=0.0)
 
     # Print heg_soms results for RPA+FL local moment
     println("(SOM) C⁽¹⁾ˡ (RPA+FL, rs = $(rs)): $c1l_rpa_fl")
-    println(
-        "(SOM) C⁽¹⁾ⁿˡ(k = $(k)) (RPA+FL, rs = $(rs): $(c1nl_rpa_fl_mean) ± $(c1nl_rpa_fl_stdev)",
-    )
 
-    # Tail fit to -ImΣ using RPA+FL results
-    rpa_fl_c1 = c1l_rpa_fl + c1nl_rpa_fl_mean
-    rpa_fl_c1_err = c1nl_rpa_fl_stdev
-    return rpa_fl_c1, rpa_fl_c1_err
+    # G₀W₀+FL asymptotics => all local tail!
+    return c1l_rpa_fl
 end
 
 function main()
@@ -355,17 +286,89 @@ function main()
 
     # The unit system to use for plotting
     # units = :Rydberg
-    units = :EF
-    # units = :eTF
+    # units = :EF
+    units = :eTF
+
+    rs_qmc = 1.0
+    beta = 40.0
+    mass2 = 1.0
+    solver = :vegasmc
+    expand_bare_interactions = 0
+
+    neval_c1l = 1e10
+    neval_c1b0 = 5e10
+    neval_c1b = 5e10
+    neval_c1c = 5e10
+    neval_c1d = 5e10
+    neval = max(neval_c1b0, neval_c1b, neval_c1c, neval_c1d)
+
+    # Use SOSEM data to max order N calculated in RPT
+    N = 5
+
+    # Use LaTex fonts for plots
+    plt.rc("text"; usetex=true)
+    plt.rc("font"; family="serif")
+
+    # Distinguish results with fixed vs re-expanded bare interactions
+    intn_str = ""
+    if expand_bare_interactions == 2
+        intn_str = "no_bare_"
+    elseif expand_bare_interactions == 1
+        intn_str = "one_bare_"
+    end
+
+    # Filename for new JLD2 format
+    filename =
+    # "results/data/rs=$(rs_qmc)_beta_ef=$(beta)_" *
+        "archives/rs=$(rs_qmc)_beta_ef=$(beta)_lambda=$(mass2)_" *
+        "$(intn_str)$(solver)_with_ct_mu_lambda_archive1"
+
+    # Load SOSEM data
+    local param1, kgrid, k_kf_grid, c1l_N_mean, c1l_N_total, c1nl_N_total
+    # Load the data for each observable
+    f = jldopen("$filename.jld2", "r")
+    param1 = f["c1d/N=$N/neval=$neval_c1d/param"]
+    kgrid = f["c1d/N=$N/neval=$neval_c1d/kgrid"]
+    c1l_N_total = f["c1l/N=$N/neval=$neval_c1l/meas"][1]
+    if N == 2
+        c1nl_N_total =
+            f["c1b0/N=$N/neval=$neval_c1b0/meas"] +
+            f["c1c/N=$N/neval=$neval_c1c/meas"] +
+            f["c1d/N=$N/neval=$neval_c1d/meas"]
+    else
+        c1nl_N_total =
+            f["c1b0/N=$N/neval=$neval_c1b0/meas"] +
+            f["c1b/N=$N/neval=$neval_c1b/meas"] +
+            f["c1c/N=$N/neval=$neval_c1c/meas"] +
+            f["c1d/N=$N/neval=$neval_c1d/meas"]
+    end
+    close(f)  # close file
+
+    # Get dimensionless k-grid (k / kF)
+    k_kf_grid = kgrid / param1.kF
+
+    # Get means and error bars from the result up to this order
+    c1l_N_mean, c1l_N_stdev =
+        Measurements.value.(c1l_N_total), Measurements.uncertainty.(c1l_N_total)
+    c1nl_N_means, c1nl_N_stdevs =
+        Measurements.value.(c1nl_N_total), Measurements.uncertainty.(c1nl_N_total)
+    @assert length(k_kf_grid) == length(c1nl_N_means) == length(c1nl_N_stdevs)
+
+    # The high-frequency tail of ImΣ(iωₙ) is -C⁽¹⁾ / ωₙ.
+    iktarget = searchsortedfirst(kgrid, ktarget)
+    tail = (c1l_N_mean + c1nl_N_means[iktarget])
+    tail_err = (c1l_N_stdev + c1nl_N_stdevs[iktarget])
 
     # Use LaTex fonts for plots
     plt.rc("text"; usetex=true)
     plt.rc("font"; family="serif")
 
     fig2, ax2 = plt.subplots()
+    fig3, ax3 = plt.subplots()
     darkcolors = ["midnightblue", "saddlebrown", "darkgreen", "darkred"]
+    sigma_peak = 0.0
     for (i, rs) in enumerate(rslist)
-        sigma_peak = 0.0
+        sigma_subpeak = 0.0
         fig, ax = plt.subplots()
 
         println("\nPlotting data for rs = $rs...")
@@ -418,22 +421,32 @@ function main()
         hf_c0 = qp_fock_exact(ktarget, param)
 
         # Get first-order RPA and RPA+FL moments at k = ktarget
-        rpa_c1, rpa_c1_err = get_rpa_moments(param; k=ktarget)
-        rpa_fl_c1, rpa_fl_c1_err = get_rpa_fl_moments(param; k=ktarget)
-        println("First-order RPA moment (Rydberg): ", rpa_c1, " ± ", rpa_c1_err)
-        println("First-order RPA+FL moment (Rydberg): ", rpa_fl_c1, " ± ", rpa_fl_c1_err)
+        rpa_c1 = get_rpa_moments(param; k=ktarget)
+        rpa_fl_c1 = get_rpa_fl_moments(param; k=ktarget)
+        println("First-order RPA moment (Rydberg): ", rpa_c1)
+        println("First-order RPA+FL moment (Rydberg): ", rpa_fl_c1)
+
+        # # Get first-order RPA and RPA+FL moments at k = ktarget
+        # rpa_c1, rpa_c1_err = get_rpa_moments(param; k=ktarget)
+        # rpa_fl_c1, rpa_fl_c1_err = get_rpa_fl_moments(param; k=ktarget)
+        # println("First-order RPA moment (Rydberg): ", rpa_c1, " ± ", rpa_c1_err)
+        # println("First-order RPA+FL moment (Rydberg): ", rpa_fl_c1, " ± ", rpa_fl_c1_err)
 
         # Nondimensionalize moments in units of EF
         rpa_c1_over_EF2 = rpa_c1 / EF^2
-        rpa_c1_err_over_EF2 = rpa_c1_err / EF^2
+        # rpa_c1_err_over_EF2 = rpa_c1_err / EF^2
         rpa_fl_c1_over_EF2 = rpa_fl_c1 / EF^2
-        rpa_fl_c1_err_over_EF2 = rpa_fl_c1_err / EF^2
+        # rpa_fl_c1_err_over_EF2 = rpa_fl_c1_err / EF^2
+        tail_over_EF2 = tail / EF^2
+        tail_err_over_EF2 = tail_err / EF^2
 
         # Nondimensionalize moments in units of eTF
         rpa_c1_over_eTF2 = rpa_c1 / eTF^2
-        rpa_c1_err_over_eTF2 = rpa_c1_err / eTF^2
+        # rpa_c1_err_over_eTF2 = rpa_c1_err / eTF^2
         rpa_fl_c1_over_eTF2 = rpa_fl_c1 / eTF^2
-        rpa_fl_c1_err_over_eTF2 = rpa_fl_c1_err / eTF^2
+        # rpa_fl_c1_err_over_eTF2 = rpa_fl_c1_err / eTF^2
+        tail_over_eTF2 = tail / eTF^2
+        tail_err_over_eTF2 = tail_err / eTF^2
 
         # Nondimensionalize zeroth-order moment in units of EF
         hf_c0_over_EF = hf_c0 / EF
@@ -442,8 +455,11 @@ function main()
         hf_c0_over_eTF = hf_c0 / eTF
 
         local wns_plot
-        local rpa_c1_plot, rpa_c1_err_plot
-        local rpa_fl_c1_plot, rpa_fl_c1_err_plot
+        local tail_plot, tail_err_plot
+        local rpa_c1_plot
+        local rpa_fl_c1_plot
+        # local rpa_c1_plot, rpa_c1_err_plot
+        # local rpa_fl_c1_plot, rpa_fl_c1_err_plot
         local sigma_rpa_dyn_plot, sigma_rpa_fl_dyn_plot
         local sigma_rpa_stat_plot, sigma_rpa_fl_stat_plot
         # wns_plot = wns
@@ -451,11 +467,14 @@ function main()
             wns_plot = wns
             # Zeroth-order moment
             hf_c0_plot = hf_c0
+            # RPT tail
+            tail_plot = tail
+            tail_err_plot = tail_err
             # First-order moment tails
             rpa_c1_plot = rpa_c1
-            rpa_c1_err_plot = rpa_c1_err
+            # rpa_c1_err_plot = rpa_c1_err
             rpa_fl_c1_plot = rpa_fl_c1
-            rpa_fl_c1_err_plot = rpa_fl_c1_err
+            # rpa_fl_c1_err_plot = rpa_fl_c1_err
             # Static part
             sigma_rpa_stat_plot = sigma_rpa_wn_stat
             sigma_rpa_fl_stat_plot = sigma_rpa_fl_wn_stat
@@ -466,11 +485,14 @@ function main()
             wns_plot = wns_over_EF
             # Zeroth-order moment
             hf_c0_plot = hf_c0_over_EF
+            # RPT tail
+            tail_plot = tail_over_EF2
+            tail_err_plot = tail_err_over_EF2
             # First-order moment tails
             rpa_c1_plot = rpa_c1_over_EF2
-            rpa_c1_err_plot = rpa_c1_err_over_EF2
+            # rpa_c1_err_plot = rpa_c1_err_over_EF2
             rpa_fl_c1_plot = rpa_fl_c1_over_EF2
-            rpa_fl_c1_err_plot = rpa_fl_c1_err_over_EF2
+            # rpa_fl_c1_err_plot = rpa_fl_c1_err_over_EF2
             # Static part
             sigma_rpa_stat_plot = sigma_rpa_wn_stat_over_EF
             sigma_rpa_fl_stat_plot = sigma_rpa_fl_wn_stat_over_EF
@@ -481,11 +503,14 @@ function main()
             wns_plot = wns_over_eTF
             # Zeroth-order moment
             hf_c0_plot = hf_c0_over_eTF
+            # RPT tail
+            tail_plot = tail_over_eTF2
+            tail_err_plot = tail_err_over_eTF2
             # First-order moment tails
             rpa_c1_plot = rpa_c1_over_eTF2
-            rpa_c1_err_plot = rpa_c1_err_over_eTF2
+            # rpa_c1_err_plot = rpa_c1_err_over_eTF2
             rpa_fl_c1_plot = rpa_fl_c1_over_eTF2
-            rpa_fl_c1_err_plot = rpa_fl_c1_err_over_eTF2
+            # rpa_fl_c1_err_plot = rpa_fl_c1_err_over_eTF2
             # Static part
             sigma_rpa_stat_plot = sigma_rpa_wn_stat_over_eTF
             sigma_rpa_fl_stat_plot = sigma_rpa_fl_wn_stat_over_eTF
@@ -497,14 +522,14 @@ function main()
             println(
                 "First-order RPA moment ($units): ",
                 rpa_c1_plot,
-                " ± ",
-                rpa_c1_err_plot,
+                # " ± ",
+                # rpa_c1_err_plot,
             )
             println(
                 "First-order RPA+FL moment ($units): ",
                 rpa_fl_c1_plot,
-                " ± ",
-                rpa_fl_c1_err_plot,
+                # " ± ",
+                # rpa_fl_c1_err_plot,
             )
         end
         println("(RPA) -ImΣ(0, 0) = ", -imag(sigma_rpa_dyn_plot[1]))
@@ -534,73 +559,106 @@ function main()
             label="\$RPA+FL\$ (\$r_s=$rs\$)",
         )
 
-        ### Comparison of -ImΣ to first-order moment tails ###
+        labels = [
+            [
+                "\$C^{(1)}_{RPA} / \\omega_n\$ (\$r_s=$rs\$)",
+                "\$C^{(1)}_{RPA+FL} / \\omega_n\$ (\$r_s=$rs\$)",
+            ],
+            [nothing, nothing],
+        ]
         sigma_peak = max(
             sigma_peak,
             maximum(-imag(sigma_rpa_dyn_plot)),
             maximum(-imag(sigma_rpa_fl_dyn_plot)),
         )
-        # RPA -ImΣ and tail fit in chosen unit system
-        ax.plot(
-            wns_plot,
-            rpa_c1_plot ./ wns_plot,
-            "C$(i-1)";
-            linestyle="dashed",
-            label="\$C^{(1)}_{RPA} / \\omega_n\$ (\$r_s=$rs\$)",
+        sigma_subpeak = max(
+            sigma_subpeak,
+            maximum(-imag(sigma_rpa_dyn_plot)),
+            maximum(-imag(sigma_rpa_fl_dyn_plot)),
         )
-        ax.fill_between(
-            wns_plot,
-            (rpa_c1_plot - rpa_c1_err_plot) ./ wns_plot,
-            (rpa_c1_plot + rpa_c1_err_plot) ./ wns_plot;
-            color="C$(i-1)",
-            alpha=0.4,
-        )
-        ax.plot(
-            wns_plot,
-            -imag(sigma_rpa_dyn_plot),
-            "C$(i-1)";
-            label="\$RPA\$ (\$r_s=$rs\$)",
-        )
-        # RPA+FL -ImΣ and tail fit in chosen unit system
-        ax.plot(
-            wns_plot,
-            rpa_fl_c1_plot ./ wns_plot,
-            "$(darkcolors[i])";
-            linestyle="dashed",
-            label="\$C^{(1)}_{RPA+FL} / \\omega_n\$ (\$r_s=$rs\$)",
-        )
-        ax.fill_between(
-            wns_plot,
-            (rpa_fl_c1_plot - rpa_fl_c1_err_plot) ./ wns_plot,
-            (rpa_fl_c1_plot + rpa_fl_c1_err_plot) ./ wns_plot;
-            color="$(darkcolors[i])",
-            alpha=0.4,
-        )
-        ax.plot(
-            wns_plot,
-            -imag(sigma_rpa_fl_dyn_plot),
-            "$(darkcolors[i])";
-            label="\$RPA+FL\$ (\$r_s=$rs\$)",
-        )
-        # Analytic RPA(+FL) tail behaviors from VZN
-        # rpa_analytic_tail = get_rpa_analytic_tail(wns_plot, param)
-        # rpa_fl_analytic_tail = get_rpa_fl_analytic_tail(wns_plot, param)
-        # ax.plot(
-        #     wns_plot / param.EF,
-        #     rpa_analytic_tail,
-        #     "C$(i-1)";
-        #     linestyle="dotted",
-        #     label="\$-\\frac{16\\sqrt{2}}{3\\pi}\\frac{(\\alpha r_s)^2}{\\omega^{3/2}_n}\$",
-        # )
-        # ax.plot(
-        #     wns_plot / param.EF,
-        #     rpa_fl_analytic_tail,
-        #     "$(darkcolors[i])";
-        #     linestyle="dotted",
-        #     label="\$-\\left(1 - f_s\\right)\\frac{16\\sqrt{2}}{3\\pi}\\frac{(\\alpha r_s)^2}{\\omega^{3/2}_n}\$",
-        # )
+        for (axis, axis_labels) in zip([ax, ax3], labels)
+            ### Comparison of -ImΣ to RPA(+FL) asymptotics and RPT first-order moment tail ###
+            # RPA -ImΣ and tail fit in chosen unit system
+            axis.plot(
+                wns_plot,
+                rpa_c1_plot ./ wns_plot,
+                "C$(i-1)";
+                linestyle="dashed",
+                label=axis_labels[1],
+                # label="\$C^{(1)}_{RPA} / \\omega_n\$ (\$r_s=$rs\$)",
+            )
+            # axis.fill_between(
+            #     wns_plot,
+            #     (rpa_c1_plot - rpa_c1_err_plot) ./ wns_plot,
+            #     (rpa_c1_plot + rpa_c1_err_plot) ./ wns_plot;
+            #     color="C$(i-1)",
+            #     alpha=0.4,
+            # )
+            axis.plot(
+                wns_plot,
+                -imag(sigma_rpa_dyn_plot),
+                "C$(i-1)";
+                label="\$RPA\$ (\$r_s=$rs\$)",
+            )
+            # # RPA+FL -ImΣ and tail fit in chosen unit system
+            # axis.plot(
+            #     wns_plot,
+            #     rpa_fl_c1_plot ./ wns_plot,
+            #     "$(darkcolors[i])";
+            #     linestyle="dashed",
+            #     label=axis_labels[2],
+            #     # label="\$C^{(1)}_{RPA+FL} / \\omega_n\$ (\$r_s=$rs\$)",
+            # )
+            # axis.fill_between(
+            #     wns_plot,
+            #     (rpa_fl_c1_plot - rpa_fl_c1_err_plot) ./ wns_plot,
+            #     (rpa_fl_c1_plot + rpa_fl_c1_err_plot) ./ wns_plot;
+            #     color="$(darkcolors[i])",
+            #     alpha=0.4,
+            # )
+            # axis.plot(
+            #     wns_plot,
+            #     -imag(sigma_rpa_fl_dyn_plot),
+            #     "$(darkcolors[i])";
+            #     label="\$RPA+FL\$ (\$r_s=$rs\$)",
+            # )
+            # Analytic RPA(+FL) tail behaviors from VZN
+            # rpa_analytic_tail = get_rpa_analytic_tail(wns_plot, param)
+            # rpa_fl_analytic_tail = get_rpa_fl_analytic_tail(wns_plot, param)
+            # axis.plot(
+            #     wns_plot / param.EF,
+            #     rpa_analytic_tail,
+            #     "C$(i-1)";
+            #     linestyle="dotted",
+            #     label="\$-\\frac{16\\sqrt{2}}{3\\pi}\\frac{(\\alpha r_s)^2}{\\omega^{3/2}_n}\$",
+            # )
+            # axis.plot(
+            #     wns_plot / param.EF,
+            #     rpa_fl_analytic_tail,
+            #     "$(darkcolors[i])";
+            #     linestyle="dotted",
+            #     label="\$-\\left(1 - f_s\\right)\\frac{16\\sqrt{2}}{3\\pi}\\frac{(\\alpha r_s)^2}{\\omega^{3/2}_n}\$",
+            # )
+        end
+        # Include QMC result at rs = 1
+        if rs == 1.0
+            ax.plot(
+                wns_plot,
+                tail_plot,
+                "k";
+                linestyle="dashed",
+                label="\$C^{(1)}_N / \\omega_n\$ (\$r_s=1\$)",
+            )
+            ax.fill_between(
+                wns_plot,
+                (tail_plot - tail_err_plot),
+                (tail_plot + tail_err_plot);
+                color="k",
+                alpha=0.4,
+            )
+        end
         ax.set_xlim(0, 50)
-        ax.set_ylim(; bottom=0, top=1.1 * sigma_peak)
+        ax.set_ylim(; bottom=0, top=1.1 * sigma_subpeak)
         # ax2.set_ylim(; bottom=0, top=0.35)
         ax.legend(; loc="best")
         # ax.set_xlabel("\$\\omega_n / \\epsilon_F\$")
@@ -639,6 +697,27 @@ function main()
     ax2.set_xlabel("\$\\omega_n / \\epsilon_F\$")
     fig2.savefig(
         "results/high_frequency_tail/re_sigma_tail_comparisons_" *
+        "rs=$(rslist)_beta_ef=$(beta)_k=$(ktarget)_$(units).pdf",
+    )
+
+    ax3.set_xlim(0, 50)
+    ax3.set_ylim(; bottom=0, top=1.1 * sigma_peak)
+    ax3.legend(; loc="best")
+    if units == :Rydberg
+        ax3.set_xlabel("\$\\omega_n\$")
+        ax3.set_ylabel("\$-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n)\$")
+    elseif units == :EF
+        ax3.set_xlabel("\$\\omega_n / \\epsilon_F\$")
+        ax3.set_ylabel("\$-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n) / \\epsilon_F\$")
+    else  # units == :eTF
+        ax3.set_xlabel("\$\\omega_n / \\epsilon_{\\mathrm{TF}}\$")
+        ax3.set_ylabel(
+            "\$-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n) / \\epsilon_{\\mathrm{TF}}\$",
+        )
+    end
+    plt.tight_layout()
+    fig3.savefig(
+        "results/high_frequency_tail/im_sigma_tail_comparisons_" *
         "rs=$(rslist)_beta_ef=$(beta)_k=$(ktarget)_$(units).pdf",
     )
     plt.close("all")
