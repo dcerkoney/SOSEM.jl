@@ -356,9 +356,7 @@ function main()
 
     # The high-frequency tail of ImΣ(iωₙ) is -C⁽¹⁾ / ωₙ.
     iktarget = searchsortedfirst(kgrid, ktarget)
-    tail = (c1l_N_mean + c1nl_N_means[iktarget])
-    tail_err = (c1l_N_stdev + c1nl_N_stdevs[iktarget])
-
+    
     # Use LaTex fonts for plots
     plt.rc("text"; usetex=true)
     plt.rc("font"; family="serif")
@@ -432,21 +430,31 @@ function main()
         # println("First-order RPA moment (Rydberg): ", rpa_c1, " ± ", rpa_c1_err)
         # println("First-order RPA+FL moment (Rydberg): ", rpa_fl_c1, " ± ", rpa_fl_c1_err)
 
+        # RPT tail calculation was nondimensionalized via division by eTF^2
+        rpt_c1_over_eTF2 = (c1l_N_mean + c1nl_N_means[iktarget])
+        rpt_err_c1_over_eTF2 = (c1l_N_stdev + c1nl_N_stdevs[iktarget])
+        rpt_c1 = rpt_c1_over_eTF2 * eTF^2
+        rpt_err_c1 = rpt_err_c1_over_eTF2 * eTF^2
+        rpt_c1_over_EF2 = rpt_c1 / EF^2
+        rpt_err_c1_over_EF2 = rpt_err_c1 / EF^2
+        # tail = c1_rpt ./ wns
+        # tail_err = c1_err_rpt ./ wns
+
         # Nondimensionalize moments in units of EF
         rpa_c1_over_EF2 = rpa_c1 / EF^2
         # rpa_c1_err_over_EF2 = rpa_c1_err / EF^2
         rpa_fl_c1_over_EF2 = rpa_fl_c1 / EF^2
         # rpa_fl_c1_err_over_EF2 = rpa_fl_c1_err / EF^2
-        tail_over_EF2 = tail / EF^2
-        tail_err_over_EF2 = tail_err / EF^2
+        # tail_over_EF2 = tail / EF^2
+        # tail_err_over_EF2 = tail_err / EF^2
 
         # Nondimensionalize moments in units of eTF
         rpa_c1_over_eTF2 = rpa_c1 / eTF^2
         # rpa_c1_err_over_eTF2 = rpa_c1_err / eTF^2
         rpa_fl_c1_over_eTF2 = rpa_fl_c1 / eTF^2
         # rpa_fl_c1_err_over_eTF2 = rpa_fl_c1_err / eTF^2
-        tail_over_eTF2 = tail / eTF^2
-        tail_err_over_eTF2 = tail_err / eTF^2
+        # tail_over_eTF2 = tail / eTF^2
+        # tail_err_over_eTF2 = tail_err / eTF^2
 
         # Nondimensionalize zeroth-order moment in units of EF
         hf_c0_over_EF = hf_c0 / EF
@@ -455,7 +463,7 @@ function main()
         hf_c0_over_eTF = hf_c0 / eTF
 
         local wns_plot
-        local tail_plot, tail_err_plot
+        local rpt_c1_plot, rpt_c1_err_plot
         local rpa_c1_plot
         local rpa_fl_c1_plot
         # local rpa_c1_plot, rpa_c1_err_plot
@@ -467,9 +475,9 @@ function main()
             wns_plot = wns
             # Zeroth-order moment
             hf_c0_plot = hf_c0
-            # RPT tail
-            tail_plot = tail
-            tail_err_plot = tail_err
+            # RPT moment
+            rpt_c1_plot = rpt_c1
+            rpt_c1_err_plot = rpt_err_c1
             # First-order moment tails
             rpa_c1_plot = rpa_c1
             # rpa_c1_err_plot = rpa_c1_err
@@ -486,8 +494,8 @@ function main()
             # Zeroth-order moment
             hf_c0_plot = hf_c0_over_EF
             # RPT tail
-            tail_plot = tail_over_EF2
-            tail_err_plot = tail_err_over_EF2
+            rpt_c1_plot = rpt_c1_over_EF2
+            rpt_c1_err_plot = rpt_err_c1_over_EF2
             # First-order moment tails
             rpa_c1_plot = rpa_c1_over_EF2
             # rpa_c1_err_plot = rpa_c1_err_over_EF2
@@ -504,8 +512,8 @@ function main()
             # Zeroth-order moment
             hf_c0_plot = hf_c0_over_eTF
             # RPT tail
-            tail_plot = tail_over_eTF2
-            tail_err_plot = tail_err_over_eTF2
+            rpt_c1_plot = rpt_c1_over_eTF2
+            rpt_c1_err_plot = rpt_err_c1_over_eTF2
             # First-order moment tails
             rpa_c1_plot = rpa_c1_over_eTF2
             # rpa_c1_err_plot = rpa_c1_err_over_eTF2
@@ -644,15 +652,15 @@ function main()
         if rs == 1.0
             ax.plot(
                 wns_plot,
-                tail_plot,
+                rpt_c1_plot ./ wns_plot,
                 "k";
                 linestyle="dashed",
                 label="\$C^{(1)}_N / \\omega_n\$ (\$r_s=1\$)",
             )
             ax.fill_between(
                 wns_plot,
-                (tail_plot - tail_err_plot),
-                (tail_plot + tail_err_plot);
+                (rpt_c1_plot - rpt_c1_err_plot) ./ wns_plot,
+                (rpt_c1_plot + rpt_c1_err_plot) ./ wns_plot;
                 color="k",
                 alpha=0.4,
             )
