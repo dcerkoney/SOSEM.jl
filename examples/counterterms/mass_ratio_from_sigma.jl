@@ -15,18 +15,21 @@ end
 
 function main()
     # Physical params matching data for SOSEM observables
-    order = [4]  # C^{(1)}_{N≤5} includes CTs up to 3rd order
+    order = [5]  # C^{(1)}_{N≤5} includes CTs up to 3rd order
     beta = [40.0]
-    rs = [3.0]
-    mass2 = [1.5]
+    # rs = [5.0]
+    # mass2 = [...]
+    # rs = [4.0]
+    # mass2 = [...]
+    # rs = [3.0]
+    # mass2 = [1.5]
     # rs = [2.0]
     # mass2 = [1.5, 1.75, 2.0]
     # rs = [1.0]
     # mass2 = [1.0]
 
     # Momentum spacing for finite-difference derivative of Sigma (in units of para.kF)
-    δK = 0.005  # spacings n*δK = 0.15–0.3 not relevant for rs = 1.0 => reduce δK by half
-    # δK = 0.01
+    δK = 0.01
 
     # Total number of MCMC evaluations
     neval = 1e11
@@ -60,10 +63,10 @@ function main()
 
         ######### calculate mass ratio ######################
         # k_points near k = 0
-        # kgrid = para.kF * (δK * collect(-15:15))
+        # kgrid = para.kF * (δK * collect(-6:2:6))
 
         # k-points near k = kF
-        kgrid = para.kF * (1 .+ δK * collect(-15:15))
+        kgrid = para.kF * (1 .+ δK * collect(-6:2:6))
         ngrid = [0]
 
         # Build diagrams

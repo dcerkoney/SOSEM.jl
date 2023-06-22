@@ -15,8 +15,8 @@ end
 
 function main()
     # Physical params matching data for SOSEM observables
-    # order = [5]  # C^{(1)}_{N≤6} includes CTs up to 5th order
-    order = [4]  # C^{(1)}_{N≤5} includes CTs up to 4th order
+    order = [5]  # C^{(1)}_{N≤6} includes CTs up to 5th order
+    # order = [4]  # C^{(1)}_{N≤5} includes CTs up to 4th order
     beta = [40.0]
 
     # rs = [3.0]
@@ -33,7 +33,8 @@ function main()
     rs = [5.0]
     # mass2 = [3.0, 3.25, 3.5, 3.75, 7.0, 8.0]
     # mass2 = [4.0, 4.5, 5.0, 5.5, 6.0]
-    mass2 = [0.1, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25, 1.5]
+    #mass2 = [0.1, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25, 1.5]
+    mass2 = [0.8125, 0.875, 0.9375]
 
     # mass2 = [0.1, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
     # mass2 = [0.1, 0.2, 0.3, 0.4, 0.5, 1.0, 1.5, 2.0]
@@ -41,7 +42,7 @@ function main()
     # mass2 = [1.0]
 
     # Total number of MCMC evaluations
-    neval = 5e10
+    neval = 1e10
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
