@@ -17,8 +17,8 @@ end
 ############################################
 order = [4]  # C^{(1)}_{N≤5} includes CTs up to 3rd order
 beta = [40.0]
-rs = [3.0]
-mass2 = [1.5]
+# rs = [3.0]
+# mass2 = [1.5]
 
 # rs = [2.0]
 # mass2 = [1.75]
@@ -28,7 +28,9 @@ mass2 = [1.5]
 # rs = 3.0
 # mass2 = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 3.5, 4.0, 5.0, 6.0]
 ### rs = 4 ###
-# rs = 4.0
+rs = [4.0]
+mass2 = [0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25]
+# mass2 = [0.25, 0.5, 0.75, 1.0, 1.25]
 # mass2 = [0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 2.25, 2.5, 2.75, 3.0, 3.5, 4.0, 4.5, 5.0, 6.0, 7.0]
 ### rs = 5 ###
 # rs = 5.0
@@ -106,14 +108,17 @@ function process_mass_ratio(datatuple, isSave; idk=1, method=:forward)
     # Get Fermi index
     ikF = searchsortedfirst(kgrid, para.kF)
     println("ikF = $ikF")
+    # println(kgrid)
+    # println(para.kF)
+    # println(kgrid[ikF])
 
     # Max order in RPT calculation
     max_order = para.order
     println("Max order: ", max_order)
 
     # Reexpand merged data in powers of μ
-    # ct_filename = "data/data_Z$(ct_string)_kF_opt.jld2"
-    ct_filename = "data/data_Z$(ct_string)_kF.jld2"
+    ct_filename = "data/data_Z$(ct_string)_kF_opt.jld2"
+    # ct_filename = "data/data_Z$(ct_string)_kF.jld2"
     # ct_filename = "data/data_Z$(ct_string)_k0.jld2"
     # ct_filename = "data/data_Z$(ct_string).jld2"
     z, μ = UEG_MC.load_z_mu(para; ct_filename=ct_filename, parafilename=parafilename)

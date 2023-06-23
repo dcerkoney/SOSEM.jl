@@ -205,30 +205,49 @@ function main()
     # System parameters
     dim = 3
     mass2 = 1e-8
-    # beta = 40.0
+    # beta = 40.0 
     beta = 1000.0
-    rslist = [1.0, 2.0, 5.0]
+    # rslist = [1.0, 2.0, 5.0]
+    rslist = [1.0, 2.0, 5.0, 10.0]
     # rslist = [1.0, 2.0, 3.0, 4.0, 5.0]
 
-    # int_type = :ko
-    int_type = :ko_const
+    int_type = :ko_takada
+    # int_type = :ko_moroni
+    # int_type = :ko_const
 
     # Plot WtildeFs(q, τ = 0) vs rs
     fig, ax = plt.subplots()
     for (i, rs) in enumerate(rslist)
-        param = Parameter.rydbergUnit(1.0 / beta, rs)
-        kF, β = param.kF, param.β
-        Euv, rtol = 1000 * param.EF, 1e-11
-
-        # Nk, order = 8, 4
-        # maxK, minK = 10kF, 1e-7kF
-        # Nk, order = 11, 8
-        maxK, minK = 20kF, 1e-8kF
-        Nk, order = 16, 12
-        # maxK, minK = 10kF, 1e-9kF
-        # Euv, rtol = 1000 * param.EF, 1e-11
-        # maxK, minK = 20param.kF, 1e-9param.kF
-        # Nk, order = 16, 12
+        if int_type == :ko_takada
+            # Converged parameters for :ko_takada
+            param = Parameter.rydbergUnit(1.0 / beta, rs)
+            kF, β = param.kF, param.β
+            Euv, rtol = 1000 * param.EF, 1e-11
+            # Nk, order = 16, 10
+            # maxK, minK = 30kF, 1e-8kF
+            Nk, order = 25, 20
+            maxK, minK = 1000kF, 1e-8kF
+        elseif int_type == :ko_moroni
+            # TODO: Get converged parameters for :ko_moroni
+            param = Parameter.rydbergUnit(1.0 / beta, rs)
+            kF, β = param.kF, param.β
+            Euv, rtol = 1000 * param.EF, 1e-11
+            Nk, order = 16, 10
+            maxK, minK = 30kF, 1e-8kF
+            # Nk, order = 20, 16
+            # maxK, minK = 300kF, 1e-8kF
+        elseif int_type == :ko_const
+            # TODO: Try subtracting large q tail and/or remapping 
+            #       ℝ to [0, 1] to fix bad maxK dependence!
+            # Converged parameters for :ko_takada
+            param = Parameter.rydbergUnit(1.0 / beta, rs)
+            kF, β = param.kF, param.β
+            Euv, rtol = 1000 * param.EF, 1e-11
+            Nk, order = 16, 10
+            maxK, minK = 30kF, 1e-8kF
+            # Nk, order = 20, 16
+            # maxK, minK = 300kF, 1e-8kF
+        end
 
         # Grids for k and n
         qgrid = CompositeGrid.LogDensedGrid(
@@ -242,29 +261,36 @@ function main()
         # dlr = DLRGrid(Euv, β, rtol, false, :ph)
 
         # Get Landau parameter F⁰ₛ from Perdew & Wang compressibility fit
-        Fs = get_Fs(rs)
+        # Fs = get_Fs(rs)
+        # println("rs = $rs, Fs = $Fs, fs = $(Fs / param.NF)")
 
-        # Either use constant Fs from P&W or q-dependent Takada fit
-        landaufunc =
-            int_type == :ko_const ? Interaction.landauParameterConst :
-            Interaction.landauParameterTakada
+        # Either use constant Fs from P&W, q-dependent Takada ansatz, or Corradini fit to Moroni DMC data
+        if int_type == :ko_const
+            landaufunc = Interaction.landauParameterConst
+        elseif int_type == :ko_takada
+            landaufunc = Interaction.landauParameterTakada
+        elseif int_type == :ko_moroni
+            landaufunc = Interaction.landauParameterMoroni
+        end
 
-        # Get WtildeFs(q, iωₙ) / V(q)
-        wtilde_Fs_over_v_wn_q = WtildeFswrapped(
+        # Get KO_dyn(q, iωₙ) / V(q)
+        KO_dyn_over_v_wn_q, _ = Interaction.KOwrapped(
             Euv,
             rtol,
             qgrid.grid,
             param;
             regular=true,
-            int_type=int_type,
+            int_type=:ko,
+            # int_type=int_type == :ko_const ? :ko_const : :ko,
             landaufunc=landaufunc,
-            Fs=Fs,
+            # Fs=-Fs,
         )
 
-        # Get WtildeFs(q, τ = 0) / V(q) from WtildeFs(q, iωₙ) / V(q)
-        wtilde_Fs_over_v_dlr_q = to_dlr(wtilde_Fs_over_v_wn_q)
-        wtilde_Fs_over_v_tau_q = to_imtime(wtilde_Fs_over_v_dlr_q)
-        wtilde_Fs_over_v_q_inst = real(wtilde_Fs_over_v_tau_q[1, :])
+        # Get KO_dyn(q, τ = 0) / V(q) from KO_dyn(q, iωₙ) / V(q)
+        KO_dyn_over_v_dlr_q = to_dlr(KO_dyn_over_v_wn_q)
+        KO_dyn_over_v_tau_q = to_imtime(KO_dyn_over_v_dlr_q)
+        # NOTE: Sigma is spin-symmetric => idx1 = 1, and idx2 = 1 for τ = 0
+        KO_dyn_over_v_q_inst = real(KO_dyn_over_v_tau_q[1, 1, :])
 
         # RPA Wtilde0(q, iωₙ) / V(q)
         wtilde_0_over_v_wn_q, _ =
@@ -277,13 +303,13 @@ function main()
         wtilde_0_over_v_q_inst = real(wtilde_0_over_v_tau_q[1, 1, :])
 
         # Infinitesimal time δ_τ from DLR grid
-        # qwin = UnitRange(1, length(qgrid.grid))
         qwin = qgrid.grid .≤ 3.0 * kF
         qs = qgrid.grid[qwin]
-        taus = wtilde_Fs_over_v_dlr_q.mesh[1].dlr.τ
+        taus = KO_dyn_over_v_dlr_q.mesh[2].dlr.τ
 
         delta_tau_str = @sprintf "%.0g" taus[1]
-        Fs_str = @sprintf "%.2g" Fs
+        # Fs_str = @sprintf "%.2g" Fs
+        Fs_str = ""
 
         # Plot RPA(+FL) (Wtilde / V) at this rs
         ax.plot(
@@ -297,22 +323,24 @@ function main()
             int_type == :ko_const ?
             "(RPA+FL) \$r_s = $rs,\\, F_s = $Fs_str, \\delta_\\tau = $delta_tau_str\$" :
             "(RPA+FL) \$r_s = $rs,\\, \\delta_\\tau = $delta_tau_str\$"
-        ax.plot(qs / kF, wtilde_Fs_over_v_q_inst[qwin]; color="C$i", label=rpa_fl_label)
+        ax.plot(qs / kF, KO_dyn_over_v_q_inst[qwin]; color="C$i", label=rpa_fl_label)
 
-        # Integrate RPA(+FL) 4πe²(Wtilde(q, τ = 0) / V(q)) over q ∈ ℝ⁺
+        # Integrate RPA(+FL) 4πe²(W_dyn(q, τ = 0) / V(q)) over q ∈ ℝ⁺ for W ∈ {W_0, W_KO}
         c1_rpa =
             -(2 * param.e0^2 / π) *
             CompositeGrids.Interp.integrate1D(wtilde_0_over_v_q_inst, qgrid)
         c1_rpa_fl =
             -(2 * param.e0^2 / π) *
-            CompositeGrids.Interp.integrate1D(wtilde_Fs_over_v_q_inst, qgrid)
+            CompositeGrids.Interp.integrate1D(KO_dyn_over_v_q_inst, qgrid)
         println("(rs = $rs) C⁽¹⁾_{RPA} = $c1_rpa, C⁽¹⁾_{RPA+FL} = $c1_rpa_fl")
     end
     ax.legend(; loc="best")
     ax.set_xlabel("\$q / k_F\$")
-    ax.set_ylabel("\$\\widetilde{W}_f(q, \\tau = \\delta_\\tau) / V(q)\$")
+    ax.set_ylabel("\$W_{dyn}(q, \\tau = \\delta_\\tau) / V(q)\$")
     plt.tight_layout()
-    fig.savefig("rpa_and_rpa_fl_wtilde_over_V_q_inst_rs=$(rslist)_$int_type.pdf")
+    fig.savefig(
+        "rpa_and_rpa_fl_wtilde_over_V_q_inst_rs=$(rslist)_beta=$(beta)_$(int_type).pdf",
+    )
     return
 end
 
