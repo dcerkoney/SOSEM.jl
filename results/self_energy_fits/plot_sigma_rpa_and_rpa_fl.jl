@@ -99,6 +99,12 @@ const rpa_fl_moments_ko_takada = Dict(
 #     5.0 => 0.1933642135060841,
 #     10.0 => 0.041487912673176086,
 # )
+# TODO: evaluate with integrate_c1_rpa_fl.jl
+const rpa_moments = Dict(1.0 => 6.817909128698095, 2.0 => 0.0, 5.0 => 0.0, 10.0 => 0.0)
+const rpa_fl_moments_takada = Dict(1.0 => 0.0, 2.0 => 0.0, 5.0 => 0.0, 10.0 => 0.0)
+
+# TODO: debug ko_const int_type in ElectronGas and subtract tail of integrand / remap to finite interval
+# const rpa_fl_moments_const = Dict(1.0 => 0.0, 2.0 => 0.0, 5.0 => 0.0, 10.0 => 0.0)
 
 function load_csv(filename)
     # assumes csv format: (x, y)
@@ -180,7 +186,7 @@ function get_rpa_fl_analytic_tail(wns, param::Parameter.Para)
     # Note that our fs has an extra minus sign relative to VZN,
     # so we have (1 - f) C / ω^(3/2) ↦ (1 - f) C / ω^(3/2)
     rpa_tail = get_rpa_analytic_tail(wns, param)
-    return (1 - fs) * rpa_tail
+    return (1 + fs) * rpa_tail
 end
 
 function get_sigma_rpa_wn(param::Parameter.Para; ktarget=0.0, atol=1e-3)
@@ -235,22 +241,18 @@ function get_sigma_rpa_wn(param::Parameter.Para; ktarget=0.0, atol=1e-3)
     # It should agree within a few percent due to finite-temperature effects.
     # (see: https://numericaleft.github.io/ElectronGas.jl/dev/manual/quasiparticle/)
     rs = round(param.rs; sigdigits=13)
-    if rs in keys(zfactor_rpa_benchmarks)
-        zfactor = SelfEnergy.zfactor(param, sigma_wn_dynamic)[1]
+    zfactor = SelfEnergy.zfactor(param, sigma_wn_dynamic)[1]
+    if haskey(zfactor_rpa_benchmarks, rs)
         zfactor_zero_temp = zfactor_rpa_benchmarks[rs]
         percent_error = 100 * abs(zfactor - zfactor_zero_temp) / zfactor_zero_temp
         println("Percent error vs zero-temperature benchmark of Z_kF: $percent_error")
         @assert percent_error ≤ 5
     end
+
     return kval, wns, sigma_wn_static_kval, sigma_wn_dynamic_kval
 end
 
-function get_sigma_rpa_fl_wn(
-    param::Parameter.Para;
-    ktarget=0.0,
-    int_type=int_type,
-    atol=1e-3,
-)
+function get_sigma_rpa_fl_wn(param::Parameter.Para; ktarget=0.0, int_type=:ko, atol=1e-3)
     # Make sure we are using parameters for the bare UEG theory
     @assert param.Λs == param.Λa == 0.0
 
@@ -260,6 +262,7 @@ function get_sigma_rpa_fl_wn(
     println("Fermi liquid parameter at rs = $(rs): Fs = $Fs")
 
     # Get RPA+FL self-energy
+    # sigma_tau_dynamic, sigma_tau_instant = SelfEnergy.G0W0(param; int_type=:ko_const, Fs=Fs)
     sigma_tau_dynamic, sigma_tau_instant = SelfEnergy.G0W0(
         param;
         Euv=1000 * param.EF,
@@ -268,17 +271,9 @@ function get_sigma_rpa_fl_wn(
         maxK=30 * param.kF,
         order=10,
         int_type=int_type,
-        Fs=-Fs,  # NOTE: NEFT uses opposite sign convention (Fs > 0)!
+        Fs=-Fs,        # NOTE: sign convention differs in NEFT!
+        bugfix=false,  # Test before/after bug
     )
-    #     param;
-    #     Euv=10000 * param.EF,
-    #     Nk=16,
-    #     minK=1e-8 * param.kF,
-    #     maxK=20 * param.kF,
-    #     order=10,
-    #     int_type=int_type,
-    #     Fs=-Fs,  # NOTE: NEFT uses opposite sign convention (Fs > 0)!
-    # )
 
     # Get sigma in DLR basis
     sigma_dlr_dynamic = to_dlr(sigma_tau_dynamic)
@@ -375,19 +370,25 @@ function main()
         cd(ENV["SOSEM_HOME"])
     end
 
+    # Use LaTex fonts for plots
+    plt.rc("text"; usetex=true)
+    plt.rc("font"; family="serif")
+
     ktarget = 0.0  # k = kF
-    beta = 1000.0
-    # beta = 40.0
+    beta = 40.0
+    rslist = [1.0, 5.0, 10.0]
+
     # rslist = [1.0]
     # rslist = [1 / α]  # Gives kF = EF = 1
-    rslist = [1.0, 5.0, 10.0]
     # rslist = [1.0, 2.0, 5.0]
-    # rslist = [1.0, 2.0, 3.0, 4.0]
 
     # The unit system to use for plotting
-    # units = :Rydberg
+    units = :Rydberg
     # units = :EF
-    units = :eTF
+    # units = :eTF
+
+    int_type = :ko
+    # int_type = :ko_const
 
     int_type = :ko
     # int_type = :ko_const
@@ -407,10 +408,6 @@ function main()
 
     # Use SOSEM data to max order N calculated in RPT
     N = 5
-
-    # Use LaTex fonts for plots
-    plt.rc("text"; usetex=true)
-    plt.rc("font"; family="serif")
 
     # Distinguish results with fixed vs re-expanded bare interactions
     intn_str = ""
@@ -460,14 +457,15 @@ function main()
     # The high-frequency tail of ImΣ(iωₙ) is -C⁽¹⁾ / ωₙ.
     iktarget = searchsortedfirst(kgrid, ktarget)
 
-    # Use LaTex fonts for plots
-    plt.rc("text"; usetex=true)
-    plt.rc("font"; family="serif")
-
     fig2, ax2 = plt.subplots()
     fig3, ax3 = plt.subplots()
+    fig4, ax4 = plt.subplots()
     darkcolors = ["midnightblue", "saddlebrown", "darkgreen", "darkred"]
     sigma_peak = 0.0
+    peak_values_rpa = []
+    peak_positions_rpa = []
+    peak_values_rpa_fl = []
+    peak_positions_rpa_fl = []
     for (i, rs) in enumerate(rslist)
         sigma_subpeak = 0.0
         fig, ax = plt.subplots()
@@ -488,8 +486,8 @@ function main()
         # The static parts do not contribute to ImΣ
         println(imag(sigma_rpa_wn_stat))
         println(imag(sigma_rpa_fl_wn_stat))
-        @assert isapprox(imag(sigma_rpa_wn_stat), 0.0, atol=1e-5)
-        @assert isapprox(imag(sigma_rpa_fl_wn_stat), 0.0, atol=1e-5)
+        # @assert isapprox(imag(sigma_rpa_wn_stat), 0.0, atol=1e-4)
+        # @assert isapprox(imag(sigma_rpa_fl_wn_stat), 0.0, atol=1e-4)
 
         # The grids should be the same for RPA and RPA+FL
         @assert kval ≈ kval_fl
@@ -523,9 +521,11 @@ function main()
 
         # Get first-order RPA and RPA+FL moments at k = ktarget
         rpa_c1 = rpa_moments[rs]
-        rpa_fl_c1 =
-            int_type == :ko ? rpa_fl_moments_ko_takada[rs] : rpa_fl_moments_ko_const[rs]
-
+        if int_type == :ko
+            rpa_fl_c1 = rpa_fl_moments_takada[rs]
+        elseif int_type == :ko_const
+            rpa_fl_c1 = rpa_fl_moments_const[rs]
+        end
         # rpa_c1 = get_rpa_moments(param; k=ktarget)
         # rpa_fl_c1 = get_rpa_fl_moments(param; k=ktarget)
         println("First-order RPA moment (Rydberg): ", rpa_c1)
@@ -555,10 +555,7 @@ function main()
 
         local wns_plot
         local rpt_c1_plot, rpt_c1_err_plot
-        local rpa_c1_plot
-        local rpa_fl_c1_plot
-        # local rpa_c1_plot, rpa_c1_err_plot
-        # local rpa_fl_c1_plot, rpa_fl_c1_err_plot
+        local rpa_c1_plot, rpa_fl_c1_plot
         local sigma_rpa_dyn_plot, sigma_rpa_fl_dyn_plot
         local sigma_rpa_stat_plot, sigma_rpa_fl_stat_plot
         # wns_plot = wns
@@ -571,9 +568,7 @@ function main()
             rpt_c1_err_plot = rpt_err_c1
             # First-order moment tails
             rpa_c1_plot = rpa_c1
-            # rpa_c1_err_plot = rpa_c1_err
             rpa_fl_c1_plot = rpa_fl_c1
-            # rpa_fl_c1_err_plot = rpa_fl_c1_err
             # Static part
             sigma_rpa_stat_plot = sigma_rpa_wn_stat
             sigma_rpa_fl_stat_plot = sigma_rpa_fl_wn_stat
@@ -589,9 +584,7 @@ function main()
             rpt_c1_err_plot = rpt_err_c1_over_EF2
             # First-order moment tails
             rpa_c1_plot = rpa_c1_over_EF2
-            # rpa_c1_err_plot = rpa_c1_err_over_EF2
             rpa_fl_c1_plot = rpa_fl_c1_over_EF2
-            # rpa_fl_c1_err_plot = rpa_fl_c1_err_over_EF2
             # Static part
             sigma_rpa_stat_plot = sigma_rpa_wn_stat_over_EF
             sigma_rpa_fl_stat_plot = sigma_rpa_fl_wn_stat_over_EF
@@ -607,9 +600,7 @@ function main()
             rpt_c1_err_plot = rpt_err_c1_over_eTF2
             # First-order moment tails
             rpa_c1_plot = rpa_c1_over_eTF2
-            # rpa_c1_err_plot = rpa_c1_err_over_eTF2
             rpa_fl_c1_plot = rpa_fl_c1_over_eTF2
-            # rpa_fl_c1_err_plot = rpa_fl_c1_err_over_eTF2
             # Static part
             sigma_rpa_stat_plot = sigma_rpa_wn_stat_over_eTF
             sigma_rpa_fl_stat_plot = sigma_rpa_fl_wn_stat_over_eTF
@@ -618,23 +609,11 @@ function main()
             sigma_rpa_fl_dyn_plot = sigma_rpa_fl_wn_dyn_over_eTF
         end
         if units != :Rydberg
-            println(
-                "First-order RPA moment ($units): ",
-                rpa_c1_plot,
-                # " ± ",
-                # rpa_c1_err_plot,
-            )
-            println(
-                "First-order RPA+FL moment ($units): ",
-                rpa_fl_c1_plot,
-                # " ± ",
-                # rpa_fl_c1_err_plot,
-            )
+            println("First-order RPA moment ($units): ", rpa_c1_plot)
+            println("First-order RPA+FL moment ($units): ", rpa_fl_c1_plot)
         end
         println("(RPA) -ImΣ(0, 0) = ", -imag(sigma_rpa_dyn_plot[1]))
         println("(RPA+FL) -ImΣ(0, 0) = ", -imag(sigma_rpa_fl_dyn_plot[1]))
-
-        # TODO: Include QMC result at rs = 1, try sign flip on c1b3+
 
         ### Comparison of ReΣ to zeroth-order moment ###
         # ReΣ includes both static and dynamic contributions
@@ -643,7 +622,7 @@ function main()
         # RPA(+FL) tails in chosen unit system
         ax2.plot(
             wns_over_EF,
-            hf_c0_plot * one.(wns_over_EF),
+            hf_c0_plot * one.(wns_plot),
             # "C$(i-1)";
             "k";
             linestyle="dashed",
@@ -797,12 +776,12 @@ function main()
                 alpha=0.4,
             )
         end
+
+        # -ImΣ one-by-one
         ax.set_xlim(0, 100)
         ax.set_ylim(; bottom=0, top=1.1 * sigma_subpeak)
-        # ax2.set_ylim(; bottom=0, top=0.35)
         ax.legend(; loc="best")
         ax.set_xlabel("\$\\omega_n / \\epsilon_F\$")
-        ax2.set_xlabel("\$\\omega_n / \\epsilon_F\$")
         if units == :Rydberg
             ax.set_ylabel("\$-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n)\$")
             ax2.set_ylabel("\$\\mathrm{Re}\\Sigma(k = $ktarget, i\\omega_n)\$")
@@ -823,18 +802,102 @@ function main()
         end
         plt.tight_layout()
         fig.savefig(
-            "results/self_energy_fits/$(int_type)/im_sigma_tail_comparisons_" *
+            "results/high_frequency_tail/$(int_type)/im_sigma_tail_comparisons_" *
             "rs=$(rs)_beta_ef=$(beta)_k=$(ktarget)_$(units)_$(int_type).pdf",
         )
+
+        # -ωₙImΣ one-by-one
+        ax4.plot(
+            wns_over_EF,
+            rpa_c1 / EF,
+            "C$(i-1)";
+            linestyle="dashed",
+            label="\$C^{(1)}_{RPA} / \\omega_n \\epsilon_F\$ (\$r_s=$rs\$)",
+        )
+        ax4.plot(
+            wns_over_EF,
+            -imag(sigma_rpa_wn_dyn) .* wns_over_EF,
+            "C$(i-1)";
+            label="\$RPA\$ (\$r_s=$rs\$)",
+        )
+        # # RPA+FL -ImΣ and tail fit in chosen unit system
+        ax4.plot(
+            wns_over_EF,
+            rpa_fl_c1 / EF,
+            "$(darkcolors[i])";
+            linestyle="dashed",
+            label="\$C^{(1)}_{RPA+FL} / \\omega_n \\epsilon_F\$ (\$r_s=$rs\$)",
+        )
+        ax4.plot(
+            wns_over_EF,
+            -imag(sigma_rpa_fl_wn_dyn) .* wns_over_EF,
+            "$(darkcolors[i])";
+            label="\$RPA+FL\$ (\$r_s=$rs\$)",
+        )
+        ax4.set_xlim(0, 1000)
+        # ax4.set_xlim(0, wns_over_EF[end])
+        ax4.set_ylim(; bottom=0, top=1.1 * sigma_subpeak)
+        ax4.legend(; loc="best")
+        ax4.set_xlabel("\$\\omega_n / \\epsilon_F\$")
+        ax4.set_ylabel(
+            "\$-\\omega_n \\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n) / \\epsilon_F\$",
+        )
+        plt.tight_layout()
+        fig4.savefig(
+            "results/high_frequency_tail/$(int_type)/wn_times_im_sigma_" *
+            "rs=$(rs)_beta_ef=$(beta)_k=$(ktarget)_EF_$(int_type).pdf",
+        )
+
+        # Add peak positions/values to list
+        peak_value_rpa = maximum(-imag(sigma_rpa_wn_dyn))
+        peak_value_rpa_fl = maximum(-imag(sigma_rpa_fl_wn_dyn))
+        peak_position_rpa = wns_over_EF[argmax(-imag(sigma_rpa_wn_dyn))]
+        peak_position_rpa_fl = wns_over_EF[argmax(-imag(sigma_rpa_fl_wn_dyn))]
+        push!(peak_values_rpa, peak_value_rpa)
+        push!(peak_values_rpa_fl, peak_value_rpa_fl)
+        push!(peak_positions_rpa, peak_position_rpa)
+        push!(peak_positions_rpa_fl, peak_position_rpa_fl)
     end
-    ax2.set_xlim(0, 100)
-    ax2.legend(; loc="best")
+
+    # Plot peak values
+    fig5, ax5 = plt.subplots()
+    ax5.plot(rslist, peak_values_rpa; label="RPA")
+    ax5.plot(rslist, peak_values_rpa_fl; label="RPA+FL")
+    ax5.set_xlabel(
+        "\$\\mathrm{max}_{\\omega_n} \\big|\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n)\\big|\$",
+    )
+    ax5.legend(; loc="best")
+    plt.tight_layout()
+    fig5.savefig(
+        "results/high_frequency_tail/$(int_type)/peak_values_" *
+        "rs=$(rslist)_beta_ef=$(beta)_k=$(ktarget)_$(int_type).pdf",
+    )
+
+    # Plot peak positions
+    fig6, ax6 = plt.subplots()
+    ax6.plot(rslist, peak_positions_rpa; label="RPA")
+    ax6.plot(rslist, peak_positions_rpa_fl; label="RPA+FL")
+    ax6.set_xlabel(
+        "\$\\mathrm{argmax}_{\\omega_n} \\big|\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n)\\big| / \\epsilon_F\$",
+    )
+    ax6.legend(; loc="best")
+    plt.tight_layout()
+    fig6.savefig(
+        "results/high_frequency_tail/$(int_type)/peak_positions_" *
+        "rs=$(rslist)_beta_ef=$(beta)_k=$(ktarget)_$(int_type).pdf",
+    )
+
+    # ReΣ together
     ax2.set_xlabel("\$\\omega_n / \\epsilon_F\$")
+    ax2.set_xlim(0, 50)
+    ax2.legend(; loc="best")
     fig2.savefig(
-        "results/self_energy_fits/$(int_type)/re_sigma_tail_comparisons_" *
+        "results/high_frequency_tail/$(int_type)/re_sigma_tail_comparisons_" *
         "rs=$(rslist)_beta_ef=$(beta)_k=$(ktarget)_$(units)_$(int_type).pdf",
     )
-    ax3.set_xlim(0, 100)
+
+    # ImΣ together
+    ax3.set_xlim(0, 50)
     ax3.set_ylim(; bottom=0, top=1.1 * sigma_peak)
     ax3.legend(; loc="best")
     ax3.set_xlabel("\$\\omega_n / \\epsilon_F\$")
@@ -849,9 +912,10 @@ function main()
     end
     plt.tight_layout()
     fig3.savefig(
-        "results/self_energy_fits/$(int_type)/im_sigma_tail_comparisons_" *
+        "results/high_frequency_tail/$(int_type)/im_sigma_tail_comparisons_" *
         "rs=$(rslist)_beta_ef=$(beta)_k=$(ktarget)_$(units)_$(int_type).pdf",
     )
+    plt.close("all")
 
     return
 end

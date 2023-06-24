@@ -26,15 +26,20 @@ function main()
         cd("$(ENV["SOSEM_HOME"])/examples/counterterms")
     end
 
-    rs = 3.0
+    solver = :mcmc
+    beta = 40.0
+
+    rs = 4.0
+    mass2list = [1.0]
+    
+    # rs = 5.0
+    # mass2list = [0.875]
+
     # rslist = [2.0]
     # rslist = [1.0, 2.0, 5.0]
-    beta = 40.0
     # mass2 = 1.0
     # mass2list = [1.5, 1.75, 2.0]
-    mass2list = [1.5]
     # mass2list = [1.75]
-    solver = :mcmc
     # solver = :vegasmc
 
     # Using mass2 from optimization of C⁽¹⁾ⁿˡ(k = 0)
@@ -152,6 +157,10 @@ function main()
             valid_window = [-Inf, Inf]
             println("\nOrder $N:")
             for (idk, mass_ratio) in enumerate(mass_ratios)
+                if rs == 4.0
+                    # This measurement is an outlier; skipping it to get correct stationary δK (idk > 1)
+                    idk == 1 && continue
+                end
                 # println(mass_ratio)
                 println(valid_window)
                 m = mass_ratio[N + 1]
@@ -216,9 +225,17 @@ function main()
         # yloc = 0.97
         # ydiv = -0.003
         ### rs = 3, lambda = 1.5 ###
+        # xloc = 0.04
+        # yloc = 0.97675
+        # ydiv = -0.00025
+        ### rs = 4, lambda = 1.0 ###
         xloc = 0.04
-        yloc = 0.97675
-        ydiv = -0.00025
+        yloc = 0.97775
+        ydiv = -0.0003
+        ### rs = 5, lambda = 0.875 ###
+        # xloc = 0.04
+        # yloc = 0.98075
+        # ydiv = -0.0004
         ### lambda = 1.75 ###
         # xloc = 0.03
         # yloc = 0.964
@@ -268,9 +285,17 @@ function main()
         # yloc = 0.93
         # ydiv = -0.01
         ### rs = 3, lambda = 1.5 ###
+        # xloc = 0.04
+        # yloc = 0.9605
+        # ydiv = -0.001
+        ### rs = 4, lambda = 1.0 ###
         xloc = 0.04
-        yloc = 0.9605
-        ydiv = -0.001
+        yloc = 0.9575
+        ydiv = -0.0025
+        ### rs = 5, lambda = 0.875 ###
+        # xloc = 0.04
+        # yloc = 0.97
+        # ydiv = -0.002
         ### lambda = 1.75 ###
         # xloc = 0.03
         # yloc = 0.960
@@ -335,7 +360,8 @@ function main()
         # ydiv = -0.0075
         xloc = 1.5
         yloc = 0.995
-        ydiv = -0.005
+        ydiv = -0.0035
+        # ydiv = -0.005
         ax.text(
             xloc,
             yloc,

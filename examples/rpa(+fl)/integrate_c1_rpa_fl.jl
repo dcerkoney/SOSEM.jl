@@ -7,11 +7,12 @@ using Lehmann, GreenFunc, CompositeGrids
 @pyimport matplotlib.pyplot as plt
 
 function get_Fs(rs)
-    if rs < 1.0 || rs > 5.0
-        return get_Fs_DMC(rs)
-    else
-        return get_Fs_PW(rs)
-    end
+    return get_Fs_PW(rs)
+    # if rs < 1.0 || rs > 5.0
+    #     return get_Fs_DMC(rs)
+    # else
+    #     return get_Fs_PW(rs)
+    # end
 end
 
 """
@@ -217,37 +218,31 @@ function main()
 
     # Plot WtildeFs(q, τ = 0) vs rs
     fig, ax = plt.subplots()
+    fig2, ax2 = plt.subplots()
+    fig3, ax3 = plt.subplots()
     for (i, rs) in enumerate(rslist)
-        if int_type == :ko_takada
-            # Converged parameters for :ko_takada
-            param = Parameter.rydbergUnit(1.0 / beta, rs)
-            kF, β = param.kF, param.β
-            Euv, rtol = 1000 * param.EF, 1e-11
-            # Nk, order = 16, 10
-            # maxK, minK = 30kF, 1e-8kF
-            Nk, order = 25, 20
-            maxK, minK = 1000kF, 1e-8kF
-        elseif int_type == :ko_moroni
-            # TODO: Get converged parameters for :ko_moroni
-            param = Parameter.rydbergUnit(1.0 / beta, rs)
-            kF, β = param.kF, param.β
-            Euv, rtol = 1000 * param.EF, 1e-11
-            Nk, order = 16, 10
-            maxK, minK = 30kF, 1e-8kF
-            # Nk, order = 20, 16
-            # maxK, minK = 300kF, 1e-8kF
-        elseif int_type == :ko_const
-            # TODO: Try subtracting large q tail and/or remapping 
-            #       ℝ to [0, 1] to fix bad maxK dependence!
-            # Converged parameters for :ko_takada
-            param = Parameter.rydbergUnit(1.0 / beta, rs)
-            kF, β = param.kF, param.β
-            Euv, rtol = 1000 * param.EF, 1e-11
-            Nk, order = 16, 10
-            maxK, minK = 30kF, 1e-8kF
-            # Nk, order = 20, 16
-            # maxK, minK = 300kF, 1e-8kF
-        end
+        param = Parameter.rydbergUnit(1.0 / beta, rs)
+        kF, β = param.kF, param.β
+        Euv, rtol = 1000 * param.EF, 1e-11
+
+        # Converged params
+        maxK, minK = 300kF, 1e-8kF
+        Nk, order = 20, 16
+
+        # # NOTE: Insufficient maxK — W_dyn / V goes to zero very slowly!
+        # # Same params as SelfEnergy.G0W0 runs
+        # maxK, minK = 30kF, 1e-8kF
+        # Nk, order = 16, 10
+
+        # Nk, order = 8, 4
+        # maxK, minK = 10kF, 1e-7kF
+        # Nk, order = 11, 8
+        # maxK, minK = 20kF, 1e-8kF
+        # Nk, order = 16, 12
+        # maxK, minK = 10kF, 1e-9kF
+        # Euv, rtol = 1000 * param.EF, 1e-11
+        # maxK, minK = 20param.kF, 1e-9param.kF
+        # Nk, order = 16, 12
 
         # Grids for k and n
         qgrid = CompositeGrid.LogDensedGrid(
@@ -273,8 +268,20 @@ function main()
             landaufunc = Interaction.landauParameterMoroni
         end
 
-        # Get KO_dyn(q, iωₙ) / V(q)
-        KO_dyn_over_v_wn_q, _ = Interaction.KOwrapped(
+        # # Get WtildeFs(q, iωₙ) / V(q)
+        # wtilde_Fs_over_v_wn_q = WtildeFswrapped(
+        #     Euv,
+        #     rtol,
+        #     qgrid.grid,
+        #     param;
+        #     regular=true,
+        #     int_type=int_type,
+        #     landaufunc=landaufunc,
+        #     Fs=-Fs,  # NOTE: NEFT uses opposite sign convention!
+        # )
+
+        # Get Wtilde_KO(q, iωₙ) / (V(q) - fs)
+        wtilde_KO_over_v_wn_q, _ = Interaction.KOwrapped(
             Euv,
             rtol,
             qgrid.grid,
@@ -283,14 +290,16 @@ function main()
             int_type=:ko,
             # int_type=int_type == :ko_const ? :ko_const : :ko,
             landaufunc=landaufunc,
-            # Fs=-Fs,
+            Fs=-Fs,  # NOTE: NEFT uses opposite sign convention!
         )
 
-        # Get KO_dyn(q, τ = 0) / V(q) from KO_dyn(q, iωₙ) / V(q)
-        KO_dyn_over_v_dlr_q = to_dlr(KO_dyn_over_v_wn_q)
-        KO_dyn_over_v_tau_q = to_imtime(KO_dyn_over_v_dlr_q)
-        # NOTE: Sigma is spin-symmetric => idx1 = 1, and idx2 = 1 for τ = 0
-        KO_dyn_over_v_q_inst = real(KO_dyn_over_v_tau_q[1, 1, :])
+        # Get Wtilde_KO(q, τ) / (V(q) - fs) from Wtilde_KO(q, iωₙ) / (V(q) - fs)
+        wtilde_KO_over_v_dlr_q = to_dlr(wtilde_KO_over_v_wn_q)
+        wtilde_KO_over_v_tau_q = to_imtime(wtilde_KO_over_v_dlr_q)
+
+        # Get Wtilde_KO_s(q, τ = 0) / (V(q) - fs), keeping only the
+        # spin-symmetric part of wtilde_KO (we define fa := 0)
+        wtilde_KO_s_over_v_q_inst = real(wtilde_KO_over_v_tau_q[1, 1, :])
 
         # RPA Wtilde0(q, iωₙ) / V(q)
         wtilde_0_over_v_wn_q, _ =
@@ -302,19 +311,59 @@ function main()
         # NOTE: Wtilde0 is spin-symmetric => idx1 = 1
         wtilde_0_over_v_q_inst = real(wtilde_0_over_v_tau_q[1, 1, :])
 
-        # Infinitesimal time δ_τ from DLR grid
-        qwin = qgrid.grid .≤ 3.0 * kF
+        # Get Wtilde_KO(q, iωₙ)
+        wtilde_KO_wn_q, _ = Interaction.KOwrapped(
+            Euv,
+            rtol,
+            qgrid.grid,
+            param;
+            regular=false,
+            int_type=int_type,
+            landaufunc=landaufunc,
+            Fs=-Fs,  # NOTE: NEFT uses opposite sign convention!
+        )
+
+        # Get Wtilde_KO(q, τ) from Wtilde_KO(q, iωₙ)
+        wtilde_KO_dlr_q = to_dlr(wtilde_KO_wn_q)
+        wtilde_KO_tau_q = to_imtime(wtilde_KO_dlr_q)
+
+        # Get Wtilde_KO_s(q, τ = 0), keeping only the
+        # spin-symmetric part of wtilde_KO (we define fa := 0)
+        wtilde_KO_s_q_inst = real(wtilde_KO_tau_q[1, 1, :])
+
+        # RPA Wtilde0(q, iωₙ)
+        wtilde_0_wn_q, _ =
+            Interaction.RPAwrapped(Euv, rtol, qgrid.grid, param; regular=false)
+
+        # Get Wtilde0(q, τ = 0) from WtildeFs(q, iωₙ)
+        wtilde_0_dlr_q = to_dlr(wtilde_0_wn_q)
+        wtilde_0_tau_q = to_imtime(wtilde_0_dlr_q)
+        # NOTE: Wtilde0 is spin-symmetric => idx1 = 1
+        wtilde_0_q_inst = real(wtilde_0_tau_q[1, 1, :])
+
+        # Big q window
+        qwin = UnitRange(1, length(qgrid.grid))
         qs = qgrid.grid[qwin]
-        taus = KO_dyn_over_v_dlr_q.mesh[2].dlr.τ
+        
+        # Small q window
+        qwinsmall = qgrid.grid .≤ 3.0 * kF
+        # qwinsmall = qgrid.grid .≤ 10.0 * kF
+        qssmall = qgrid.grid[qwinsmall]
+        
+        # Infinitesimal time δ_τ from DLR grid
+        taus = wtilde_KO_over_v_dlr_q.mesh[2].dlr.τ
 
         delta_tau_str = @sprintf "%.0g" taus[1]
-        # Fs_str = @sprintf "%.2g" Fs
-        Fs_str = ""
+        if int_type == :ko_const
+            Fs_str = @sprintf "%.2g" Fs
+        else
+            Fs_str = ""
+        end
 
-        # Plot RPA(+FL) (Wtilde / V) at this rs
-        ax.plot(
-            qs / kF,
-            wtilde_0_over_v_q_inst[qwin];
+        # Plot the lowest-frequency part of RPA(+FL) Wtilde(q, iωₙ)
+        ax3.plot(
+            qssmall / kF,
+            wtilde_0_over_v_wn_q[1, 1, :][qwinsmall],
             color="C$i",
             linestyle="--",
             label="(RPA) \$r_s = $rs,\\, \\delta_\\tau = $delta_tau_str\$",
@@ -323,24 +372,67 @@ function main()
             int_type == :ko_const ?
             "(RPA+FL) \$r_s = $rs,\\, F_s = $Fs_str, \\delta_\\tau = $delta_tau_str\$" :
             "(RPA+FL) \$r_s = $rs,\\, \\delta_\\tau = $delta_tau_str\$"
-        ax.plot(qs / kF, KO_dyn_over_v_q_inst[qwin]; color="C$i", label=rpa_fl_label)
+        ax3.plot(
+            qssmall / kF,
+            wtilde_KO_over_v_wn_q[1, 1, :][qwinsmall],
+            color="C$i",
+            label=rpa_fl_label,
+        )
 
-        # Integrate RPA(+FL) 4πe²(W_dyn(q, τ = 0) / V(q)) over q ∈ ℝ⁺ for W ∈ {W_0, W_KO}
+        # Plot RPA(+FL) (Wtilde / V) at this rs
+        ax.plot(
+            # qs / kF,
+            qssmall / kF,
+            # wtilde_0_over_v_q_inst[qwin];
+            wtilde_0_over_v_q_inst[qwinsmall];
+            color="C$i",
+            linestyle="--",
+            label="(RPA) \$r_s = $rs,\\, \\delta_\\tau = $delta_tau_str\$",
+        )
+        rpa_fl_label =
+            int_type == :ko_const ?
+            "(RPA+FL) \$r_s = $rs,\\, F_s = $Fs_str, \\delta_\\tau = $delta_tau_str\$" :
+            "(RPA+FL) \$r_s = $rs,\\, \\delta_\\tau = $delta_tau_str\$"
+        # ax.plot(qs / kF, wtilde_KO_s_over_v_q_inst[qwin]; color="C$i", label=rpa_fl_label)
+        ax.plot(qssmall / kF, wtilde_KO_s_over_v_q_inst[qwinsmall]; color="C$i", label=rpa_fl_label)
+
+        # Integrate RPA(+FL) 4πe²(Wtilde(q, τ = 0) / V(q)) over q ∈ ℝ⁺
+        rpa_integrand = wtilde_0_over_v_q_inst
         c1_rpa =
-            -(2 * param.e0^2 / π) *
-            CompositeGrids.Interp.integrate1D(wtilde_0_over_v_q_inst, qgrid)
+        -(2 * param.e0^2 / π) *
+        CompositeGrids.Interp.integrate1D(rpa_integrand, qgrid)
+        
+        # Wtilde_KO_s / Vs = (Wtilde_KO_s / (Vs - fs)) * (1 - fs Vinvs) = Wtilde_KO_s(...; regular=true) * (1 - fs Vinvs)
+        fs = -Fs / param.NF
+        Vinvs = [Interaction.coulombinv(q, param)[1] for q in qgrid.grid]
+        rpa_fl_integrand = @. wtilde_KO_s_over_v_q_inst * (1.0 - fs * Vinvs)
+ 
+        # Integrate RPA(+FL) 4πe²(Wtilde(q, τ = 0) / V(q)) over q ∈ ℝ⁺
         c1_rpa_fl =
             -(2 * param.e0^2 / π) *
-            CompositeGrids.Interp.integrate1D(KO_dyn_over_v_q_inst, qgrid)
-        println("(rs = $rs) C⁽¹⁾_{RPA} = $c1_rpa, C⁽¹⁾_{RPA+FL} = $c1_rpa_fl")
+            CompositeGrids.Interp.integrate1D(rpa_fl_integrand, qgrid)
+
+        # # Integrate RPA(+FL) q² Wtilde(q, τ = 0) over q ∈ ℝ⁺
+        c1_rpa_v2 =
+            -(1 / 2π^2) *
+            CompositeGrids.Interp.integrate1D(wtilde_0_q_inst .* qgrid .* qgrid, qgrid)
+        c1_rpa_fl_v2 =
+            -(1 / 2π^2) *
+            CompositeGrids.Interp.integrate1D(wtilde_KO_s_q_inst .* qgrid .* qgrid, qgrid)
+        println("(rs = $rs, regular=true) C⁽¹⁾_{RPA} = $c1_rpa, C⁽¹⁾_{RPA+FL} = $c1_rpa_fl")
+        println("(rs = $rs, regular=false) C⁽¹⁾_{RPA} = $c1_rpa_v2, C⁽¹⁾_{RPA+FL} = $c1_rpa_fl_v2")
+        println()
     end
     ax.legend(; loc="best")
     ax.set_xlabel("\$q / k_F\$")
     ax.set_ylabel("\$W_{dyn}(q, \\tau = \\delta_\\tau) / V(q)\$")
     plt.tight_layout()
-    fig.savefig(
-        "rpa_and_rpa_fl_wtilde_over_V_q_inst_rs=$(rslist)_beta=$(beta)_$(int_type).pdf",
-    )
+    fig.savefig("rpa_and_rpa_fl_wtilde_over_V_q_inst_rs=$(rslist)_$(int_type).pdf")
+    ax3.legend(; loc="best")
+    ax3.set_xlabel("\$q / k_F\$")
+    ax3.set_ylabel("\$W_{dyn}(q, i\\omega_0) / V(q)\$")
+    plt.tight_layout()
+    fig3.savefig("rpa_and_rpa_fl_wtilde_over_V_q_iw0_rs=$(rslist)_$(int_type).pdf")
     return
 end
 
