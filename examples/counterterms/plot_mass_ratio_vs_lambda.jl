@@ -29,11 +29,6 @@ function main()
 
     beta = 40.0
     neval = 1e11
-<<<<<<< HEAD
-=======
-    # neval = 5e10
-    # neval = 1e10
->>>>>>> dbfaf4659d19ce7d3079693f61eae62f167ecfbe
     # rs = 2.0
     # lambdas = [0.1, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
     # lambdas = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
@@ -43,7 +38,6 @@ function main()
     # lambdas = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0]
     # lambdas = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 3.5, 4.0, 5.0, 6.0]
     ### rs = 4 ###
-<<<<<<< HEAD
     # rs = 4.0
     # lambdas = [0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25, 1.5]
     # lambdas = [0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 2.25, 2.5, 2.75, 3.0]
@@ -51,16 +45,6 @@ function main()
     ### rs = 5 ###
     rs = 5.0
     lambdas = [0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25, 1.5]
-=======
-    rs = 4.0
-    lambdas = [0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25, 1.5]
-    # lambdas = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
-    # lambdas = [0.25, 0.5, 0.75, 1.0, 1.25]
-    # lambdas = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 2.25, 2.5, 2.75, 3.0]
-    # lambdas = [0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 2.25, 2.5, 2.75, 3.0, 3.5, 4.0, 4.5, 5.0, 6.0]
-    ### rs = 5 ###
-    # rs = 5.0
->>>>>>> dbfaf4659d19ce7d3079693f61eae62f167ecfbe
     # lambdas = [0.25, 0.5, 0.75, 1.0, 2.0, 3.0]
     # lambdas = [0.1, 0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 3.25, 3.5, 3.75, 4.0, 4.5, 5.0, 5.5, 6.0]
     # lambdas = [0.1, 0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
@@ -153,15 +137,7 @@ function main()
     # Plot the results for each order ξ vs lambda
     fig, ax = plt.subplots()
     if rs == 3.0
-<<<<<<< HEAD
         ax.axvline(1.0; linestyle="--", color="dimgray", label="\$\\lambda^\\star = 1\$")
-=======
-        # ax.axvline(1.0; linestyle="--", color="dimgray", label="\$\\lambda^\\star = 1\$")
-    elseif rs == 4.0
-        # ax.axvline(1.0; linestyle="--", color="dimgray", label="\$\\lambda^\\star = 1\$")
-    elseif rs == 5.0
-        # ax.axvline(0.875; linestyle="--", color="dimgray", label="\$\\lambda^\\star = 0.875\$")
->>>>>>> dbfaf4659d19ce7d3079693f61eae62f167ecfbe
     end
     # for (i, N) in enumerate(0:4)
     for (i, N) in enumerate(0:4)
@@ -169,40 +145,8 @@ function main()
         # Get means and error bars from the result up to this order
         means = Measurements.value.(mass_ratios_N_vs_lambda[i])
         stdevs = Measurements.uncertainty.(mass_ratios_N_vs_lambda[i])
-<<<<<<< HEAD
         ax.plot(lambdas, means, "o-"; color="C$(i-2)", markersize=3, label="\$N=$N\$ ($solver)")
         ax.fill_between(lambdas, (means - stdevs), (means + stdevs); color="C$(i-2)", alpha=0.3)
-=======
-        ax.plot(
-            lambdas,
-            means,
-            "o-";
-            color="C$(i-2)",
-            markersize=3,
-            label="\$N=$N\$ ($solver)",
-            zorder=10i,
-        )
-        ax.fill_between(
-            lambdas,
-            (means - stdevs),
-            (means + stdevs);
-            color="C$(i-2)",
-            alpha=0.3,
-            zorder=10i + 1,
-        )
-    end
-    if rs == 4.0
-        fdata = [Measurements.value.(r) for r in mass_ratios_N_vs_lambda]
-        x2opt = (0.5 + 0.625) / 2.0
-        f2opt = ((fdata[3][lambdas .== 0.625] + fdata[3][lambdas .== 0.5]) / 2.0)[1]
-        x3opt = 0.75
-        f3opt = fdata[4][lambdas .== x3opt][1]
-        x4opt = 1.0
-        f4opt = fdata[5][lambdas .== x4opt][1]
-        ax.scatter(x2opt, f2opt; s=80, marker="*", color="C1", zorder=100)
-        ax.scatter(x3opt, f3opt; s=80, marker="*", color="C2", zorder=101)
-        ax.scatter(x4opt, f4opt; s=80, marker="*", color="C3", zorder=102)
->>>>>>> dbfaf4659d19ce7d3079693f61eae62f167ecfbe
     end
     xloc = 1.25
     ax.set_xlim(0.125, 3.125)
@@ -211,41 +155,21 @@ function main()
         ydiv = -0.02
         ax.set_ylim(0.89, 1.06)
     elseif rs == 4.0
-<<<<<<< HEAD
         xloc = 0.6
         yloc = 0.94
         ydiv = -0.01125
         ax.set_xlim(0.375, 1.5)
         ax.set_ylim(0.91, 1.0)
-=======
-        yloc = 0.935
-        ydiv = -0.01
-        xloc = 0.6
-        ax.set_xlim(0.375, 1.5)
-        ax.set_ylim(0.91, 1.0)
-        # xloc = 0.75
-        # ydiv = -0.02
-        # yloc = 1.0375
-        # xloc = 1.125
-        # ax.set_xlim(0.125, 2.125)
-        # ax.set_ylim(0.89, 1.06)
->>>>>>> dbfaf4659d19ce7d3079693f61eae62f167ecfbe
         # yloc = 1.0275
         # ydiv = -0.0125
         # ax.set_ylim(0.95, 1.04)
     elseif rs == 5.0
-<<<<<<< HEAD
         xloc = 0.6
         yloc = 0.9575
         ydiv = -0.00875
         ax.set_xlim(0.375, 1.5)
         ax.set_ylim(0.93, 1.0)
         # ax.set_ylim(0.375, 1.5)
-=======
-        yloc = 1.0375
-        ydiv = -0.02
-        ax.set_ylim(0.89, 1.06)
->>>>>>> dbfaf4659d19ce7d3079693f61eae62f167ecfbe
         # yloc = 1.0275
         # ydiv = -0.0125
         # ax.set_ylim(0.95, 1.04)
