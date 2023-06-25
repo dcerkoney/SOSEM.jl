@@ -26,6 +26,7 @@ function main()
         cd("$(ENV["SOSEM_HOME"])/examples/counterterms")
     end
 
+<<<<<<< HEAD
     solver = :mcmc
     beta = 40.0
 
@@ -35,11 +36,20 @@ function main()
     # rs = 5.0
     # mass2list = [0.875]
 
+=======
+    rs = 3.0
+>>>>>>> dbfaf4659d19ce7d3079693f61eae62f167ecfbe
     # rslist = [2.0]
     # rslist = [1.0, 2.0, 5.0]
     # mass2 = 1.0
     # mass2list = [1.5, 1.75, 2.0]
+<<<<<<< HEAD
     # mass2list = [1.75]
+=======
+    mass2list = [1.5]
+    # mass2list = [1.75]
+    solver = :mcmc
+>>>>>>> dbfaf4659d19ce7d3079693f61eae62f167ecfbe
     # solver = :vegasmc
 
     # Using mass2 from optimization of C⁽¹⁾ⁿˡ(k = 0)
@@ -225,6 +235,7 @@ function main()
         # yloc = 0.97
         # ydiv = -0.003
         ### rs = 3, lambda = 1.5 ###
+<<<<<<< HEAD
         # xloc = 0.04
         # yloc = 0.97675
         # ydiv = -0.00025
@@ -236,6 +247,11 @@ function main()
         # xloc = 0.04
         # yloc = 0.98075
         # ydiv = -0.0004
+=======
+        xloc = 0.04
+        yloc = 0.97675
+        ydiv = -0.00025
+>>>>>>> dbfaf4659d19ce7d3079693f61eae62f167ecfbe
         ### lambda = 1.75 ###
         # xloc = 0.03
         # yloc = 0.964
@@ -285,6 +301,7 @@ function main()
         # yloc = 0.93
         # ydiv = -0.01
         ### rs = 3, lambda = 1.5 ###
+<<<<<<< HEAD
         # xloc = 0.04
         # yloc = 0.9605
         # ydiv = -0.001
@@ -296,6 +313,11 @@ function main()
         # xloc = 0.04
         # yloc = 0.97
         # ydiv = -0.002
+=======
+        xloc = 0.04
+        yloc = 0.9605
+        ydiv = -0.001
+>>>>>>> dbfaf4659d19ce7d3079693f61eae62f167ecfbe
         ### lambda = 1.75 ###
         # xloc = 0.03
         # yloc = 0.960
@@ -360,8 +382,12 @@ function main()
         # ydiv = -0.0075
         xloc = 1.5
         yloc = 0.995
+<<<<<<< HEAD
         ydiv = -0.0035
         # ydiv = -0.005
+=======
+        ydiv = -0.005
+>>>>>>> dbfaf4659d19ce7d3079693f61eae62f167ecfbe
         ax.text(
             xloc,
             yloc,
