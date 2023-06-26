@@ -280,7 +280,7 @@ function main()
     end
 
     # Total loop order N
-    # orders = [0, 1, 2, 3]
+    # orders = [1, 2, 3, 4]
     orders = [4, 5]
     max_order = maximum(orders)
     sort!(orders)
@@ -291,7 +291,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 1e7
+    neval = 1e9
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -305,7 +305,8 @@ function main()
     no_green4_str = no_green4 ? "_no_green4" : ""
 
     # Optionally give specific partition(s) to build
-    build_partitions = [(2, 0, 2), (2, 0, 3)]  # Need at least V^2 and 2nd order λ derivative to test interaction Taylor factor bug
+    build_partitions = [(2, 0, 2), (2, 0, 3)]
+    # build_partitions = [(1, 2, 1), (1, 3, 0)]  # Need at least V^2 and 2nd order λ derivative to test interaction Taylor factor bug
     # build_partitions = nothing
     partn_string = ""
     if isnothing(build_partitions) == false
@@ -319,9 +320,9 @@ function main()
         order=max_order,
         rs=1.0,
         beta=40.0,
-        mass2=1.0,
+	mass2=0.6,
         isDynamic=false,
-        isFock=isFock,  # remove Fock insertions
+        isFock=isFock,  # remove Fock insertions?
     )
     @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)"
 
@@ -378,7 +379,6 @@ function main()
             # "$(no_green4_str)$(partn_string)_EFT_UEG"
             # "$(no_green4_str)$(partn_string)_SOSEM"
             "$(no_green4_str)$(partn_string)_EFT_UEG_bugfix"
-            # "$(no_green4_str)$(partn_string)"
         jldopen("$savename.jld2", "a+"; compress=true) do f
             key = "$(UEG.short(param))"
             if haskey(f, key)
