@@ -33,7 +33,7 @@ function eval(id::BareGreenId, K, _, varT, p::ParaMC)
         ϵ = k^2 / (2me * massratio) - μ         # ϵ_0
     end
 
-    # Since τout = -δ for some SOSEM observables, it is possible to generate
+    # Since τout = -δ for c1c SOSEM observable, it is possible to generate
     # out-of-bounds time differences => use anti-periodicity on [0, β)
     s = 1.0
     if τ < 0.0
@@ -61,9 +61,9 @@ function eval(id::BareGreenId, K, _, varT, p::ParaMC)
     elseif order == 3
         green *= -Spectral.kernelFermiT_dω3(τ, ϵ, β)
     elseif order == 4
-        return Spectral.kernelFermiT_dω4(τ, ϵ, β)
+        green *= Spectral.kernelFermiT_dω4(τ, ϵ, β)
     elseif order == 5
-        return -Spectral.kernelFermiT_dω5(τ, ϵ, β)
+        green *= -Spectral.kernelFermiT_dω5(τ, ϵ, β)
     else
         @todo
     end
