@@ -255,6 +255,7 @@ function integrand(vars, config)
 
         # Evaluate the expression tree (additional = mcparam)
         ExprTree.evalKT!(exprtrees[i], varK, T.data, mcparam)
+        # ExprTree.evalKT!(exprtrees[i], varK, T.data, mcparam; eval=UEG_MC.Propagators.eval)
 
         # Evaluate the density integrand n for this partition
         root = exprtrees[i].root[1]  # there is only one root per partition
@@ -279,7 +280,8 @@ function main()
     end
 
     # Total loop order N
-    orders = [0, 1, 2, 3]
+    # orders = [0, 1, 2, 3]
+    orders = [4, 5]
     max_order = maximum(orders)
     sort!(orders)
 
@@ -289,7 +291,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 1e10
+    neval = 1e7
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -303,7 +305,8 @@ function main()
     no_green4_str = no_green4 ? "_no_green4" : ""
 
     # Optionally give specific partition(s) to build
-    build_partitions = nothing
+    build_partitions = [(2, 0, 2), (2, 0, 3)]  # Need at least V^2 and 2nd order λ derivative to test interaction Taylor factor bug
+    # build_partitions = nothing
     partn_string = ""
     if isnothing(build_partitions) == false
         for P in build_partitions
@@ -314,7 +317,7 @@ function main()
     # UEG parameters for MC integration
     param = ParaMC(;
         order=max_order,
-        rs=5.0,
+        rs=1.0,
         beta=40.0,
         mass2=1.0,
         isDynamic=false,
@@ -372,7 +375,10 @@ function main()
         savename =
             "results/data/density_n=$(param.order)_rs=$(param.rs)_beta_ef=$(param.beta)_" *
             "lambda=$(param.mass2)_neval=$(neval)_$(solver)$(ct_string)" *
-            "$(no_green4_str)$(partn_string)"
+            # "$(no_green4_str)$(partn_string)_EFT_UEG"
+            # "$(no_green4_str)$(partn_string)_SOSEM"
+            "$(no_green4_str)$(partn_string)_EFT_UEG_bugfix"
+            # "$(no_green4_str)$(partn_string)"
         jldopen("$savename.jld2", "a+"; compress=true) do f
             key = "$(UEG.short(param))"
             if haskey(f, key)
