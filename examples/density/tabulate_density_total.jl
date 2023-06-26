@@ -21,7 +21,7 @@ function main()
     end
 
     # Total loop order N
-    orders = [0, 1, 2, 3]
+    orders = [0, 1, 2, 3, 4]
     min_order = minimum(orders)
     max_order = maximum(orders)
     sort!(orders)
@@ -32,7 +32,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 1e10
+    neval = 1e9
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -52,7 +52,8 @@ function main()
     compare_eft = false
 
     # Set green4 to zero for benchmarking?
-    no_green4 = false
+    no_green4 = true
+    # no_green4 = false
     no_green4_str = no_green4 ? "_no_green4" : ""
 
     # Optionally give specific partition(s) to build
@@ -67,9 +68,10 @@ function main()
     # UEG parameters for MC integration
     loadparam = ParaMC(;
         order=max_order,
-        rs=5.0,
+        rs=1.0,
         beta=beta,
-        mass2=1.0,
+        mass2=0.6,
+        # mass2=1.0,
         isDynamic=false,
         isFock=isFock,  # remove Fock insertions
     )
@@ -92,13 +94,21 @@ function main()
     savename =
         "results/data/density_n=$(loadparam.order)_rs=$(loadparam.rs)_beta_ef=$(loadparam.beta)_" *
         "lambda=$(loadparam.mass2)_neval=$(neval)_$(solver)$(ct_string)" *
-        "$(no_green4_str)$(partn_string)"
+        "$(no_green4_str)$(partn_string)_ct_fixes"
+    # "$(no_green4_str)$(partn_string)"
     println(savename)
     orders, param, partitions, res = jldopen("$savename.jld2", "a+") do f
         key = "$(UEG.short(loadparam))"
         return f[key]
     end
     println(partitions)
+
+    # NOTE: Since we use the SOSEM script for the density integration, 
+    #       the Taylor factors are post-processed for SOSEM case
+    has_taylor_factors_sosem = false
+
+    # Taylor factors in EFT case are pre/post-processed depending on age
+    has_taylor_factors_eft = false
 
     if compare_eft
         # Load the EFT_UEG data (NOTE: EFT data is already in Dict format!)
@@ -120,23 +130,35 @@ function main()
     # Add overall spin summation (factor of 2) and factor of 1 / (n_μ! n_λ!)
     n0 = param.kF^3 / (3 * pi^2)
     for (k, v) in data
-        data[k] = [2 * v / (factorial(k[2]) * factorial(k[3]))]
-        # data[k] = [2 * v / n0 / (factorial(k[2]) * factorial(k[3]))]
+        if has_taylor_factors_sosem
+            # data[k] = 2 * v
+            data[k] = 2 * v / n0
+        else
+            # data[k] = 2 * v / (factorial(k[2]) * factorial(k[3]))
+            data[k] = 2 * v / n0 / (factorial(k[2]) * factorial(k[3]))
+        end
     end
     if compare_eft
         for (k, v) in data_eft
-            data_eft[k] = [2 * v / (factorial(k[2]) * factorial(k[3]))]
-            # data_eft[k] = [2 * v / n0]
+            if has_taylor_factors_sosem
+                data_eft[k] = 2 * v
+                # data_eft[k] = 2 * v / n0
+            else
+                data_eft[k] = 2 * v / (factorial(k[2]) * factorial(k[3]))
+                # data_eft[k] = 2 * v / n0
+            end
         end
     end
 
     # println(n0)
-    # println("\nPartitions SOSEM in units of n0 (n_loop, n_λ, n_μ):\n")
-    # for Pm in keys(data)
-    #     # fix_mu && Pm[2] > 0 && continue
-    #     # Pm[3] > 0 && continue  # No lambda counterterms
-    #     println("$((Pm[1]+1, Pm[3], Pm[2])):\t$(data[Pm][1])")
-    # end
+    println("\nPartitions SOSEM in units of n0 (n_loop, n_λ, n_μ):\n")
+    for Pm in keys(sort(data))
+        # for Pm in keys(data)
+        # fix_mu && Pm[2] > 0 && continue
+        # Pm[3] > 0 && continue  # No lambda counterterms
+        no_green4 && Pm[2] ≥ 3 && continue
+        println("$((Pm[1]+1, Pm[3], Pm[2])):\t$(data[Pm][1])")
+    end
     # if compare_eft
     #     println("\nPartitions EFT in units of n0 (n_loop, n_λ, n_μ):\n")
     #     for Pm in keys(data_eft)
@@ -146,7 +168,7 @@ function main()
     #     end
     # end
     # println("Done!")
-    # return
+    return
 
     # Zero out partitions with mu renorm if present (fix mu)
     if renorm_mu == false || fix_mu

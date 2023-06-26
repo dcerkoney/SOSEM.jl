@@ -6,8 +6,10 @@ using SOSEM
 
 function main()
     # Total loop order N
-    # orders = [0, 1, 2, 3]
-    orders = [4, 5]
+    orders = [1, 2, 3, 4]
+    # orders = [0, 1, 2, 3, 4]
+    # orders = [4, 5]
+    # orders = [4]
     min_order = minimum(orders)
     max_order = maximum(orders)
     sort!(orders)
@@ -20,6 +22,7 @@ function main()
     # Number of evals below and above kF
     # neval = 1e7
     neval = 1e9
+    # neval = 1e10
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -40,11 +43,13 @@ function main()
 
     # Set green4 to zero for benchmarking?
     no_green4 = false
+    # no_green4 = true
     no_green4_str = no_green4 ? "_no_green4" : ""
 
     # Optionally give specific partition(s) to build
-    build_partitions = [(2, 0, 2), (2, 0, 3)]
-    # build_partitions = nothing
+    # build_partitions = [(1, 2, 1), (1, 3, 0)]
+    # build_partitions = [(2, 0, 2), (2, 0, 3)]
+    build_partitions = nothing
     partn_string = ""
     if isnothing(build_partitions) == false
         for P in build_partitions
@@ -57,7 +62,8 @@ function main()
         order=max_order,
         rs=1.0,
         beta=beta,
-        mass2=1.0,
+        # mass2=1.0,
+        mass2=0.6,
         isDynamic=false,
         isFock=isFock,  # remove Fock insertions
     )
@@ -81,10 +87,21 @@ function main()
         "results/data/density_n=$(loadparam.order)_rs=$(loadparam.rs)_beta_ef=$(loadparam.beta)_" *
         "lambda=$(loadparam.mass2)_neval=$(neval)_$(solver)$(ct_string)" *
         "$(no_green4_str)$(partn_string)"
-    
-    run_types = ["SOSEM", "EFT_UEG", "EFT_UEG (post-bugfix)"]
-    savenames = [savename * "_SOSEM", savename * "_EFT_UEG", savename * "_EFT_UEG_bugfix"]
-    for (run_type, savename) in zip(run_types, savenames)
+    println(savename)
+
+    # NOTE: Since we use the SOSEM script for the density integration, 
+    #       the Taylor factors are post-processed in all three cases
+    has_taylor_factors_list = [false]
+    run_types = ["EFT_UEG (post-bugfix)"]
+    savenames = [savename * "_EFT_UEG_bugfix"]
+    # has_taylor_factors_list = [false, false]
+    # run_types = ["SOSEM", "EFT_UEG (post-bugfix)"]
+    # savenames = [savename * "_SOSEM", savename * "_EFT_UEG_bugfix"]
+    # has_taylor_factors_list = [false, false, false]
+    # run_types = ["SOSEM", "EFT_UEG", "EFT_UEG (post-bugfix)"]
+    # savenames = [savename * "_SOSEM", savename * "_EFT_UEG", savename * "_EFT_UEG_bugfix"]
+    for (has_taylor_factors, run_type, savename) in
+        zip(has_taylor_factors_list, run_types, savenames)
         # println(savename)
         orders, param, partitions, res = jldopen("$savename.jld2", "a+") do f
             key = "$(UEG.short(loadparam))"
@@ -99,14 +116,19 @@ function main()
         n0 = param.kF^3 / (3 * pi^2)
         for (k, v) in data
             # 2 from spin factor and units of n0
-            data[k] = 2 * v / n0 / (factorial(k[2]) * factorial(k[3]))
-            # data[k] = [2 * v / n0 / (factorial(k[2]) * factorial(k[3]))]
-            # data[k] = [2 * v / (factorial(k[2]) * factorial(k[3]))]
+            if has_taylor_factors
+                # data[k] = 2 * v
+                data[k] = 2 * v / n0
+            else
+                # data[k] = 2 * v / (factorial(k[2]) * factorial(k[3]))
+                data[k] = 2 * v / n0 / (factorial(k[2]) * factorial(k[3]))
+            end
         end
-
-        println("\n$(run_type) partitions (n_loop + 1, n_μ, n_λ):")
+        
+        println("\n$(run_type) partitions (n_loop + 1, n_λ, n_μ):")
         for P in keys(data)
-            println("$((P[1] + 1, P[3], P[2])):\t$(data[P])")
+            sum(P) > 3 && continue
+            println("$((P[1] + 1, P[3], P[2])):\t$(data[P][1])")
         end
     end
 end
