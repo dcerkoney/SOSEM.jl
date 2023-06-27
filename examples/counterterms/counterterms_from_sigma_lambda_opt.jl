@@ -15,12 +15,15 @@ end
 
 function main()
     # Physical params matching data for SOSEM observables
-    order = [5]  # C^{(1)}_{N≤6} includes CTs up to 5th order
-    # order = [4]  # C^{(1)}_{N≤5} includes CTs up to 4th order
+    # order = [5]  # C^{(1)}_{N≤6} includes CTs up to 5th order
+    order = [4]  # C^{(1)}_{N≤5} includes CTs up to 4th order
     beta = [40.0]
 
-    # rs = [3.0]
-    # mass2 = [1.0, 1.25, 1.5, 1.75, 5.0, 6.0]
+    # rs = [2.0]
+    # mass2 = [1.25, 1.5, 1.625, 1.75, 1.875, 2.0]
+
+    rs = [3.0]
+    mass2 = [0.75, 0.875, 1.0, 1.125, 1.25, 1.5]
     # mass2 = [2.0, 2.5, 3.0, 3.5, 4.0]
     # mass2 = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75]
 
