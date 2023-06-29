@@ -74,8 +74,7 @@ function chemicalpotential_renormalization_sosem(
         for n in 1:lowest_order
             # data_with_missing_partns[(2, n, 0)] = zero(valtype(data))
             if length(collect(keys(data))[1]) == 2
-                data_with_missing_partns[(2, n)] =
-                    zero(data[(max_order, 0)])
+                data_with_missing_partns[(2, n)] = zero(data[(max_order, 0)])
             else
                 data_with_missing_partns[(2, n, 0)] =
                     zero(data[(max_order - lowest_order, 0, 0)])
@@ -149,11 +148,15 @@ function load_z_mu(
     ct_filename="examples/counterterms/data/data_Z.jld2",
 )
     # Load μ from csv
+    local has_taylor_factors
     local ct_data
     filefound = false
     f = jldopen(ct_filename, "r")
     for key in keys(f)
-        if UEG.paraid(f[key][1]) == UEG.paraid(param)
+        if f[key] isa Bool
+            has_taylor_factors = f[key]
+            continue
+        elseif UEG.paraid(f[key][1]) == UEG.paraid(param)
             ct_data = f[key]
             filefound = true
         end
@@ -188,7 +191,25 @@ function load_z_mu(
         z[p] = zfactor(val, para.β)
     end
 
-    return z, μ
+    return z, μ, has_taylor_factors
+end
+
+"""
+    function getSigma(para::ParaMC; order=para.order, parafile=parafileName)
+
+    Read self-energy parameters from the file.
+    Modified from EFT_UEG to load parafile from local (SOSEM) directory.
+
+# Arguments
+df     : DataFrame
+paraid : Dictionary of parameter names and values
+order  : the truncation order
+"""
+function getSigma(para::ParaMC; order=para.order, parafile=parafileName)
+    # println(parafile)
+    df = fromFile(parafile)
+    @assert isnothing(df) == false "file $parafile failed to load"
+    return CounterTerm.getSigma(df, UEG.paraid(para), order)
 end
 
 """Modified from EFT_UEG to store parafile in local (SOSEM) directory."""

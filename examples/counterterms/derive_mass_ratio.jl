@@ -20,32 +20,35 @@ beta = [40.0]
 # rs = [3.0]
 # mass2 = [1.5]
 
+### rs = 2 ###
 # rs = [2.0]
 # mass2 = [1.75]
 # mass2 = [1.5, 1.75, 2.0]
 # mass2 = [0.1, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
 ### rs = 3 ###
-# rs = 3.0
+rs = [3.0]
+mass2 = [0.75, 0.875, 1.0, 1.125, 1.25, 1.5]
 # mass2 = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 3.5, 4.0, 5.0, 6.0]
 ### rs = 4 ###
-rs = [4.0]
-mass2 = [0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25]
+# rs = [4.0]
+# mass2 = [0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25]
 # mass2 = [0.25, 0.5, 0.75, 1.0, 1.25]
 # mass2 = [0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 2.25, 2.5, 2.75, 3.0, 3.5, 4.0, 4.5, 5.0, 6.0, 7.0]
 ### rs = 5 ###
-rs = 5.0
-mass2 = [0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25, 1.5]
-# rs = 5.0
+# rs = [5.0]
+# mass2 = [0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25, 1.5]
+# rs = [5.0]
 # mass2 = [0.1, 0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 3.25, 3.5, 3.75, 4.0, 4.5, 5.0, 5.5, 6.0, 7.0, 8.0]
 
 # Momentum spacing for finite-difference derivative of Sigma (in units of para.kF)
-δK = 0.005  # spacings n*δK = 0.15–0.3 not relevant for rs = 1.0 => reduce δK by half
+δK = 0.01  # spacings n*δK = 0.15–0.3 not relevant for rs = 1.0 => reduce δK by half
+# δK = 0.005  # spacings n*δK = 0.15–0.3 not relevant for rs = 1.0 => reduce δK by half
 
 # We estimate the derivative wrt k using grid points kgrid[ikF] and kgrid[ikF + idk]
-idks = 1:15
+idks = eachindex(-6:2:6)
 
 # kgrid indices & spacings
-dks = δK * collect(idks)
+dks = δK * collect(-6:2:6)
 
 # Which finite difference method for numerical k derivative?
 method = :central
@@ -69,7 +72,7 @@ method = :central
 
 # # kgrid indices & spacings
 # dks = [δK, 5δK, 10δK]
-# # dks = δK * collect(idks)
+# # dks = δK * collect(-6:2:6)
 
 # Enable/disable interaction and chemical potential counterterms
 renorm_mu = true

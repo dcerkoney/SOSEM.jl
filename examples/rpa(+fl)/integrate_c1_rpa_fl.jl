@@ -28,10 +28,10 @@ Get the symmetric l=0 Fermi-liquid parameter F⁰ₛ via interpolation of the
 compressibility ratio data of Perdew & Wang (1992) [Phys. Rev. B 45, 13244].
 """
 function get_Fs_PW(rs)
-    if rs < 1.0 || rs > 5.0
-        @warn "The Perdew-Wang interpolation for Fs may " *
-              "be inaccurate outside the metallic regime!"
-    end
+    # if rs < 1.0 || rs > 5.0
+    #     @warn "The Perdew-Wang interpolation for Fs may " *
+    #           "be inaccurate outside the metallic regime!"
+    # end
     kappa0_over_kappa = 1.0025 - 0.1721rs - 0.0036rs^2
     # F⁰ₛ = κ₀/κ - 1
     return kappa0_over_kappa - 1.0
@@ -209,10 +209,11 @@ function main()
     # beta = 40.0 
     beta = 1000.0
     # rslist = [1.0, 2.0, 5.0]
-    rslist = [1.0, 2.0, 5.0, 10.0]
+    # rslist = [1.0, 2.0, 5.0, 10.0]
     # rslist = [1.0, 2.0, 3.0, 4.0, 5.0]
+    rslist = [0.1, 0.5, 1.0, 2.0, 3.0, 4.0, 5.0, 7.5, 10.0]
 
-    int_type = :ko_takada
+    int_type = :ko
     # int_type = :ko_moroni
     # int_type = :ko_const
 
@@ -223,11 +224,17 @@ function main()
     for (i, rs) in enumerate(rslist)
         param = Parameter.rydbergUnit(1.0 / beta, rs)
         kF, β = param.kF, param.β
-        Euv, rtol = 1000 * param.EF, 1e-11
+        Euv, rtol = 10000 * param.EF, 1e-11
+        
+        # # Converged params
+        # Euv, rtol = 10000 * param.EF, 1e-11
+        # maxK, minK = 1000kF, 1e-8kF
+        # Nk, order = 25, 20
 
-        # Converged params
-        maxK, minK = 300kF, 1e-8kF
-        Nk, order = 20, 16
+        # Small params
+        Euv, rtol = 1000 * param.EF, 1e-11
+        maxK, minK = 30kF, 1e-8kF
+        Nk, order = 11, 8
 
         # # NOTE: Insufficient maxK — W_dyn / V goes to zero very slowly!
         # # Same params as SelfEnergy.G0W0 runs
@@ -256,13 +263,15 @@ function main()
         # dlr = DLRGrid(Euv, β, rtol, false, :ph)
 
         # Get Landau parameter F⁰ₛ from Perdew & Wang compressibility fit
-        # Fs = get_Fs(rs)
-        # println("rs = $rs, Fs = $Fs, fs = $(Fs / param.NF)")
+        Fs = get_Fs(rs)
+        if int_type == :ko_const
+            println("rs = $rs, Fs = $Fs, fs = $(Fs / param.NF)")
+        end
 
         # Either use constant Fs from P&W, q-dependent Takada ansatz, or Corradini fit to Moroni DMC data
         if int_type == :ko_const
             landaufunc = Interaction.landauParameterConst
-        elseif int_type == :ko_takada
+        elseif int_type == :ko
             landaufunc = Interaction.landauParameterTakada
         elseif int_type == :ko_moroni
             landaufunc = Interaction.landauParameterMoroni
@@ -278,6 +287,7 @@ function main()
         #     int_type=int_type,
         #     landaufunc=landaufunc,
         #     Fs=-Fs,  # NOTE: NEFT uses opposite sign convention!
+        #     bugfix=true,
         # )
 
         # Get Wtilde_KO(q, iωₙ) / (V(q) - fs)
@@ -291,6 +301,7 @@ function main()
             # int_type=int_type == :ko_const ? :ko_const : :ko,
             landaufunc=landaufunc,
             Fs=-Fs,  # NOTE: NEFT uses opposite sign convention!
+            bugfix=true,
         )
 
         # Get Wtilde_KO(q, τ) / (V(q) - fs) from Wtilde_KO(q, iωₙ) / (V(q) - fs)
@@ -299,11 +310,13 @@ function main()
 
         # Get Wtilde_KO_s(q, τ = 0) / (V(q) - fs), keeping only the
         # spin-symmetric part of wtilde_KO (we define fa := 0)
-        wtilde_KO_s_over_v_q_inst = real(wtilde_KO_over_v_tau_q[1, 1, :])
+        wtilde_KO_s_over_v_q_f_inst = real(wtilde_KO_over_v_tau_q[1, 1, :])
 
         # RPA Wtilde0(q, iωₙ) / V(q)
         wtilde_0_over_v_wn_q, _ =
-            Interaction.RPAwrapped(Euv, rtol, qgrid.grid, param; regular=true)
+            Interaction.RPAwrapped(Euv, rtol, qgrid.grid, param; bugfix=true)
+        # Interaction.RPAwrapped(Euv, rtol, qgrid.grid, param)
+        # Interaction.RPAwrapped(Euv, rtol, qgrid.grid, param; regular=true)
 
         # Get Wtilde0(q, τ = 0) / V(q) from WtildeFs(q, iωₙ) / V(q)
         wtilde_0_over_v_dlr_q = to_dlr(wtilde_0_over_v_wn_q)
@@ -311,45 +324,39 @@ function main()
         # NOTE: Wtilde0 is spin-symmetric => idx1 = 1
         wtilde_0_over_v_q_inst = real(wtilde_0_over_v_tau_q[1, 1, :])
 
-        # Get Wtilde_KO(q, iωₙ)
-        wtilde_KO_wn_q, _ = Interaction.KOwrapped(
-            Euv,
-            rtol,
-            qgrid.grid,
-            param;
-            regular=false,
-            int_type=int_type,
-            landaufunc=landaufunc,
-            Fs=-Fs,  # NOTE: NEFT uses opposite sign convention!
-        )
+        @assert maximum(imag(wtilde_0_over_v_wn_q[1, 1, :])) ≤ 1e-10
+        @assert maximum(imag(wtilde_KO_over_v_wn_q[1, 1, :])) ≤ 1e-10
 
-        # Get Wtilde_KO(q, τ) from Wtilde_KO(q, iωₙ)
-        wtilde_KO_dlr_q = to_dlr(wtilde_KO_wn_q)
-        wtilde_KO_tau_q = to_imtime(wtilde_KO_dlr_q)
+        # # Get Wtilde_KO(q, iωₙ)
+        # wtilde_KO_wn_q, _ = Interaction.KOwrapped(
+        #     Euv,
+        #     rtol,
+        #     qgrid.grid,
+        #     param;
+        #     regular=false,
+        #     int_type=int_type,
+        #     landaufunc=landaufunc,
+        #     # Fs=-Fs,  # NOTE: NEFT uses opposite sign convention!
+        #     bugfix=true,
+        # )
 
-        # Get Wtilde_KO_s(q, τ = 0), keeping only the
-        # spin-symmetric part of wtilde_KO (we define fa := 0)
-        wtilde_KO_s_q_inst = real(wtilde_KO_tau_q[1, 1, :])
+        # # Get Wtilde_KO(q, τ) from Wtilde_KO(q, iωₙ)
+        # wtilde_KO_dlr_q = to_dlr(wtilde_KO_wn_q)
+        # wtilde_KO_tau_q = to_imtime(wtilde_KO_dlr_q)
 
-        # RPA Wtilde0(q, iωₙ)
-        wtilde_0_wn_q, _ =
-            Interaction.RPAwrapped(Euv, rtol, qgrid.grid, param; regular=false)
-
-        # Get Wtilde0(q, τ = 0) from WtildeFs(q, iωₙ)
-        wtilde_0_dlr_q = to_dlr(wtilde_0_wn_q)
-        wtilde_0_tau_q = to_imtime(wtilde_0_dlr_q)
-        # NOTE: Wtilde0 is spin-symmetric => idx1 = 1
-        wtilde_0_q_inst = real(wtilde_0_tau_q[1, 1, :])
+        # # Get Wtilde_KO_s(q, τ = 0), keeping only the
+        # # spin-symmetric part of wtilde_KO (we define fa := 0)
+        # wtilde_KO_s_q_inst = real(wtilde_KO_tau_q[1, 1, :])
 
         # Big q window
         qwin = UnitRange(1, length(qgrid.grid))
         qs = qgrid.grid[qwin]
-        
+
         # Small q window
         qwinsmall = qgrid.grid .≤ 3.0 * kF
         # qwinsmall = qgrid.grid .≤ 10.0 * kF
         qssmall = qgrid.grid[qwinsmall]
-        
+
         # Infinitesimal time δ_τ from DLR grid
         taus = wtilde_KO_over_v_dlr_q.mesh[2].dlr.τ
 
@@ -363,7 +370,7 @@ function main()
         # Plot the lowest-frequency part of RPA(+FL) Wtilde(q, iωₙ)
         ax3.plot(
             qssmall / kF,
-            wtilde_0_over_v_wn_q[1, 1, :][qwinsmall],
+            real(wtilde_0_over_v_wn_q[1, 1, :])[qwinsmall];
             color="C$i",
             linestyle="--",
             label="(RPA) \$r_s = $rs,\\, \\delta_\\tau = $delta_tau_str\$",
@@ -374,7 +381,7 @@ function main()
             "(RPA+FL) \$r_s = $rs,\\, \\delta_\\tau = $delta_tau_str\$"
         ax3.plot(
             qssmall / kF,
-            wtilde_KO_over_v_wn_q[1, 1, :][qwinsmall],
+            real(wtilde_KO_over_v_wn_q[1, 1, :])[qwinsmall];
             color="C$i",
             label=rpa_fl_label,
         )
@@ -393,42 +400,65 @@ function main()
             int_type == :ko_const ?
             "(RPA+FL) \$r_s = $rs,\\, F_s = $Fs_str, \\delta_\\tau = $delta_tau_str\$" :
             "(RPA+FL) \$r_s = $rs,\\, \\delta_\\tau = $delta_tau_str\$"
-        # ax.plot(qs / kF, wtilde_KO_s_over_v_q_inst[qwin]; color="C$i", label=rpa_fl_label)
-        ax.plot(qssmall / kF, wtilde_KO_s_over_v_q_inst[qwinsmall]; color="C$i", label=rpa_fl_label)
+        # ax.plot(qs / kF, wtilde_KO_s_over_v_q_f_inst[qwin]; color="C$i", label=rpa_fl_label)
+        ax.plot(
+            qssmall / kF,
+            wtilde_KO_s_over_v_q_f_inst[qwinsmall];
+            color="C$i",
+            label=rpa_fl_label,
+        )
 
         # Integrate RPA(+FL) 4πe²(Wtilde(q, τ = 0) / V(q)) over q ∈ ℝ⁺
         rpa_integrand = wtilde_0_over_v_q_inst
         c1_rpa =
-        -(2 * param.e0^2 / π) *
-        CompositeGrids.Interp.integrate1D(rpa_integrand, qgrid)
-        
-        # Wtilde_KO_s / Vs = (Wtilde_KO_s / (Vs - fs)) * (1 - fs Vinvs) = Wtilde_KO_s(...; regular=true) * (1 - fs Vinvs)
-        fs = -Fs / param.NF
+            -(2 * param.e0^2 / π) * CompositeGrids.Interp.integrate1D(rpa_integrand, qgrid)
+
+        local fs_int_type
+        if int_type == :ko
+            # NOTE: The Takada ansatz for fs is q-dependent!
+            fs_int_type =
+                [Interaction.landauParameterTakada(q, 0, param)[1] for q in qgrid.grid]
+        elseif int_type == :ko_const
+            # fs = Fs / NF
+            fs_int_type = Fs / param.NF
+        else
+            error("Not yet implemented!")
+        end
+
+        # 1 / Vs(q)
         Vinvs = [Interaction.coulombinv(q, param)[1] for q in qgrid.grid]
-        rpa_fl_integrand = @. wtilde_KO_s_over_v_q_inst * (1.0 - fs * Vinvs)
- 
-        # Integrate RPA(+FL) 4πe²(Wtilde(q, τ = 0) / V(q)) over q ∈ ℝ⁺
+
+        # Wtilde_KO_s / Vs = (Wtilde_KO_s / (Vs - fs)) * (1 - fs Vinvs) 
+        #                  = Wtilde_KO_s(...; regular=true) * (1 - fs Vinvs)
+        rpa_fl_integrand = @. wtilde_KO_s_over_v_q_f_inst * (1.0 - fs_int_type * Vinvs)
+
+        # Integrate RPA+FL 4πe²(Wtilde(q, τ = 0) / V(q)) over q ∈ ℝ⁺ (regular = true)
         c1_rpa_fl =
             -(2 * param.e0^2 / π) *
             CompositeGrids.Interp.integrate1D(rpa_fl_integrand, qgrid)
 
-        # # Integrate RPA(+FL) q² Wtilde(q, τ = 0) over q ∈ ℝ⁺
-        c1_rpa_v2 =
-            -(1 / 2π^2) *
-            CompositeGrids.Interp.integrate1D(wtilde_0_q_inst .* qgrid .* qgrid, qgrid)
-        c1_rpa_fl_v2 =
-            -(1 / 2π^2) *
-            CompositeGrids.Interp.integrate1D(wtilde_KO_s_q_inst .* qgrid .* qgrid, qgrid)
-        println("(rs = $rs, regular=true) C⁽¹⁾_{RPA} = $c1_rpa, C⁽¹⁾_{RPA+FL} = $c1_rpa_fl")
-        println("(rs = $rs, regular=false) C⁽¹⁾_{RPA} = $c1_rpa_v2, C⁽¹⁾_{RPA+FL} = $c1_rpa_fl_v2")
+        # # Integrate RPA+FL q² Wtilde(q, τ = 0) over q ∈ ℝ⁺ (regular = false)
+        # c1_rpa_fl_v2 =
+        #     -(1 / 2π^2) *
+        #     CompositeGrids.Interp.integrate1D(wtilde_KO_s_q_inst .* qgrid .* qgrid, qgrid)
+
+        println(
+            "rs = $rs:" * "\nC⁽¹⁾_{RPA} = $c1_rpa" * "\nC⁽¹⁾_{RPA+FL} = $c1_rpa_fl",
+            # # NOTE: Agrees with regular = true for int_type = :ko!
+            # * "\n(regular = false) C⁽¹⁾_{RPA+FL} = $c1_rpa_fl_v2",
+        )
         println()
     end
-    ax.legend(; loc="best")
+    if length(rslist) ≤ 6
+        ax.legend(; loc="best")
+    end
     ax.set_xlabel("\$q / k_F\$")
     ax.set_ylabel("\$W_{dyn}(q, \\tau = \\delta_\\tau) / V(q)\$")
     plt.tight_layout()
     fig.savefig("rpa_and_rpa_fl_wtilde_over_V_q_inst_rs=$(rslist)_$(int_type).pdf")
-    ax3.legend(; loc="best")
+    if length(rslist) ≤ 6
+        ax3.legend(; loc="best")
+    end
     ax3.set_xlabel("\$q / k_F\$")
     ax3.set_ylabel("\$W_{dyn}(q, i\\omega_0) / V(q)\$")
     plt.tight_layout()
