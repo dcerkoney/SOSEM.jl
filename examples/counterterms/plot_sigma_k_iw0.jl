@@ -33,46 +33,6 @@ const cdict = Dict([
     "grey" => "#BBBBBB",
 ]);
 
-function loaddata(para, FileName=filename)
-    key = UEG.short(para)
-    f = jldopen(FileName, "r")
-    # println(key)
-    # println(keys(f))
-    p, ngrid, kgrid, sigma = f[key]
-    # println(sigma)
-    order = p.order
-    _partition = UEG.partition(para.order)
-    rdata, idata = Dict(), Dict()
-    for (ip, p) in enumerate(_partition)
-        rdata[p] = real(sigma[p][:, :])
-        idata[p] = imag(sigma[p][:, :])
-    end
-    return ngrid, kgrid, rdata, idata
-end
-
-function renormalize(para, sigma, Zrenorm)
-    dim, β, kF = para.dim, para.β, para.kF
-    mu, sw = UEG_MC.getSigma(para; parafile=parafilename)
-    # mu, sw = CounterTerm.getSigma(para, parafile=parafilename)
-    ############ z renormalized  ##########################
-    dzi, dmu, dz = CounterTerm.sigmaCT(para.order, mu, sw)
-    println(para.order)
-    println(dmu)
-    sigma = CounterTerm.chemicalpotential_renormalization(para.order, sigma, dmu)
-    return sigma
-end
-
-function process(para, Zrenorm)
-    dim, β, kF = para.dim, para.β, para.kF
-
-    ngrid, kgrid, rdata, idata = loaddata(para, filename)
-
-    return renormalize(para, rdata, Zrenorm),
-    renormalize(para, idata, Zrenorm),
-    kgrid,
-    ngrid
-end
-
 function spline(x, y, e)
     # signal = pyimport("scipy.signal")
     interp = pyimport("scipy.interpolate")
@@ -99,12 +59,55 @@ function spline(x, y, e)
     return __x, yfit
 end
 
-function dΣ_dϵk_n(sigma, order, kgrid, para)
-    dk = [
-        (sigma[o][1, 2:end] .- sigma[o][1, 1]) ./ (kgrid[2:end] .^ 2 / (2 * para.me))
-        for o in 1:order
+function loaddata(para, FileName=filename)
+    key = UEG.short(para)
+    f = jldopen(FileName, "r")
+    # println(key)
+    # println(keys(f))
+    p, ngrid, kgrid, sigma = f[key]
+    # println(sigma)
+    order = p.order
+    _partition = UEG.partition(para.order)
+    rdata, idata = Dict(), Dict()
+    for (ip, p) in enumerate(_partition)
+        rdata[p] = real(sigma[p][:, :])
+        idata[p] = imag(sigma[p][:, :])
+    end
+    return ngrid, kgrid, rdata, idata
+end
+
+function renormalize(para, sigma, Zrenorm)
+    dim, β, kF = para.dim, para.β, para.kF
+    mu, sw = UEG_MC.getSigma(para; parafile=parafilename)
+    # mu, sw = CounterTerm.getSigma(para, parafile=parafilename)
+    
+    δzi, δμ, δz = CounterTerm.sigmaCT(para.order, mu, sw)
+    println(para.order)
+    println(δμ)
+    # sigma = CounterTerm.chemicalpotential_renormalization(para.order, sigma, δμ)
+    sigma_R = CounterTerm.renormalization(para.order, sigma, δμ, δz; zrenorm=Zrenorm)
+    # sigma_R = sigma * z
+    return sigma_R
+end
+
+
+function process(para, Zrenorm)
+    dim, β, kF = para.dim, para.β, para.kF
+
+    ngrid, kgrid, rdata, idata = loaddata(para, filename)
+    
+        rdata_R = renormalize(para, rdata, Zrenorm)
+        idata_R = renormalize(para, idata, Zrenorm)
+
+    δS, δM = get_ds_dm_series(rdata, para.order, kgrid, kF, para)
+
+    return rdata_R, idata_R, kgrid, ngrid
+end
+
+function dΣ_dϵk_n(sigma, order, ki, para)
+    return [
+        (sigma[o][1, ki] .- sigma[o][1, 1]) ./ (ki .^ 2 / (2 * para.me)) for o in 1:order
     ]
-    return kgrid[2:end], sum(dk)
 end
 
 function dΣ_dω_n(sigma, order, ki, para)
@@ -112,12 +115,36 @@ function dΣ_dω_n(sigma, order, ki, para)
     # return [(sigma[o][1, ki]) ./ (π / para.β) for o in 1:order]
 end
 
+"""Get the coefficients of (1 - δs)[ξ] = (1/z)[ξ] to order ξᴺ."""
+function get_δsp(sigma, order, ki, para; Zrenorm=true)
+    # (1/z)[ξ] series
+    δsi = sum(dΣ_dω_n(sigma, order, ki, para))
+    δs = Taylor1([δsi...], order)
+    δsp = 1 - δs
+    # Get coefficients of (1/z)[ξ] to order ξᴺ
+    δsp_coeffs = [getcoeff(δsp, o) for o in 1:order]
+    return δsp_coeffs
+end
+const get_zinv_coeffs = get_δsp
+
+"""Get the coefficients of (1 - δs)[ξ] = (1/z)[ξ] to order ξᴺ."""
+function get_δmp(sigma, order, ki, para; Zrenorm=true)
+    # Setup mass shifts as power series in ξ
+    _kgrid, δmi = dΣ_dϵk_n(sigma, order, ki, para)
+    δm = Taylor1([δmi...], order)
+    δmp = 1 + δm
+    # Evaluate (m*/mZ)[ξ] to order ξᴺ
+    δmp_coeffs = [getcoeff(δmp, o) for o in 1:order]
+    return δmp_coeffs
+end
+const get_mass_shift_coeffs = get_δmp
+
 function get_mstar_m_over_z(sigma, order, kgrid, para; Zrenorm=true)
     kF_label = searchsortedfirst(kgrid, kF)
     mstar_m_over_z_N = []
     for ki in 1:length(kgrid)
         # Setup mass shifts as power series in ξ
-        δmi = dΣ_dϵk_n(sigma, order, ki, para)
+        _kgrid, δmi = dΣ_dϵk_n(sigma, order, ki, para)
         δm = Taylor1([δmi...], order)
         # Derive z[ξ] (/ z_kF[ξ])
         mass_series = 1 + δm
@@ -422,7 +449,7 @@ end
 if abspath(PROGRAM_FILE) == @__FILE__
     para = ParaMC(; rs=1.0, beta=40.0, Fs=-0.0, order=4, mass2=1.0, isDynamic=false)
     # para = ParaMC(; rs=2.0, beta=40.0, Fs=-0.0, order=4, mass2=1.75, isDynamic=false)
-    
+
     # Using single lambda for all orders at rs=1,2
     rSw_k, iSw_k, kgrid, ngrid = process(para, false)
     kF_label = searchsortedfirst(kgrid, para.kF)

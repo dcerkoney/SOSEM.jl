@@ -152,11 +152,15 @@ function load_z_mu(
     local ct_data
     filefound = false
     f = jldopen(ct_filename, "r")
+    if haskey(f, "has_taylor_factors") == false
+        error(
+            "Data missing key 'has_taylor_factors', process with script 'add_taylor_factors_to_counterterm_data.jl'!",
+        )
+    end
+    has_taylor_factors::Bool = f["has_taylor_factors"]
     for key in keys(f)
-        if f[key] isa Bool
-            has_taylor_factors = f[key]
-            continue
-        elseif UEG.paraid(f[key][1]) == UEG.paraid(param)
+        key == "has_taylor_factors" && continue
+        if UEG.paraid(f[key][1]) == UEG.paraid(param)
             ct_data = f[key]
             filefound = true
         end

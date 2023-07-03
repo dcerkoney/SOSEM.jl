@@ -14,32 +14,45 @@ end
 
 # Physical params matching data for SOSEM observables
 # order = [5]  # C^{(1)}_{N≤6} includes CTs up to 5th order
-# rs = [1.0]
-# mass2 = [1.0]
+
 # beta = [40.0]
 
 # For lambda optimization
-order = [4]  # C^{(1)}_{N≤5} includes CTs up to 4th order
+# order = [4]  # C^{(1)}_{N≤5} includes CTs up to 4th order
+order = [5]  # C^{(1)}_{N≤5} includes CTs up to 4th order
 beta = [40.0]
 
+### rs = 1 ###
+# rs = [1.0]
+# mass2 = [1.0]
+
 ### rs = 2 ###
+# rs = [2.0]
+# mass2 = [1.25, 1.5, 1.625, 1.75, 1.875, 2.0]
+
 # rs = [2.0]
 # mass2 = [1.75]
 # mass2 = [1.5, 1.75, 2.0]
 # mass2 = [0.1, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
+
 ### rs = 3 ###
-rs = [3.0]
-mass2 = [0.75, 0.875, 1.0, 1.125, 1.25, 1.5]
+# rs = [3.0]
+# mass2 = [0.75, 0.875, 1.0, 1.125, 1.25, 1.5]
 # mass2 = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 3.5, 4.0, 5.0, 6.0]
+
 ### rs = 4 ###
 # rs = [4.0]
 # mass2 = [0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125]
 # mass2 = [0.25, 0.5, 0.75, 1.0, 1.25]
 # mass2 = [0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 2.25, 2.5, 2.75, 3.0, 3.5, 4.0, 4.5, 5.0, 6.0, 7.0]
+
 ### rs = 5 ###
+# N = 5
+rs = [5.0]
+mass2 = [0.8125, 0.875, 0.9375]
+# N = 4
 # rs = [5.0]
 # mass2 = [0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25, 1.5]
-# rs = [5.0]
 # mass2 = [0.1, 0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 3.25, 3.5, 3.75, 4.0, 4.5, 5.0, 5.5, 6.0, 7.0, 8.0]
 
 # Enable/disable interaction and chemical potential counterterms
@@ -58,9 +71,18 @@ if renorm_lambda
     ct_string *= "_lambda"
 end
 
+# # For testing has_taylor_factors == false
+# const filename = "data/before_taylor_factors/data_Z$(ct_string)_kF.jld2.bak"
+
 # const filename = "data/data_Z$(ct_string).jld2"
+
+# rs = 1
 # const filename = "data/data_Z$(ct_string)_kF.jld2"
-const filename = "data/data_Z$(ct_string)_kF_opt.jld2"
+
+# rs = 2, 3, 4, 5
+# const filename = "data/data_Z$(ct_string)_kF_opt.jld2"
+const filename = "data/data_Z$(ct_string)_kF_opt_archive1.jld2"
+
 const parafilename = "data/para.csv"
 
 """
@@ -75,7 +97,7 @@ function mu(data)
     return real(data[1, 1])
 end
 
-function process(datatuple, isSave)
+function process(datatuple, isSave, has_taylor_factors)
     print("processing...")
     df = UEG_MC.fromFile(parafilename)
     para, ngrid, kgrid, data = datatuple
@@ -87,7 +109,10 @@ function process(datatuple, isSave)
 
     # Specializing Z-factor calculation based on ngrid
     if ngrid ∉ [[-1, 0], [0, 1], [-1, 0, 1]]
-        error("Expect ngrid = [-1, 0] or [-1, 0, 1], ngrid = $ngrid is not supported!")
+        # if ngrid ∉ [[-1, 0], [-1, 0, 1]]
+        error(
+            "Expect ngrid = [1, 0], [-1, 0] or [-1, 0, 1], ngrid = $ngrid is not supported!",
+        )
     end
     if ngrid == [0, 1]
         @warn "ngrid = $ngrid is deprecated, use [-1, 0] instead!"
@@ -96,20 +121,24 @@ function process(datatuple, isSave)
     end
 
     _mu = Dict()
-    for (p, val) in data
-        _mu[p] = mu(val) / (factorial(p[2]) * factorial(p[3]))
-    end
     _z = Dict()
     for (p, val) in data
-        _z[p] = zfactor(val, para.β) / (factorial(p[2]) * factorial(p[3]))
+        if has_taylor_factors
+            _mu[p] = mu(val)
+            _z[p] = zfactor(val, para.β)
+        else
+            _mu[p] = mu(val) / (factorial(p[2]) * factorial(p[3]))
+            _z[p] = zfactor(val, para.β) / (factorial(p[2]) * factorial(p[3]))
+        end
     end
 
     for p in sort([k for k in keys(data)])
         println("$p: μ = $(mu(data[p]))   z = $(zfactor(data[p], para.β))")
     end
 
-    dzi, _, _ = CounterTerm.sigmaCT(para.order, _mu, _z; isfock=isFock, verbose=1)
+    dzi, dmu, _ = CounterTerm.sigmaCT(para.order, _mu, _z; isfock=isFock, verbose=1)
     println("zfactor: ", dzi)
+    println("dmu: ", dmu)
 
     ############# save to csv  #################
     # println(df)
@@ -164,9 +193,18 @@ if abspath(PROGRAM_FILE) == @__FILE__
         )
 
         kF = para.kF
+        if haskey(f, "has_taylor_factors") == false
+            error(
+                "Data missing key 'has_taylor_factors', process with script 'add_taylor_factors_to_counterterm_data.jl'!",
+            )
+        end
+        has_taylor_factors::Bool = f["has_taylor_factors"]
         for key in keys(f)
+            key == "has_taylor_factors" && continue
             if UEG.paraid(f[key][1]) == UEG.paraid(para)
-                process(f[key], isSave)
+                htf_str = has_taylor_factors ? "with" : "without"
+                print("Found data $(htf_str) Taylor factors...")
+                process(f[key], isSave, has_taylor_factors)
             end
         end
     end

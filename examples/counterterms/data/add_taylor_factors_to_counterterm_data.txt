@@ -23,3 +23,19 @@ Updating file 'data_mass_ratio_with_ct_mu_lambda.jld2'...contains Taylor factors
 Updating file 'data_mass_ratio_with_ct_mu_lambda_gridtest.jld2'...contains Taylor factors, skipping file.
 Updating file 'data_mass_ratio_with_ct_mu_lambda_k0_gridtest.jld2'...contains Taylor factors, skipping file.
 Updating file 'data_mass_ratio_with_ct_mu_lambda_kF_gridtest.jld2'...contains Taylor factors, skipping file.
+
+Updating file 'data_K_with_ct_mu_lambda.jld2'...contains Taylor factors, skipping file.
+Updating file 'data_Z_with_ct_mu.jld2'...contains Taylor factors, skipping file.
+Updating file 'data_Z_with_ct_mu_lambda.jld2'...contains Taylor factors, skipping file.
+Updating file 'data_Z_with_ct_mu_lambda_k0.jld2'...contains Taylor factors, skipping file.
+Updating file 'data_Z_with_ct_mu_lambda_kF.jld2'...contains Taylor factors, skipping file.
+Updating file 'data_Z_with_ct_mu_lambda_kF_opt.jld2'...contains Taylor factors, skipping file.
+Updating file 'data_Z_with_ct_mu_lambda_kF_opt_archive1.jld2'...creating backup...adding factors...done.
+Updating file 'data_Z_with_ct_mu_lambda_old.jld2'...contains Taylor factors, skipping file.
+Updating file 'data_Z_with_ct_mu_lambda_test.jld2'...contains Taylor factors, skipping file.
+Updating file 'data_mass_ratio_and_Z_with_ct_mu_lambda.jld2'...contains Taylor factors, skipping file.
+Updating file 'data_mass_ratio_with_ct_mu_lambda.jld2'...contains Taylor factors, skipping file.
+Updating file 'data_mass_ratio_with_ct_mu_lambda_gridtest.jld2'...contains Taylor factors, skipping file.
+Updating file 'data_mass_ratio_with_ct_mu_lambda_k0_gridtest.jld2'...contains Taylor factors, skipping file.
+Updating file 'data_mass_ratio_with_ct_mu_lambda_kF_gridtest.jld2'...contains Taylor factors, skipping file.
+Updating file 'data_mass_ratio_with_ct_mu_lambda_kF_gridtest_archive1.jld2'...creating backup...adding factors...done.

@@ -28,13 +28,14 @@ function main()
     # end
 
     beta = 40.0
-    neval = 1e11
+    neval = 1e10
     # rs = 2.0
     # lambdas = [0.1, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
     # lambdas = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
     # lambdas = [1.0, 3.0]
     ### rs = 3 ###
     # rs = 3.0
+    # lambdas = [0.75, 0.875, 1.0, 1.125, 1.25, 1.5]
     # lambdas = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0]
     # lambdas = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 3.5, 4.0, 5.0, 6.0]
     ### rs = 4 ###
@@ -44,18 +45,20 @@ function main()
     # lambdas = [0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 2.25, 2.5, 2.75, 3.0, 3.5, 4.0, 4.5, 5.0, 6.0]
     ### rs = 5 ###
     rs = 5.0
-    lambdas = [0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25, 1.5]
+    # lambdas = [0.375, 0.5, 0.625, 0.75, 0.8125, 0.875, 0.9375, 1.0, 1.125, 1.25, 1.5]
+    lambdas = [0.8125, 0.875, 0.9375]
+    lambdas5 = [0.8125, 0.875, 0.9375]
     # lambdas = [0.25, 0.5, 0.75, 1.0, 2.0, 3.0]
     # lambdas = [0.1, 0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 3.25, 3.5, 3.75, 4.0, 4.5, 5.0, 5.5, 6.0]
     # lambdas = [0.1, 0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
     solver = :mcmc
 
     min_order = 0
-    max_order = 4
+    max_order = 5
 
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
     min_order_plot = 1
-    max_order_plot = 4
+    max_order_plot = 5
 
     # Distinguish results with fixed vs re-expanded bare interactions
     intn_str = ""
@@ -80,18 +83,25 @@ function main()
     # idk = 1
     # idk = 3  # From lambda = 0.4 stationarity test (δK = 0.015kF)
     # idk = 6  # Try the same grid spacing as rs=1 (δK = 0.03kF)
-    idk = 15
+    # idk = 15
+    idk = 7
+    # idk = 12
+    idk5 = 7
 
     # Momentum spacing for finite-difference derivative of Sigma (in units of para.kF)
-    δK = 0.005  # spacings n*δK = 0.15–0.3 not relevant for rs = 1.0 => reduce δK by half
+    δK = 0.01
+    # δK = 0.005  # spacings n*δK = 0.15–0.3 not relevant for rs = 1.0 => reduce δK by half
 
     # We estimate the derivative wrt k using grid points kgrid[ikF] and kgrid[ikF + idk]
+    idks = eachindex(collect(-6:2:6))
+    # idks = collect(-6:2:6)
     # idks = 1:30
-    idks = 1:15
+    # idks = 1:15
     # idks = -15:15  # TODO: test central difference method
 
     # kgrid indices & spacings
-    dks = δK * collect(idks)
+    dks = δK * collect(-6:2:6)
+    # dks = δK * collect(idks)
 
     dk = dks[idk]
 
@@ -115,8 +125,13 @@ function main()
         savename_mass = "data/mass_ratio_from_sigma_kF_gridtest"
         mass_ratios = []
         print("Loading data from $savename_mass...")
+        if lambda in lambdas5
+            index = idk5
+        else
+            index = idk
+        end
         param, ngrid, kgrid, mass_ratio = jldopen("$savename_mass.jld2", "r") do f
-            key = "$(UEG.short(loadparam))_idk=$(idk)"
+            key = "$(UEG.short(loadparam))_idk=$(index)"
             return f[key]
         end
         push!(mass_ratios_lambda_vs_N, mass_ratio)
@@ -125,29 +140,68 @@ function main()
     end
     @assert allequal(length(row) for row in mass_ratios_lambda_vs_N)
     mass_ratios_N_vs_lambda = [
-        [mass_ratios_lambda_vs_N[i][j] for i in eachindex(mass_ratios_lambda_vs_N)] for
-        j in eachindex(mass_ratios_lambda_vs_N[1])
+        [mass_ratios_lambda_vs_N[i][j] for i in eachindex(lambdas)] for
+        j in eachindex(1:4)
+    ]
+    mass_ratios_N_vs_lambda5 = [
+        [mass_ratios_lambda_vs_N[i][j] for i in eachindex(lambdas5)] for
+        j in eachindex(1:5)
     ]
 
     # mass_ratios_N_vs_lambda = collect(eachrow(reduce(hcat, mass_ratios_lambda_vs_N)))
     # mass_ratios_N_vs_lambda = collect(zip(mass_ratios_lambda_vs_N...))
     println("mass_ratios_lambda_vs_N:\n$mass_ratios_lambda_vs_N")
     println("\nmass_ratios_N_vs_lambda:\n$mass_ratios_N_vs_lambda")
+    println("\nmass_ratios_N_vs_lambda5:\n$mass_ratios_N_vs_lambda5")
 
     # Plot the results for each order ξ vs lambda
     fig, ax = plt.subplots()
     if rs == 3.0
         ax.axvline(1.0; linestyle="--", color="dimgray", label="\$\\lambda^\\star = 1\$")
     end
-    # for (i, N) in enumerate(0:4)
     for (i, N) in enumerate(0:4)
         N == 0 && continue  # Ignore zeroth order
         # Get means and error bars from the result up to this order
         means = Measurements.value.(mass_ratios_N_vs_lambda[i])
         stdevs = Measurements.uncertainty.(mass_ratios_N_vs_lambda[i])
-        ax.plot(lambdas, means, "o-"; color="C$(i-2)", markersize=3, label="\$N=$N\$ ($solver)")
-        ax.fill_between(lambdas, (means - stdevs), (means + stdevs); color="C$(i-2)", alpha=0.3)
+        # small lambda list at fifth order, full list otherwise
+        ax.plot(
+            lambdas,
+            means,
+            "o-";
+            color="C$(i-2)",
+            markersize=3,
+            label="\$N=$N\$ ($solver)",
+        )
+        ax.fill_between(
+            lambdas,
+            (means - stdevs),
+            (means + stdevs);
+            color="C$(i-2)",
+            alpha=0.3,
+        )
     end
+    # Plot 5th order over small lambda list
+    # Get means and error bars from the result up to this order
+    means5 = Measurements.value.(mass_ratios_N_vs_lambda5)
+    stdevs5 = Measurements.uncertainty.(mass_ratios_N_vs_lambda5)
+    # small lambda list at fifth order, full list otherwise
+    ax.plot(
+        lambdas5,
+        means5,
+        "o-";
+        color="k",
+        markersize=3,
+        label="\$N=5\$ ($solver)",
+    )
+    ax.fill_between(
+        lambdas5,
+        (means5 - stdevs5),
+        (means5 + stdevs5);
+        color="k",
+        alpha=0.3,
+    )
+
     xloc = 1.25
     ax.set_xlim(0.125, 3.125)
     if rs == 3.0
@@ -189,9 +243,11 @@ function main()
         opt2 = Measurements.value.(mass_ratios_N_vs_lambda[3])[lambdas .== 0.5]
         opt3 = Measurements.value.(mass_ratios_N_vs_lambda[4])[lambdas .== 0.625]
         opt4 = Measurements.value.(mass_ratios_N_vs_lambda[5])[lambdas .== 0.875]
+        opt5 = Measurements.value.(mass_ratios_N_vs_lambda[6])[lambdas .== 0.875]
         ax.scatter(0.5, opt2; s=80, color="C1", marker="*", zorder=100)
         ax.scatter(0.625, opt3; s=80, color="C2", marker="*", zorder=101)
         ax.scatter(0.875, opt4; s=80, color="C3", marker="*", zorder=102)
+        ax.scatter(0.875, opt5; s=80, color="k", marker="*", zorder=102)
     end
     ax.legend(; loc="lower right")
     ax.set_xlabel("\$\\lambda\$ (Ry)")

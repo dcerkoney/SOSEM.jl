@@ -15,64 +15,57 @@ end
 ############################################
 # For lambda optimization
 ############################################
-order = [4]  # C^{(1)}_{N≤5} includes CTs up to 3rd order
+order = [5]
+# order = [4]
 beta = [40.0]
-# rs = [3.0]
-# mass2 = [1.5]
+
+### rs = 1 ###
+# rs = [1.0]
+# mass2 = [1.0]
 
 ### rs = 2 ###
+# rs = [2.0]
+# mass2 = [1.25, 1.5, 1.625, 1.75, 1.875, 2.0]
+
 # rs = [2.0]
 # mass2 = [1.75]
 # mass2 = [1.5, 1.75, 2.0]
 # mass2 = [0.1, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
+
 ### rs = 3 ###
-rs = [3.0]
-mass2 = [0.75, 0.875, 1.0, 1.125, 1.25, 1.5]
+# rs = [3.0]
+# mass2 = [0.75, 0.875, 1.0, 1.125, 1.25, 1.5]
 # mass2 = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 3.5, 4.0, 5.0, 6.0]
+
 ### rs = 4 ###
 # rs = [4.0]
-# mass2 = [0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25]
+# mass2 = [0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125]
 # mass2 = [0.25, 0.5, 0.75, 1.0, 1.25]
 # mass2 = [0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 2.25, 2.5, 2.75, 3.0, 3.5, 4.0, 4.5, 5.0, 6.0, 7.0]
+
 ### rs = 5 ###
+# N = 5
+rs = [5.0]
+mass2 = [0.8125, 0.875, 0.9375]
+# N = 4
 # rs = [5.0]
 # mass2 = [0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25, 1.5]
-# rs = [5.0]
 # mass2 = [0.1, 0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 3.25, 3.5, 3.75, 4.0, 4.5, 5.0, 5.5, 6.0, 7.0, 8.0]
 
 # Momentum spacing for finite-difference derivative of Sigma (in units of para.kF)
-δK = 0.01  # spacings n*δK = 0.15–0.3 not relevant for rs = 1.0 => reduce δK by half
+δK = 0.01
 # δK = 0.005  # spacings n*δK = 0.15–0.3 not relevant for rs = 1.0 => reduce δK by half
 
 # We estimate the derivative wrt k using grid points kgrid[ikF] and kgrid[ikF + idk]
-idks = eachindex(-6:2:6)
+kspacings = -6:2:6
+idks = eachindex(kspacings)
+
 
 # kgrid indices & spacings
-dks = δK * collect(-6:2:6)
+dks = δK * collect(kspacings)
 
 # Which finite difference method for numerical k derivative?
 method = :central
-
-############################################
-############################################
-
-# # Physical params matching data for SOSEM observables
-# order = [4]  # C^{(1)}_{N≤5} includes CTs up to 3rd order
-# rs = [1.0]
-# mass2 = [1.0]
-# beta = [40.0]
-
-# # Momentum spacing for finite-difference derivative of Sigma (in units of kF)
-# δK = 0.001
-# # δK = 0.01
-
-# # We estimate the derivative wrt k using grid points kgrid[ikF] and kgrid[ikF + idk]
-# idks = 1:3
-# # idks = 1:30
-
-# # kgrid indices & spacings
-# dks = [δK, 5δK, 10δK]
-# # dks = δK * collect(-6:2:6)
 
 # Enable/disable interaction and chemical potential counterterms
 renorm_mu = true
@@ -92,49 +85,54 @@ end
 
 # const filename = "data/data_mass_ratio$(ct_string).jld2"
 # const filename = "data/data_mass_ratio$(ct_string).jld2"
-const filename = "data/data_mass_ratio$(ct_string)_kF_gridtest.jld2"
+# const filename = "data/data_mass_ratio$(ct_string)_kF_gridtest.jld2"
+const filename = "data/data_mass_ratio$(ct_string)_kF_gridtest_archive1.jld2"
 const parafilename = "data/para.csv"
 
 # function process_mass_ratio(datatuple, δzi, δμ, isSave)
-function process_mass_ratio(datatuple, isSave; idk=1, method=:forward)
-    print("Processing mass ratio...")
+function process_mass_ratio(
+    datatuple,
+    isSave,
+    has_taylor_factors_mass;
+    idk=1,
+    method=:forward,
+)
+    print("processing mass ratio...")
     @assert idk ∈ idks
     @assert method in [:forward, :central]
     # df = UEG_MC.fromFile(parafilename)
     para, ngrid, kgrid, data = datatuple
     printstyled(UEG.short(para); color=:yellow)
-    # println()
-    # println(kgrid)
-
-    # # Get k=0 index
-    # ik0 = searchsortedfirst(kgrid, 0.0)
-    # println("ik0 = $ik0")
 
     # Get Fermi index
     ikF = searchsortedfirst(kgrid, para.kF)
     println("ikF = $ikF")
-    # println(kgrid)
-    # println(para.kF)
-    # println(kgrid[ikF])
 
     # Max order in RPT calculation
     max_order = para.order
     println("Max order: ", max_order)
 
     # Reexpand merged data in powers of μ
-    ct_filename = "data/data_Z$(ct_string)_kF_opt.jld2"
+    ct_filename = "data/data_Z$(ct_string)_kF_opt_archive1.jld2"
+    # ct_filename = "data/data_Z$(ct_string)_kF_opt.jld2"
     # ct_filename = "data/data_Z$(ct_string)_kF.jld2"
-    # ct_filename = "data/data_Z$(ct_string)_k0.jld2"
     # ct_filename = "data/data_Z$(ct_string).jld2"
-    z, μ = UEG_MC.load_z_mu(para; ct_filename=ct_filename, parafilename=parafilename)
+    z, μ, has_taylor_factors_zmu = UEG_MC.load_z_mu(para; ct_filename=ct_filename, parafilename=parafilename)
     # Add Taylor factors to CT data
     for (p, v) in z
-        z[p] = v / (factorial(p[2]) * factorial(p[3]))
+        if has_taylor_factors_zmu
+            z[p] = v
+        else
+            z[p] = v / (factorial(p[2]) * factorial(p[3]))
+        end
     end
     for (p, v) in μ
-        μ[p] = v / (factorial(p[2]) * factorial(p[3]))
+        if has_taylor_factors_zmu
+            μ[p] = v
+        else
+            μ[p] = v / (factorial(p[2]) * factorial(p[3]))
+        end
     end
-    # δzi, δμ, _ = CounterTerm.sigmaCT(max_order - 1, μ, z; verbose=1)
     δzi, δμ, _ = CounterTerm.sigmaCT(max_order, μ, z; verbose=1)
     println("Computed δμ: ", δμ)
 
@@ -142,29 +140,21 @@ function process_mass_ratio(datatuple, isSave; idk=1, method=:forward)
     z = 1 - sum(δzi)
     println("δzi:\n", δzi, "\n", "z = ", z)
 
-    # println(data)
-
     # Convert data to a Dict of measurements with interaction counterterms merged
     _data = Dict{keytype(data),valtype(data)}()
     for (k, v) in data
-        _data[k] = v / (factorial(k[2]) * factorial(k[3]))
+        if has_taylor_factors_mass
+            _data[k] = v
+        else
+            _data[k] = v / (factorial(k[2]) * factorial(k[3]))
+        end
     end
     merged_data = CounterTerm.mergeInteraction(_data)
-    # println()
-    # println([k for (k, _) in merged_data])
-    # println(merged_data)
 
     # Renormalize self-energy data (ngrid, kgrid) to get Sigma to order N in RPT
     Σ_renorm = CounterTerm.chemicalpotential_renormalization(max_order, merged_data, δμ)
     # Σ_renorm =
     #     UEG_MC.chemicalpotential_renormalization_sigma(merged_data, δμ; max_order=max_order)
-
-    # Aggregate the full results for Σₓ up to order N
-    # Σ_total = UEG_MC.aggregate_orders(Σ_renorm)
-
-    # println()
-    # println(Σ_renorm)
-    # println(Σ_total)
 
     # Compute shifts δm and δs for each order n in RPT
     δm = Measurement{Float64}[]
@@ -177,8 +167,8 @@ function process_mass_ratio(datatuple, isSave; idk=1, method=:forward)
         # idk = 1
         @assert idk ∈ idks
         @assert kgrid[ikF] ≈ para.kF
-        @assert kgrid[ikF + 1] ≈ para.kF + para.kF * δK
-        @assert kgrid[ikF + idk] - kgrid[ikF] ≈ para.kF * dks[idk]
+        # @assert kgrid[ikF + 1] ≈ para.kF + para.kF * δK
+        @assert kgrid[ikF + kspacings[idk]] - kgrid[ikF] ≈ para.kF * dks[idk]
 
         # Forward difference method
         if method == :forward
@@ -313,13 +303,27 @@ if abspath(PROGRAM_FILE) == @__FILE__
 
         kF = para.kF
         mass_ratios = []
+        if haskey(f, "has_taylor_factors") == false
+            error(
+                "Data missing key 'has_taylor_factors', process with script 'add_taylor_factors_to_counterterm_data.jl'!",
+            )
+        end
+        has_taylor_factors_mass::Bool = f["has_taylor_factors"]
         for key in keys(f)
+            key == "has_taylor_factors" && continue
             if UEG.paraid(f[key][1]) == UEG.paraid(para)
-                println("Found matching key, processing...")
+                htf_str = has_taylor_factors_mass ? "with" : "without"
+                print("Found data $(htf_str) Taylor factors...")
                 # process_mass_ratio(f[key], isSave)
                 for idk in idks
-                    mass_ratio = process_mass_ratio(f[key], isSave; idk=idk, method=method)
-                    push!(mass_ratios, mass_ratio)
+                    mass_ratio = process_mass_ratio(
+                        f[key],
+                        isSave,
+                        has_taylor_factors_mass;
+                        idk=idk,
+                        method=method,
+                    )
+                    push!(mass_ratios, pass_ratio)
                 end
                 println("done!")
             end
