@@ -128,8 +128,13 @@ function renorm_measurement(
         # for the vertex-corrected diagrams in class c1bL
         lowest_order = class == "c1bL" ? 3 : 2
         # Reexpand merged data in powers of μ
-        z, μ = UEG_MC.load_z_mu(param)
-        δz, δμ = CounterTerm.sigmaCT(max_order - n_min, μ, z; verbose=1)
+        δμ = load_mu_counterterm(
+            param;
+            max_order=max_order - n_min,
+            parafilename="examples/counterterms/data/para.csv",
+            ct_filename="examples/counterterms/data/data_Z$(ct_string).jld2",
+            verbose=1,
+        )
         println("Computed δμ: ", δμ)
         c1class = UEG_MC.chemicalpotential_renormalization_sosem(
             merged_data,

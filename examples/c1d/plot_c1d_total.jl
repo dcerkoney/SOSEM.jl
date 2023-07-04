@@ -156,17 +156,13 @@ function main()
     # Get total data
     if renorm_mu
         # Reexpand merged data in powers of μ
-        ct_filename = "examples/counterterms/data/data_Z$(ct_string).jld2"
-        z, μ = UEG_MC.load_z_mu(param; ct_filename=ct_filename)
-        # Add Taylor factors to CT data
-        for (p, v) in z
-            z[p] = v / (factorial(p[2]) * factorial(p[3]))
-        end
-        for (p, v) in μ
-            μ[p] = v / (factorial(p[2]) * factorial(p[3]))
-        end
-        # δz, δμ = CounterTerm.sigmaCT(2, μ, z; verbose=1)  # TODO: Debug 3rd order CTs
-        δz, δμ = CounterTerm.sigmaCT(max_order - n_min, μ, z; verbose=1)
+        δμ = load_mu_counterterm(
+            param;
+            max_order=max_order - n_min,
+            parafilename="examples/counterterms/data/para.csv",
+            ct_filename="examples/counterterms/data/data_Z$(ct_string).jld2",
+            verbose=1,
+        )
         println("Computed δμ: ", δμ)
         δμ1_exact = UEG_MC.delta_mu1(param)  # = ReΣ₁[λ](kF, 0)
         if renorm_mu_lo_ex && max_order_plot ≥ 3

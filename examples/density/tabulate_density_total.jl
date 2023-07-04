@@ -307,13 +307,6 @@ function main()
     # Load counterterm data
     ct_filename = "examples/counterterms/data/data_Z$(ct_string_short).jld2"
     z, μ = UEG_MC.load_z_mu(param; ct_filename=ct_filename)
-    # Add Taylor factors to CT data
-    for (p, v) in z
-        z[p] = v / (factorial(p[2]) * factorial(p[3]))
-    end
-    for (p, v) in μ
-        μ[p] = v / (factorial(p[2]) * factorial(p[3]))
-    end
     # Zero out partitions with mu renorm if present (fix mu)
     if renorm_mu == false || fix_mu
         for P in keys(μ)

@@ -24,7 +24,7 @@ function main()
     elseif haskey(ENV, "SOSEM_HOME")
         cd(ENV["SOSEM_HOME"])
     end
-    
+
     rs = 1.0
     beta = 40.0
     mass2 = 2.0
@@ -95,10 +95,11 @@ function main()
         "results/data/c1bL_n=$(max_order)_rs=$(rs)_" *
         "beta_ef=$(beta)_lambda=$(mass2)_" *
         "neval=$(neval)_$(intn_str)$(solver)_$(ct_string)"
-    settings, param, kgrid, partitions, res = jldopen("$savename.jld2", "a+"; compress=true) do f
-        key = "$(UEG.short(plotparams[end]))"
-        return f[key]
-    end
+    settings, param, kgrid, partitions, res =
+        jldopen("$savename.jld2", "a+"; compress=true) do f
+            key = "$(UEG.short(plotparams[end]))"
+            return f[key]
+        end
     data = UEG_MC.restodict(res, partitions)
     println(data)
 
@@ -213,8 +214,16 @@ function main()
     println([k for (k, _) in merged_data])
 
     # Reexpand merged data in powers of μ
-    z, μ = UEG_MC.load_z_mu(param)
-    δz, δμ = CounterTerm.sigmaCT(max_order - n_min, μ, z; verbose=1)
+    δμ = load_mu_counterterm(
+        param;
+        max_order=max_order - n_min,
+        parafilename="examples/counterterms/data/para.csv",
+        ct_filename="examples/counterterms/data/data_Z$(ct_string).jld2",
+        verbose=1,
+    )
+    # ct_filename = "examples/counterterms/data/data_Z$(ct_string).jld2"
+    # z, μ = UEG_MC.load_z_mu(param; ct_filename=ct_filename)
+    # δz, δμ = CounterTerm.sigmaCT(max_order - n_min, μ, z; verbose=1)
     println("Computed δμ: ", δμ)
     c1bL = UEG_MC.chemicalpotential_renormalization_sosem(
         merged_data,

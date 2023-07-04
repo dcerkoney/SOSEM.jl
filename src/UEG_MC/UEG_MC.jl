@@ -28,7 +28,14 @@ export restodict, load_fixed_order_jld2_data, aggregate_orders
 # Chemical potential renormalization for Monte-Carlo with counterterms
 include("renormalization.jl")
 export chemicalpotential_renormalization_sosem,
-    chemicalpotential_renormalization, delta_mu1, load_z_mu, getSigma, fromFile, toFile
+    chemicalpotential_renormalization,
+    delta_mu1,
+    load_z_mu,
+    load_z_mu_counterterms,
+    load_mu_counterterm,
+    getSigma,
+    fromFile,
+    toFile
 
 # Dimensionless Lindhard functions for the bare and statically-screened UEG theories
 include("lindhard.jl")

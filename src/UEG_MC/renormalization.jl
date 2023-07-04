@@ -141,13 +141,13 @@ function fock_mass_ratio(param::UEG.ParaMC)
     return
 end
 
-"""Load counterterm data from CSV file."""
+"""Load z and μ data from JLD2 file."""
 function load_z_mu(
     param::UEG.ParaMC;
-    parafilename="examples/counterterms/data/para.csv",
-    ct_filename="examples/counterterms/data/data_Z.jld2",
+    ct_filename="examples/counterterms/data/data_Z_with_ct_mu_lambda.jld2",
 )
-    # Load μ from csv
+    # Derive z and μ from JLD2 data
+    print("Deriving counterterm data from JLD2...")
     local has_taylor_factors
     local ct_data
     filefound = false
@@ -168,35 +168,131 @@ function load_z_mu(
     if !filefound
         throw(KeyError(UEG.paraid(param)))
     end
-
-    df = fromFile(parafilename)
+    # df = fromFile(parafilename)
     para, _, _, data = ct_data
     printstyled(UEG.short(para); color=:yellow)
     println()
 
-    function zfactor(data, β)
-        return @. (imag(data[2, 1]) - imag(data[1, 1])) / (2π / β)
+    function get_sw(sigma_data, β)
+        sw = @. (imag(sigma_data[2, 1]) - imag(sigma_data[1, 1])) / (2π / β)
+        # Add Taylor factors if not present
+        if has_taylor_factors == false
+            for (p, v) in sw
+                sw[p] = v / (factorial(p[2]) * factorial(p[3]))
+            end
+        end
+        return sw
     end
-
-    function mu(data)
-        return real(data[1, 1])
+    function get_mu(sigma_data)
+        mu = real(sigma_data[1, 1])
+        # Add Taylor factors if not present
+        if has_taylor_factors == false
+            for (p, v) in mu
+                mu[p] = v / (factorial(p[2]) * factorial(p[3]))
+            end
+        end
+        return mu
     end
 
     for p in sort([k for k in keys(data)])
-        println("$p: μ = $(mu(data[p]))   z = $(zfactor(data[p], para.β))")
+        println("$p: mu = $(get_mu(data[p]))   sw = $(get_sw(data[p], para.β))")
     end
-
-    μ = Dict()
+    mu = Dict()
     for (p, val) in data
-        μ[p] = mu(val)
+        mu[p] = get_mu(val)
     end
-    z = Dict()
+    sw = Dict()
     for (p, val) in data
-        z[p] = zfactor(val, para.β)
+        sw[p] = get_sw(val, para.β)
     end
-
-    return z, μ, has_taylor_factors
+    return sw, mu
 end
+
+"""Load counterterm data from CSV/JLD2 file."""
+function load_z_mu_counterterms(
+    param::UEG.ParaMC;
+    max_order=param.order,
+    parafilename="examples/counterterms/data/para_0m1.csv",
+    ct_filename="examples/counterterms/data/data_Z_with_ct_mu_lambda_kF.jld2",
+    isFock=false,
+    verbose=1,
+)
+    # Load z and μ data from file
+    print("Loading counterterm data from CSV...")
+    try
+        # First, try loading data from CSV file
+        mu, sw = UEG_MC.getSigma(para; parafile=parafilename)
+    catch
+        # Fallback mode: Re-derive counterterms from JLD2 file
+        @warn "falling back to JLD2 data..."
+        local has_taylor_factors
+        local ct_data
+        filefound = false
+        f = jldopen(ct_filename, "r")
+        if haskey(f, "has_taylor_factors") == false
+            error(
+                "Data missing key 'has_taylor_factors', process with script 'add_taylor_factors_to_counterterm_data.jl'!",
+            )
+        end
+        has_taylor_factors::Bool = f["has_taylor_factors"]
+        for key in keys(f)
+            key == "has_taylor_factors" && continue
+            if UEG.paraid(f[key][1]) == UEG.paraid(param)
+                ct_data = f[key]
+                filefound = true
+            end
+        end
+        if !filefound
+            throw(KeyError(UEG.paraid(param)))
+        end
+        # df = fromFile(parafilename)
+        para, _, _, data = ct_data
+        printstyled(UEG.short(para); color=:yellow)
+        println()
+
+        function get_sw(sigma_data, β)
+            sw = @. (imag(sigma_data[2, 1]) - imag(sigma_data[1, 1])) / (2π / β)
+            # Add Taylor factors if not present
+            if has_taylor_factors == false
+                for (p, v) in sw
+                    sw[p] = v / (factorial(p[2]) * factorial(p[3]))
+                end
+            end
+            return sw
+        end
+        function get_mu(sigma_data)
+            mu = real(sigma_data[1, 1])
+            # Add Taylor factors if not present
+            if has_taylor_factors == false
+                for (p, v) in mu
+                    mu[p] = v / (factorial(p[2]) * factorial(p[3]))
+                end
+            end
+            return mu
+        end
+
+        for p in sort([k for k in keys(data)])
+            println("$p: mu = $(get_mu(data[p]))   sw = $(get_sw(data[p], para.β))")
+        end
+        mu = Dict()
+        for (p, val) in data
+            mu[p] = get_mu(val)
+        end
+        sw = Dict()
+        for (p, val) in data
+            sw[p] = get_sw(val, para.β)
+        end
+    end
+    # Derive counterterms
+    print("...deriving counterterms...")
+    δzi, δμ, δz = CounterTerm.sigmaCT(max_order, mu, sw; isfock=isFock, verbose=verbose)
+    println("done!")
+    println("δzi: ", δzi, "\tδμ: ", δμ, "\tδz: ", δz)
+    return δzi, δμ, δz
+end
+
+"""Loads chemical potential counterterm data δμ from CSV/JLD2 file."""
+load_mu_counterterm(args...; kwargs...) = load_z_mu_counterterms(args...; kwargs...)[2]
 
 """
     function getSigma(para::ParaMC; order=para.order, parafile=parafileName)
@@ -210,7 +306,6 @@ paraid : Dictionary of parameter names and values
 order  : the truncation order
 """
 function getSigma(para::ParaMC; order=para.order, parafile=parafileName)
-    # println(parafile)
     df = fromFile(parafile)
     @assert isnothing(df) == false "file $parafile failed to load"
     return CounterTerm.getSigma(df, UEG.paraid(para), order)

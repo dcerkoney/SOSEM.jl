@@ -144,16 +144,13 @@ function main()
     end
 
     # Reexpand merged data in powers of μ
-    ct_filename = "examples/counterterms/data/data_Z$(ct_string).jld2"
-    z, μ = UEG_MC.load_z_mu(param; ct_filename=ct_filename)
-    # Add Taylor factors to CT data
-    for (p, v) in z
-        z[p] = v / (factorial(p[2]) * factorial(p[3]))
-    end
-    for (p, v) in μ
-        μ[p] = v / (factorial(p[2]) * factorial(p[3]))
-    end
-    δz, δμ = CounterTerm.sigmaCT(max_order, μ, z; isfock=false, verbose=1)
+    δμ = load_mu_counterterm(
+        param;
+        max_order=max_order,
+        parafilename="examples/counterterms/data/para.csv",
+        ct_filename="examples/counterterms/data/data_Z$(ct_string).jld2",
+        verbose=1,
+    )
 
     println("Computed δμ: ", δμ)
     static_structure = UEG_MC.chemicalpotential_renormalization_poln(

@@ -36,7 +36,7 @@ function main()
     min_order_plot = 2
     max_order_plot = 5
     @assert max_order ≥ 3
-    
+
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
     renorm_lambda = true
@@ -160,8 +160,13 @@ function main()
             c1c = [c1c2, c1c3]
         else
             # Reexpand merged data in powers of μ
-            z, μ = UEG_MC.load_z_mu(param)
-            δz, δμ = CounterTerm.sigmaCT(max_order - n_min, μ, z; verbose=1)
+            δμ = load_mu_counterterm(
+                param;
+                max_order=max_order - n_min,
+                parafilename="examples/counterterms/data/para.csv",
+                ct_filename="examples/counterterms/data/data_Z$(ct_string).jld2",
+                verbose=1,
+            )
             println("Computed δμ: ", δμ)
             c1c = UEG_MC.chemicalpotential_renormalization_sosem(
                 merged_data,
@@ -207,7 +212,7 @@ function main()
 
     # Plot the results
     fig, ax = plt.subplots()
-    
+
     if min_order_plot == 2
         # Plot the bare (LO) result; there are no RPA(+FL) corrections for the class (c) moment
         ax.plot(k_kf_grid_quad, c1c_bare_quad, "C0"; label="\$N=2\$ (quad)")
