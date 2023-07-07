@@ -19,7 +19,7 @@ function main()
     beta = [40.0]
 
     rs = [1.0]
-    mass2 = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
+    mass2 = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5]
 
     # rs = [2.0]
     # mass2 = [1.25, 1.5, 1.625, 1.75, 1.875, 2.0]
@@ -37,6 +37,7 @@ function main()
     # mass2 = [0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25]
 
     # rs = [5.0]
+    # mass2 = [0.375, 0.5, 0.625, 0.75, 0.8125, 0.875, 0.9375, 1.0, 1.125, 1.25, 1.5]
     # mass2 = [3.0, 3.25, 3.5, 3.75, 7.0, 8.0]
     # mass2 = [4.0, 4.5, 5.0, 5.5, 6.0]
     # mass2 = [0.1, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25, 1.5]
@@ -51,8 +52,7 @@ function main()
     δK = 0.01
 
     # Total number of MCMC evaluations
-    # neval = 1e11
-    neval = 5e10
+    neval = 1e10
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -106,7 +106,10 @@ function main()
         #     1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 4.0, 2.0, 
         #     2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0,
         # ]
-        reweight_goal = [1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 4.0, 2.0]
+        #reweight_goal = [1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 4.0, 2.0]
+        reweight_goal = [1.0, 1.0, 1.0, 1.0,
+            2.0, 2.0, 2.0, 4.0, 4.0, 8.0, 2.0, 2.0, 2.0,
+            4.0, 4.0, 8.0, 4.0, 4.0, 8.0, 8.0, 2.0]
         reweight_pad = repeat([2.0], max(0, length(valid_partition) - length(reweight_goal) + 1))
         reweight_goal = [reweight_goal; reweight_pad]
         @assert length(reweight_goal) ≥ length(valid_partition) + 1
@@ -127,19 +130,23 @@ function main()
         if isnothing(sigma) == false
             println("Current working directory: $(pwd())")
             println("Saving data to JLD2...")
-            #jldopen("data/data_mass_ratio$(ct_string)_gridtest.jld2", "a+"; compress=true) do f
-            # jldopen("data/data_mass_ratio$(ct_string)_k0_gridtest.jld2", "a+"; compress=true) do f
             jldopen(
-                "data/data_mass_ratio$(ct_string)_kF_gridtest.jld2",
+                "data/data_mass_ratio$(ct_string)_kF_with_factors.jld2",
                 "a+";
                 compress=true,
             ) do f
+                if haskey(f, "has_taylor_factors")
+                    @assert f["has_taylor_factors"] == true
+                else
+                    f["has_taylor_factors"] = true
+                end
                 key = "$(UEG.short(para))"
                 if haskey(f, key)
                     @warn("replacing existing data for $key")
                     delete!(f, key)
                 end
-                return f[key] = (para, ngrid, kgrid, sigma)
+                f[key] = (para, ngrid, kgrid, sigma)
+                return
             end
             println("done!")
         end
