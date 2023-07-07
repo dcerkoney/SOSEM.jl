@@ -19,7 +19,8 @@ function main()
     beta = [40.0]
 
     rs = [1.0]
-    mass2 = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5]
+    #mass2 = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5]
+    mass2 = [3.0, 3.5, 4.0]
 
     # rs = [2.0]
     # mass2 = [1.25, 1.5, 1.625, 1.75, 1.875, 2.0]
@@ -82,7 +83,7 @@ function main()
 
         # For μ & Z := Z(k = kF)
         kgrid = [para.kF]
-        ngrid = [0, 1]  # switching to [-1, 0] for improved FT effects
+        ngrid = [-1, 0]  # switching to [-1, 0] for improved FT effects
 
         # Build diagrams
         n_min, n_max = 1, _order
@@ -127,7 +128,7 @@ function main()
             println("Current working directory: $(pwd())")
             println("Saving data to JLD2...")
             jldopen(
-                "data/data_Z$(ct_string)_kF_with_factors_n01.jld2",
+                "data/data_Z$(ct_string)_kF_with_factors.jld2",
                 "a+";
                 compress=true,
             ) do f

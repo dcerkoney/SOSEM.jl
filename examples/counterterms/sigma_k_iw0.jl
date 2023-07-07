@@ -32,7 +32,8 @@ function main()
     # mass2 = [1.75]
 
     rs = [1.0]
-    mass2 = [1.0, 1.75]
+    # mass2 = [1.0, 1.75]
+    mass2 = []
 
     # Total number of MCMC evaluations
     neval = 1e10
@@ -71,7 +72,7 @@ function main()
         minK = 0.2kF
         kgrid =
             CompositeGrid.LogDensedGrid(:uniform, [0.0, 2.2kF], [kF], Nk, minK, korder).grid
-        ngrid = [0, 1]
+        ngrid = [-1, 0]  # for improved finite-temperature effects
 
         # Build diagrams
         n_min, n_max = 1, _order
@@ -112,7 +113,7 @@ function main()
             println("Current working directory: $(pwd())")
             println("Saving data to JLD2...")
             jldopen(
-                "data/data_K$(ct_string)_with_factors_n01.jld2",
+                "data/data_K$(ct_string)_with_factors.jld2",
                 "a+";
                 compress=true,
             ) do f
