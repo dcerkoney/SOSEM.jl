@@ -25,14 +25,15 @@ function main()
     # mass2 = [1.5]
     # rs = [2.0]
     # mass2 = [1.5, 1.75, 2.0]
-    # rs = [1.0]
-    # mass2 = [1.0]
+
+    rs = [1.0]
+    mass2 = [2.0]
 
     # Momentum spacing for finite-difference derivative of Sigma (in units of para.kF)
     δK = 0.01
 
     # Total number of MCMC evaluations
-    neval = 1e11
+    neval = 1e10
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true

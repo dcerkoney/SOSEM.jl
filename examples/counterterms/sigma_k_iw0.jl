@@ -16,7 +16,7 @@ end
 
 function main()
     # Physical params matching data for SOSEM observables
-    order = [4]
+    order = [5]
     beta = [40.0]
 
     # rs = [5.0]
@@ -33,7 +33,7 @@ function main()
 
     rs = [1.0]
     # mass2 = [1.0, 1.75]
-    mass2 = []
+    mass2 = [2.0]
 
     # Total number of MCMC evaluations
     neval = 1e10
