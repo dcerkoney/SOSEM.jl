@@ -87,7 +87,10 @@ function main()
         #     1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 4.0, 2.0, 
         #     2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0,
         # ]
-        reweight_goal = [1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 4.0, 2.0]
+        #reweight_goal = [1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 4.0, 2.0]
+        reweight_goal = [1.0, 1.0, 1.0, 1.0,
+            2.0, 2.0, 2.0, 4.0, 4.0, 8.0, 2.0, 2.0, 2.0,
+            4.0, 4.0, 8.0, 4.0, 4.0, 8.0, 8.0, 2.0]
         reweight_pad = repeat([2.0], max(0, length(valid_partition) - length(reweight_goal) + 1))
         reweight_goal = [reweight_goal; reweight_pad]
         @assert length(reweight_goal) ≥ length(valid_partition) + 1
@@ -108,15 +111,19 @@ function main()
         if isnothing(sigma) == false
             println("Current working directory: $(pwd())")
             println("Saving data to JLD2...")
-            # jldopen("data/data_Z$(ct_string)_k0.jld2", "a+"; compress=true) do f
-            # jldopen("data/data_Z$(ct_string).jld2", "a+"; compress=true) do f
-            jldopen("data/data_Z$(ct_string)_kF.jld2", "a+"; compress=true) do f
-                key = "$(UEG.short(para))"
+            jldopen("data/data_Z$(ct_string)_kF_with_factors.jld2", "a+"; compress=true) do f
+                if haskey(f, "has_taylor_factors")
+                    @assert f["has_taylor_factors"] == true
+                else
+                    f["has_taylor_factors"] = true
+                end
+		key = "$(UEG.short(para))"
                 if haskey(f, key)
                     @warn("replacing existing data for $key")
                     delete!(f, key)
                 end
-                return f[key] = (para, ngrid, kgrid, sigma)
+                f[key] = (para, ngrid, kgrid, sigma)
+		return
             end
             println("done!")
         end

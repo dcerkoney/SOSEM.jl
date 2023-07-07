@@ -28,11 +28,11 @@ function main()
     # rs = [3.0]
     # mass2 = [1.25]
 
-    rs = [2.0]
-    mass2 = [1.75]
+    # rs = [2.0]
+    # mass2 = [1.75]
 
-    # rs = [1.0]
-    # mass2 = [1.0]
+    rs = [1.0]
+    mass2 = [1.0, 1.75]
 
     # Total number of MCMC evaluations
     neval = 1e10
@@ -70,7 +70,7 @@ function main()
         Nk, korder = 4, 4
         minK = 0.2kF
         kgrid = CompositeGrid.LogDensedGrid(:uniform, [0.0, 2.2kF], [kF,], Nk, minK, korder).grid
-        ngrid = [-1, 0]
+        ngrid = [0, 1]
 
         # Build diagrams
         n_min, n_max = 1, _order
@@ -110,7 +110,7 @@ function main()
         if isnothing(sigma) == false
             println("Current working directory: $(pwd())")
             println("Saving data to JLD2...")
-            jldopen("data/data_K$(ct_string).jld2", "a+"; compress=true) do f
+            jldopen("data/data_K$(ct_string)_with_factors_n01.jld2", "a+"; compress=true) do f
 		if haskey(f, "has_taylor_factors")
 		    @assert f["has_taylor_factors"] == true
 		else
@@ -121,7 +121,8 @@ function main()
                     @warn("replacing existing data for $key")
                     delete!(f, key)
                 end
-                return f[key] = (para, ngrid, kgrid, sigma)
+                f[key] = (para, ngrid, kgrid, sigma)
+		return
             end
             println("done!")
         end

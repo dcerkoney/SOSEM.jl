@@ -15,12 +15,11 @@ end
 
 function main()
     # Physical params matching data for SOSEM observables
-    # order = [5]  # C^{(1)}_{N≤6} includes CTs up to 5th order
-    order = [4]  # C^{(1)}_{N≤5} includes CTs up to 4th order
+    order = [4]
     beta = [40.0]
 
     rs = [1.0]
-    mass2 = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
+    mass2 = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5]
 
     # rs = [2.0]
     # mass2 = [1.25, 1.5, 1.625, 1.75, 1.875, 2.0]
@@ -83,7 +82,7 @@ function main()
 
         # For μ & Z := Z(k = kF)
         kgrid = [para.kF]
-        ngrid = [-1, 0]  # switching to [-1, 0] for improved FT effects
+        ngrid = [0, 1]  # switching to [-1, 0] for improved FT effects
 
         # Build diagrams
         n_min, n_max = 1, _order
@@ -103,7 +102,10 @@ function main()
         #     1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 4.0, 2.0, 
         #     2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0,
         # ]
-        reweight_goal = [1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 4.0, 2.0]
+        # reweight_goal = [1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 4.0, 2.0]
+        reweight_goal = [1.0, 1.0, 1.0, 1.0,
+            2.0, 2.0, 2.0, 4.0, 4.0, 8.0, 2.0, 2.0, 2.0,
+            4.0, 4.0, 8.0, 4.0, 4.0, 8.0, 8.0, 2.0]
         reweight_pad = repeat([2.0], max(0, length(valid_partition) - length(reweight_goal) + 1))
         reweight_goal = [reweight_goal; reweight_pad]
         @assert length(reweight_goal) ≥ length(valid_partition) + 1
@@ -124,13 +126,19 @@ function main()
         if isnothing(sigma) == false
             println("Current working directory: $(pwd())")
             println("Saving data to JLD2...")
-            jldopen("data/data_Z$(ct_string)_kF_opt.jld2", "a+"; compress=true) do f
-                key = "$(UEG.short(para))"
+            jldopen("data/data_Z$(ct_string)_kF_with_factors_n01.jld2", "a+"; compress=true) do f
+		if haskey(f, "has_taylor_factors")
+                    @assert f["has_taylor_factors"] == true
+                else
+                    f["has_taylor_factors"] = true
+                end
+		key = "$(UEG.short(para))"
                 if haskey(f, key)
                     @warn("replacing existing data for $key")
                     delete!(f, key)
                 end
-                return f[key] = (para, ngrid, kgrid, sigma)
+                f[key] = (para, ngrid, kgrid, sigma)
+		return
             end
             println("done!")
         end
