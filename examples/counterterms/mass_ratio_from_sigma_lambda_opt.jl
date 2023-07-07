@@ -135,18 +135,18 @@ function main()
                 "a+";
                 compress=true,
             ) do f
-	        if haskey(f, "has_taylor_factors")
-		    @assert f["has_taylor_factors"] == true
-		else
-	            f["has_taylor_factors"] = true
-		end
+                if haskey(f, "has_taylor_factors")
+                    @assert f["has_taylor_factors"] == true
+                else
+                    f["has_taylor_factors"] = true
+                end
                 key = "$(UEG.short(para))"
                 if haskey(f, key)
                     @warn("replacing existing data for $key")
                     delete!(f, key)
                 end
                 f[key] = (para, ngrid, kgrid, sigma)
-		return
+                return
             end
             println("done!")
         end

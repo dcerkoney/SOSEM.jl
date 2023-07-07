@@ -111,19 +111,23 @@ function main()
         if isnothing(sigma) == false
             println("Current working directory: $(pwd())")
             println("Saving data to JLD2...")
-            jldopen("data/data_Z$(ct_string)_kF_with_factors.jld2", "a+"; compress=true) do f
+            jldopen(
+                "data/data_Z$(ct_string)_kF_with_factors.jld2",
+                "a+";
+                compress=true,
+            ) do f
                 if haskey(f, "has_taylor_factors")
                     @assert f["has_taylor_factors"] == true
                 else
                     f["has_taylor_factors"] = true
                 end
-		key = "$(UEG.short(para))"
+                key = "$(UEG.short(para))"
                 if haskey(f, key)
                     @warn("replacing existing data for $key")
                     delete!(f, key)
                 end
                 f[key] = (para, ngrid, kgrid, sigma)
-		return
+                return
             end
             println("done!")
         end

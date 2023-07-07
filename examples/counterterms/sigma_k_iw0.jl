@@ -62,14 +62,15 @@ function main()
             mass2=_mass2,
             isDynamic=false,
             isFock=isFock,
-	    dim=3,
+            dim=3,
         )
         kF = para.kF
 
         ######### calculate K dependence #####################
         Nk, korder = 4, 4
         minK = 0.2kF
-        kgrid = CompositeGrid.LogDensedGrid(:uniform, [0.0, 2.2kF], [kF,], Nk, minK, korder).grid
+        kgrid =
+            CompositeGrid.LogDensedGrid(:uniform, [0.0, 2.2kF], [kF], Nk, minK, korder).grid
         ngrid = [0, 1]
 
         # Build diagrams
@@ -103,26 +104,30 @@ function main()
             kgrid=kgrid,
             ngrid=ngrid,
             neval=neval,
-	    parallel=:thread,
+            parallel=:thread,
         )
 
         # Save data to JLD2
         if isnothing(sigma) == false
             println("Current working directory: $(pwd())")
             println("Saving data to JLD2...")
-            jldopen("data/data_K$(ct_string)_with_factors_n01.jld2", "a+"; compress=true) do f
-		if haskey(f, "has_taylor_factors")
-		    @assert f["has_taylor_factors"] == true
-		else
-		    f["has_taylor_factors"] = true
-		end
+            jldopen(
+                "data/data_K$(ct_string)_with_factors_n01.jld2",
+                "a+";
+                compress=true,
+            ) do f
+                if haskey(f, "has_taylor_factors")
+                    @assert f["has_taylor_factors"] == true
+                else
+                    f["has_taylor_factors"] = true
+                end
                 key = "$(UEG.short(para))"
                 if haskey(f, key)
                     @warn("replacing existing data for $key")
                     delete!(f, key)
                 end
                 f[key] = (para, ngrid, kgrid, sigma)
-		return
+                return
             end
             println("done!")
         end
