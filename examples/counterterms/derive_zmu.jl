@@ -18,8 +18,8 @@ beta = [40.0]
 
 ### rs = 1 ###
 rs = [1.0]
-# mass2 = [1.0]
-mass2 = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
+mass2 = [2.5, 3.0, 3.5, 4.0]
+#mass2 = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5]
 
 ### rs = 2 ###
 # rs = [2.0]
@@ -84,16 +84,8 @@ end
 # New parafile for ngrid = [-1, 0] only
 # const parafilename = "data/para_m10.csv"
 
-
-# Test of [-1, 0] and [0, 1] grids at rs = 1
-const filename_m10 = "../../results/effective_mass_ratio/rs=1/ngrid_test/data_Z_with_ct_mu_lambda_kF_with_factors_m10.jld2"
-const filename_0p1 = "../../results/effective_mass_ratio/rs=1/ngrid_test/data_Z_with_ct_mu_lambda_kF_with_factors_0p1.jld2"
-const parafilename_m10 = "../../results/effective_mass_ratio/rs=1/ngrid_test/para_rs=1_m10.csv"
-const parafilename_0p1 = "../../results/effective_mass_ratio/rs=1/ngrid_test/para_rs=1_0p1.csv"
-# filename = filename_m10
-# parafilename = parafilename_m10
-filename = filename_0p1
-parafilename = parafilename_0p1
+const filename = "data/data_Z_with_ct_mu_lambda_kF_with_factors.jld2"
+const parafilename = "data/para_with_factors.csv"
 
 """
 Calculate the Z-factor shift using finite-difference methods 
@@ -128,16 +120,17 @@ function process(datatuple, isSave, has_taylor_factors)
     @assert kgrid == [para.kF] "Expect kgrid = [kF], kgrid = $kgrid is not supported!"
 
     # Specializing Z-factor calculation based on ngrid
-    # if ngrid ∉ [[-1, 0], [-1, 0, 1]]
-    if ngrid ∉ [[-1, 0], [0, 1], [-1, 0, 1]]
+    # if ngrid ∉ [[-1, 0], [0, 1], [-1, 0, 1]]
+    if ngrid ∉ [[-1, 0], [-1, 0, 1]]
         error(
-            "Expect ngrid = [1, 0], [-1, 0] or [-1, 0, 1], ngrid = $ngrid is not supported!",
+            # "Expect ngrid = [1, 0], [-1, 0] or [-1, 0, 1], ngrid = $ngrid is not supported!",
+            "Expect ngrid = [-1, 0] or [-1, 0, 1], ngrid = $ngrid is not supported!",
         )
     end
     if ngrid == [0, 1]
         @warn "ngrid = $ngrid is deprecated, use [-1, 0] instead!"
-        # zfactor = (data, β) -> zfactor_0(data, β; idx_n0=1)
-        zfactor = (data, β) -> zfactor_m10(data, β)  # use [0, 1] as in old data
+        zfactor = (data, β) -> zfactor_0(data, β; idx_n0=1)  # use [0] only
+        # zfactor = (data, β) -> zfactor_m10(data, β)        # use [0, 1] as in old data
     elseif ngrid == [-1, 0, 1]
         @warn "Using [-1, 0] data for Z-factor calculation, ignoring last grid point!"
         zfactor = (data, β) -> zfactor_m10(data, β)

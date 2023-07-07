@@ -16,7 +16,7 @@ beta = [40.0]
 
 ### rs = 1 ###
 rs = [1.0]
-# mass2 = [1.0]
+# mass2 = [2.5, 3.0, 3.5, 4.0]
 mass2 = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
 
 ### rs = 2 ###
@@ -79,24 +79,17 @@ end
 
 # Old parafile (mixed ngrid)
 # const parafilename = "data/para.csv"
-
-# New parafile for ngrid = [-1, 0] only
-#    const parafilename = "data/para_0m1.csv"
-# const parafilename = "data/para.csv"
-
-# const filename = "data/before_taylor_factors/data_mass_ratio$(ct_string)_gridtest.jld2.bak"
-
-# const filename = "data/before_taylor_factors/data_mass_ratio$(ct_string)_kF_gridtest.jld2.bak"
-#    const filename = "data/data_mass_ratio$(ct_string)_kF_gridtest.jld2"
 # const filename = "data/data_mass_ratio$(ct_string).jld2"
 # const filename = "data/data_mass_ratio$(ct_string)_kF_gridtest_archive1.jld2"
+#    const parafilename = "data/para_m10.csv"
+#    const filename = "data/data_mass_ratio$(ct_string)_kF_gridtest.jld2"
 
 # Location of mass shift data
-const filename = "../../results/effective_mass_ratio/rs=1/ngrid_test/data_mass_ratio_with_ct_mu_lambda_kF_with_factors.jld2"
+const filename = "data/data_mass_ratio_with_ct_mu_lambda_kF_with_factors.jld2"
 
 # Location of z/μ data
-# const parafilename = "../../results/effective_mass_ratio/rs=1/ngrid_test/para_rs=1_m10.csv"
-const parafilename = "../../results/effective_mass_ratio/rs=1/ngrid_test/para_rs=1_0p1.csv"
+# New parafile for ngrid = [-1, 0] only
+const parafilename = "data/para_with_factors.csv"
 
 # function process_mass_ratio(datatuple, δzi, δμ, isSave)
 function process_mass_ratio(datatuple, isSave, has_taylor_factors; idk=1, method=:central)
@@ -291,16 +284,7 @@ function process_mass_ratio(datatuple, isSave, has_taylor_factors; idk=1, method
         # jldopen("data/mass_ratio_from_sigma_gridtest_old.jld2", "a+"; compress=true) do f
         #     jldopen("data/mass_ratio_from_sigma_gridtest_new.jld2", "a+"; compress=true) do f
 
-        # jldopen(
-        #     "../../results/effective_mass_ratio/rs=1/ngrid_test/mass_ratio_from_sigma_m10.jld2",
-        #     "a+";
-        #     compress=true,
-        # ) do f
-        jldopen(
-            "../../results/effective_mass_ratio/rs=1/ngrid_test/mass_ratio_from_sigma_0p1.jld2",
-            "a+";
-            compress=true,
-        ) do f
+        jldopen("data/mass_ratio_from_sigma_kF_with_factors.jld2", "a+"; compress=true) do f
             key = "$(UEG.short(para))_idk=$(idk)"
             if haskey(f, key)
                 @warn("replacing existing data for $key")
@@ -313,16 +297,7 @@ function process_mass_ratio(datatuple, isSave, has_taylor_factors; idk=1, method
             # jldopen("data/inverse_zfactor_old.jld2", "a+"; compress=true) do f
             #     jldopen("data/inverse_zfactor_new.jld2", "a+"; compress=true) do f
 
-            # jldopen(
-            #     "../../results/effective_mass_ratio/rs=1/ngrid_test/inverse_zfactor_m10.jld2",
-            #     "a+";
-            #     compress=true,
-            # ) do f
-            jldopen(
-                "../../results/effective_mass_ratio/rs=1/ngrid_test/inverse_zfactor_0p1.jld2",
-                "a+";
-                compress=true,
-            ) do f
+            jldopen("data/inverse_zfactor_with_factors.jld2", "a+"; compress=true) do f
                 key = "$(UEG.short(para))"
                 if haskey(f, key)
                     @warn("replacing existing data for $key")

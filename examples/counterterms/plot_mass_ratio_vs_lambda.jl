@@ -39,7 +39,8 @@ function main()
 
     ### rs = 1 ###
     rs = 1.0
-    lambdas = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
+    lambdas = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 3.5, 4.0]
+    #lambdas = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
     lambdas5 = nothing
 
     ### rs = 2 ###
@@ -151,8 +152,7 @@ function main()
             isFock=isFock,
         )
         # Load mass ratio data for each idk
-        savename_mass = "../../results/effective_mass_ratio/rs=1/ngrid_test/mass_ratio_from_sigma_0p1"
-        # savename_mass = "../../results/effective_mass_ratio/rs=1/ngrid_test/mass_ratio_from_sigma_m10"
+        savename_mass = "data/mass_ratio_from_sigma_kF_with_factors"
 
         # savename_mass = "data/mass_ratio_from_sigma_kF_gridtest"
         # savename_mass = "data/mass_ratio_from_sigma_kF_gridtest_archive1"
@@ -191,7 +191,8 @@ function main()
                 isFock=isFock,
             )
             # Load mass ratio data for each idk
-            savename_mass = "data/mass_ratio_from_sigma_kF_gridtest"
+            savename_mass = "data/mass_ratio_from_sigma_kF_with_factors"
+            # savename_mass = "data/mass_ratio_from_sigma_kF_gridtest"
             # savename_mass = "data/mass_ratio_from_sigma_kF_gridtest_archive1"
             print("Loading 5th-order data from $savename_mass...")
             param5, ngrid5, kgrid5, mass_ratio = jldopen("$savename_mass.jld2", "r") do f
@@ -260,7 +261,9 @@ function main()
         yloc = 0.9775
         ydiv = -0.0125
         # ax.set_xlim(0.48, 2.0)
-        ax.set_xlim(0.75, 2.0)
+        # ax.set_xlim(0.75, 2.0)
+        # ax.set_ylim(0.87, 0.99)
+        ax.set_xlim(0.75, 4.0)
         ax.set_ylim(0.87, 0.99)
     elseif rs == 3.0
         yloc = 1.0375
@@ -334,16 +337,9 @@ function main()
     )
     plt.tight_layout()
     fig.savefig(
-        # "../../results/effective_mass_ratio/rs=1/ngrid_test/effective_mass_ratio_rs=$(param.rs)_" *
-        # "beta_ef=$(param.beta)_$(intn_str)$(solver)_$(ct_string)_deltaK=$(dk)kF_vs_lambda_m10.pdf",
-        "../../results/effective_mass_ratio/rs=1/ngrid_test/effective_mass_ratio_rs=$(param.rs)_" *
-        "beta_ef=$(param.beta)_neval=$(neval)_$(intn_str)$(solver)_$(ct_string)_deltaK=$(dk)kF_vs_lambda_0p1.pdf",
+        "../../results/effective_mass_ratio/effective_mass_ratio_rs=$(param.rs)_" *
+        "beta_ef=$(param.beta)_neval=$(neval)_$(intn_str)$(solver)_$(ct_string)_deltaK=$(dk)kF_vs_lambda.pdf",
     )
-    # fig.savefig(
-    #     "../../results/effective_mass_ratio/effective_mass_ratio_rs=$(param.rs)_" *
-    #     "beta_ef=$(param.beta)_$(intn_str)$(solver)_$(ct_string)_deltaK=$(dk)kF_vs_lambda.pdf",
-    #     # "beta_ef=$(param.beta)_neval=$(neval)_$(intn_str)$(solver)_$(ct_string)_deltaK=$(dk)  kF_vs_lambda.pdf",
-    # )
     plt.close("all")
     return
 end
