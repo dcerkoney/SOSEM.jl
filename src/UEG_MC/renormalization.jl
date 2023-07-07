@@ -141,6 +141,59 @@ function fock_mass_ratio(param::UEG.ParaMC)
     return
 end
 
+"""Load counterterm data from CSV file."""
+function load_z_mu_old(
+    param::UEG.ParaMC;
+    ct_filename="examples/counterterms/data/data_Z.jld2",
+    # parafilename="examples/counterterms/data/para.csv",
+)
+    # Derive z and μ from JLD2 data
+    print("Deriving counterterm data from JLD2...")
+    local has_taylor_factors
+    local ct_data
+    filefound = false
+    f = jldopen(ct_filename, "r")
+    if haskey(f, "has_taylor_factors") == false
+        error(
+            "Data missing key 'has_taylor_factors', process with script 'add_taylor_factors_to_counterterm_data.jl'!",
+        )
+    end
+    has_taylor_factors::Bool = f["has_taylor_factors"]
+    for key in keys(f)
+        key == "has_taylor_factors" && continue
+        if UEG.paraid(f[key][1]) == UEG.paraid(param)
+            ct_data = f[key]
+            filefound = true
+        end
+    end
+    if !filefound
+        throw(KeyError(UEG.paraid(param)))
+    end
+    # df = fromFile(parafilename)
+    para, _, _, data = ct_data
+    printstyled(UEG.short(para); color=:yellow)
+    println()
+
+    function zfactor(data, β)
+        return @. (imag(data[2, 1]) - imag(data[1, 1])) / (2π / β)
+    end
+
+    function mu(data)
+        return real(data[1, 1])
+    end
+
+    μ = Dict()
+    for (p, val) in data
+        μ[p] = mu(val)
+    end
+    z = Dict()
+    for (p, val) in data
+        z[p] = zfactor(val, para.β)
+    end
+
+    return z, μ, has_taylor_factors
+end
+
 """Load z and μ data from JLD2 file."""
 function load_z_mu(
     param::UEG.ParaMC;
@@ -224,7 +277,8 @@ function load_z_mu_counterterms(
         mu, sw = UEG_MC.getSigma(para; parafile=parafilename)
     catch
         # Fallback mode: Re-derive counterterms from JLD2 file
-        @warn "falling back to JLD2 data..."
+        error("falling back to JLD2 data...")
+        # @warn "falling back to JLD2 data..."
         local has_taylor_factors
         local ct_data
         filefound = false

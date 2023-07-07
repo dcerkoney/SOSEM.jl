@@ -12,19 +12,14 @@ elseif haskey(ENV, "SOSEM_HOME")
     cd("$(ENV["SOSEM_HOME"])/examples/counterterms")
 end
 
-# Physical params matching data for SOSEM observables
-# order = [5]  # C^{(1)}_{N≤6} includes CTs up to 5th order
-
-# beta = [40.0]
-
-# For lambda optimization
-# order = [4]  # C^{(1)}_{N≤5} includes CTs up to 4th order
-order = [5]  # C^{(1)}_{N≤5} includes CTs up to 4th order
+# order = [5]
+order = [4]
 beta = [40.0]
 
 ### rs = 1 ###
-# rs = [1.0]
+rs = [1.0]
 # mass2 = [1.0]
+mass2 = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
 
 ### rs = 2 ###
 # rs = [2.0]
@@ -47,11 +42,10 @@ beta = [40.0]
 # mass2 = [0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 2.25, 2.5, 2.75, 3.0, 3.5, 4.0, 4.5, 5.0, 6.0, 7.0]
 
 ### rs = 5 ###
-# N = 5
-rs = [5.0]
-mass2 = [0.8125, 0.875, 0.9375]
-# N = 4
 # rs = [5.0]
+# N = 5
+# mass2 = [0.8125, 0.875, 0.9375]
+# N = 4
 # mass2 = [0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25, 1.5]
 # mass2 = [0.1, 0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 3.25, 3.5, 3.75, 4.0, 4.5, 5.0, 5.5, 6.0, 7.0, 8.0]
 
@@ -74,6 +68,7 @@ end
 # # For testing has_taylor_factors == false
 # const filename = "data/before_taylor_factors/data_Z$(ct_string)_kF.jld2.bak"
 
+# # SOSEM data
 # const filename = "data/data_Z$(ct_string).jld2"
 
 # rs = 1
@@ -81,16 +76,41 @@ end
 
 # rs = 2, 3, 4, 5
 # const filename = "data/data_Z$(ct_string)_kF_opt.jld2"
-const filename = "data/data_Z$(ct_string)_kF_opt_archive1.jld2"
+# const filename = "data/data_Z$(ct_string)_kF_opt_archive1.jld2"
 
-const parafilename = "data/para.csv"
+# Old parafile (mixed ngrid)
+# const parafilename = "data/para.csv"
+
+# New parafile for ngrid = [-1, 0] only
+# const parafilename = "data/para_m10.csv"
+
+
+# Test of [-1, 0] and [0, 1] grids at rs = 1
+const filename_m10 = "../../results/effective_mass_ratio/rs=1/ngrid_test/data_Z_with_ct_mu_lambda_kF_with_factors_m10.jld2"
+const filename_0p1 = "../../results/effective_mass_ratio/rs=1/ngrid_test/data_Z_with_ct_mu_lambda_kF_with_factors_0p1.jld2"
+const parafilename_m10 = "../../results/effective_mass_ratio/rs=1/ngrid_test/para_rs=1_m10.csv"
+const parafilename_0p1 = "../../results/effective_mass_ratio/rs=1/ngrid_test/para_rs=1_0p1.csv"
+# filename = filename_m10
+# parafilename = parafilename_m10
+filename = filename_0p1
+parafilename = parafilename_0p1
 
 """
 Calculate the Z-factor shift using finite-difference methods 
-(assumes the first two grid points of data in dimension 1 are [-1, 0] or [0, 1]).
+(i.e., by averaging data at n=0 and n=-1)
 """
-function zfactor(data, β)
+function zfactor_m10(data, β)
     return @. (imag(data[2, 1]) - imag(data[1, 1])) / (2π / β)
+end
+
+"""
+Calculate the Z-factor shift using finite-difference methods via only data at n=0,
+using the symmetry d[n = -1] = -d[n = 0].
+
+- `idx_n0`: index into data where n=0
+"""
+function zfactor_0(data, β; idx_n0)
+    return @. imag(data[idx_n0, 1]) / (π / β)
 end
 
 function mu(data)
@@ -108,16 +128,21 @@ function process(datatuple, isSave, has_taylor_factors)
     @assert kgrid == [para.kF] "Expect kgrid = [kF], kgrid = $kgrid is not supported!"
 
     # Specializing Z-factor calculation based on ngrid
+    # if ngrid ∉ [[-1, 0], [-1, 0, 1]]
     if ngrid ∉ [[-1, 0], [0, 1], [-1, 0, 1]]
-        # if ngrid ∉ [[-1, 0], [-1, 0, 1]]
         error(
             "Expect ngrid = [1, 0], [-1, 0] or [-1, 0, 1], ngrid = $ngrid is not supported!",
         )
     end
     if ngrid == [0, 1]
         @warn "ngrid = $ngrid is deprecated, use [-1, 0] instead!"
+        # zfactor = (data, β) -> zfactor_0(data, β; idx_n0=1)
+        zfactor = (data, β) -> zfactor_m10(data, β)  # use [0, 1] as in old data
     elseif ngrid == [-1, 0, 1]
         @warn "Using [-1, 0] data for Z-factor calculation, ignoring last grid point!"
+        zfactor = (data, β) -> zfactor_m10(data, β)
+    else # ngrid == [-1, 0]
+        zfactor = (data, β) -> zfactor_m10(data, β)
     end
 
     _mu = Dict()
@@ -136,9 +161,10 @@ function process(datatuple, isSave, has_taylor_factors)
         println("$p: μ = $(mu(data[p]))   z = $(zfactor(data[p], para.β))")
     end
 
-    dzi, dmu, _ = CounterTerm.sigmaCT(para.order, _mu, _z; isfock=isFock, verbose=1)
+    dzi, dmu, dz = CounterTerm.sigmaCT(para.order, _mu, _z; isfock=isFock, verbose=1)
     println("zfactor: ", dzi)
     println("dmu: ", dmu)
+    println("dz: ", dz)
 
     ############# save to csv  #################
     # println(df)
@@ -171,7 +197,6 @@ function process(datatuple, isSave, has_taylor_factors)
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
-
     # @assert length(ARGS) >= 1 "One argument for the data file name is required!"
     # filename = ARGS[1]
     isSave = false
@@ -180,7 +205,6 @@ if abspath(PROGRAM_FILE) == @__FILE__
         # the second parameter may be set to save the derived parameters
         isSave = true
     end
-
     f = jldopen(filename, "r")
     for (_rs, _mass2, _beta, _order) in Iterators.product(rs, mass2, beta, order)
         para = UEG.ParaMC(;
@@ -191,8 +215,6 @@ if abspath(PROGRAM_FILE) == @__FILE__
             isDynamic=false,
             isFock=isFock,
         )
-
-        kF = para.kF
         if haskey(f, "has_taylor_factors") == false
             error(
                 "Data missing key 'has_taylor_factors', process with script 'add_taylor_factors_to_counterterm_data.jl'!",
