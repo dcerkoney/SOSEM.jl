@@ -33,7 +33,7 @@ function main()
 
     rs = [1.0]
     # mass2 = [1.0, 1.75]
-    mass2 = [2.0]
+    mass2 = [3.5]
 
     # Total number of MCMC evaluations
     neval = 1e10
