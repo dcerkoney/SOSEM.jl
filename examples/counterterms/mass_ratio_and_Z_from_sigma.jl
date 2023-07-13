@@ -59,12 +59,13 @@ function main()
         ######### calcualte Z factor and mass ratio ######################
         δK *= kF
         kgrid = [kF, kF + δK, kF + 5δK, kF + 10δK]
-        ngrid = [0, 1]
+        ngrid = [-1, 0]
         # kgrid = [kF, kF + δK, kF + 2δK, kF + 4δK, kF + 8δK]
-        # ngrid = [0, 1]
+        # ngrid = [-1, 0]
         # ngrid = [-1, 0]
 
         # Build diagrams
+        orders = 1:_order
         n_min, n_max = 1, _order
         partition = UEG_MC.counterterm_partitions(
             n_min,
@@ -104,7 +105,7 @@ function main()
                     @warn("replacing existing data for $key")
                     delete!(f, key)
                 end
-                return f[key] = (para, ngrid, kgrid, sigma)
+                return f[key] = (orders, para, ngrid, kgrid, sigma)
             end
             println("done!")
         end

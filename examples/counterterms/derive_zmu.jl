@@ -12,18 +12,19 @@ elseif haskey(ENV, "SOSEM_HOME")
     cd("$(ENV["SOSEM_HOME"])/examples/counterterms")
 end
 
-# order = [5]
 order = [4]
 beta = [40.0]
 
 ### rs = 1 ###
-rs = [1.0]
-mass2 = [2.5, 3.0, 3.5, 4.0]
+# rs = [1.0]
+# mass2 = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 3.5, 4.0]
+# mass2 = [3.5]
+# mass2 = [2.5, 3.0, 3.5, 4.0]
 #mass2 = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5]
 
 ### rs = 2 ###
-# rs = [2.0]
-# mass2 = [1.25, 1.5, 1.625, 1.75, 1.875, 2.0]
+rs = [2.0]
+mass2 = [1.25, 1.5, 1.625, 1.75, 1.875, 2.0]
 
 # rs = [2.0]
 # mass2 = [1.75]
@@ -65,27 +66,8 @@ if renorm_lambda
     ct_string *= "_lambda"
 end
 
-# # For testing has_taylor_factors == false
-# const filename = "data/before_taylor_factors/data_Z$(ct_string)_kF.jld2.bak"
-
-# # SOSEM data
-# const filename = "data/data_Z$(ct_string).jld2"
-
-# rs = 1
-# const filename = "data/data_Z$(ct_string)_kF.jld2"
-
-# rs = 2, 3, 4, 5
-# const filename = "data/data_Z$(ct_string)_kF_opt.jld2"
-# const filename = "data/data_Z$(ct_string)_kF_opt_archive1.jld2"
-
-# Old parafile (mixed ngrid)
-# const parafilename = "data/para.csv"
-
-# New parafile for ngrid = [-1, 0] only
-# const parafilename = "data/para_m10.csv"
-
-const filename = "data/data_Z_with_ct_mu_lambda_kF_with_factors.jld2"
-const parafilename = "data/para_with_factors.csv"
+const parafilename = "data/para.csv"
+const filename = "data/data_Z.jld2"
 
 """
 Calculate the Z-factor shift using finite-difference methods 
@@ -109,10 +91,11 @@ function mu(data)
     return real(data[1, 1])
 end
 
-function process(datatuple, isSave, has_taylor_factors)
+function process(datatuple, para, isSave, has_taylor_factors)
     print("processing...")
     df = UEG_MC.fromFile(parafilename)
-    para, ngrid, kgrid, data = datatuple
+
+    ngrid, kgrid, data = datatuple
     printstyled(UEG.short(para); color=:yellow)
     println()
 
@@ -130,7 +113,7 @@ function process(datatuple, isSave, has_taylor_factors)
     if ngrid == [0, 1]
         @warn "ngrid = $ngrid is deprecated, use [-1, 0] instead!"
         zfactor = (data, β) -> zfactor_0(data, β; idx_n0=1)  # use [0] only
-        # zfactor = (data, β) -> zfactor_m10(data, β)        # use [0, 1] as in old data
+    # zfactor = (data, β) -> zfactor_m10(data, β)        # use [0, 1] as in old data
     elseif ngrid == [-1, 0, 1]
         @warn "Using [-1, 0] data for Z-factor calculation, ignoring last grid point!"
         zfactor = (data, β) -> zfactor_m10(data, β)
@@ -161,19 +144,19 @@ function process(datatuple, isSave, has_taylor_factors)
 
     ############# save to csv  #################
     # println(df)
-    for o in keys(data)
-        println("Adding order $o")
+    for P in keys(data)
+        println("Adding partition $P")
         # global df
         paraid = UEG.paraid(para)
         df = CounterTerm.appendDict(
             df,
             paraid,
             Dict(
-                "order" => o,
-                "μ" => _mu[o].val,
-                "μ.err" => _mu[o].err,
-                "Σw" => _z[o].val,
-                "Σw.err" => _z[o].err,
+                "partition" => P,
+                "μ" => _mu[P].val,
+                "μ.err" => _mu[P].err,
+                "Σw" => _z[P].val,
+                "Σw.err" => _z[P].err,
             );
             replace=true,
         )
@@ -216,10 +199,11 @@ if abspath(PROGRAM_FILE) == @__FILE__
         has_taylor_factors::Bool = f["has_taylor_factors"]
         for key in keys(f)
             key == "has_taylor_factors" && continue
-            if UEG.paraid(f[key][1]) == UEG.paraid(para)
+            loadpara = UEG.ParaMC(key)
+            if UEG.paraid(loadpara) == UEG.paraid(para)
                 htf_str = has_taylor_factors ? "with" : "without"
                 print("Found data $(htf_str) Taylor factors...")
-                process(f[key], isSave, has_taylor_factors)
+                process(f[key], loadpara, isSave, has_taylor_factors)
             end
         end
     end

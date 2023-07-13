@@ -38,16 +38,16 @@ function main()
     # neval = 1e11    # rs=2, 3, 4, and N=4, rs=5
 
     ### rs = 1 ###
-    rs = 1.0
-    lambdas = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 3.5, 4.0]
+    # rs = 1.0
+    # lambdas = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 3.5, 4.0]
+    # lambdas5 = nothing
     #lambdas = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
-    lambdas5 = nothing
 
     ### rs = 2 ###
-    # rs = 2.0
+    rs = 2.0
+    lambdas = [1.25, 1.5, 1.625, 1.75, 1.875, 2.0]
+    lambdas5 = nothing
     # # lambdas = [0.1, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
-    # lambdas = [1.25, 1.5, 1.625, 1.75, 1.875, 2.0]
-    # lambdas5 = nothing
 
     ### rs = 3 ###
     # rs = 3.0
@@ -101,32 +101,16 @@ function main()
     end
 
     # Use derivative estimate with δK = dks[idk] (grid points kgrid[ikF] and kgrid[ikF + idk])
-    idk = 3   # dk = 0.06, new grid
-    idk5 = 3  # dk = 0.06, new grid
-    # idk = 12   # dk = 0.06, old grid
-    # idk5 = 3  # dk = 0.06, new grid
-
-    # idk = 7
-    # idk5 = 7
+    idk = 3   # dk = 0.06, max δK on new grid
+    idk5 = 3  # dk = 0.06, max δK on new grid
 
     # Momentum spacing for finite-difference derivative of Sigma (in units of para.kF)
     δK = 0.01
     δK5 = 0.01
-    # δK = 0.005
-    # δK5 = 0.01
-
-    # We estimate the derivative wrt k using grid points kgrid[ikF] and kgrid[ikF + idk]
-    # idks = eachindex(collect(2:2:6)) # = [1, 2, 3]
-    # idks = collect(-6:2:6)
-    # idks = 1:30
-    # idks = 1:15
-    # idks = -15:15  # TODO: test central difference method
 
     # kgrid indices & spacings
     dks = δK * collect(-6:2:6)
     dks5 = δK * collect(-6:2:6)
-    # dks = δK * collect(-15:15)
-    # dks5 = δK5 * collect(-6:2:6)
     ikF = searchsortedfirst(dks, 0)
     ikF5 = searchsortedfirst(dks5, 0)
     dk = dks[ikF + idk]
@@ -152,13 +136,11 @@ function main()
             isFock=isFock,
         )
         # Load mass ratio data for each idk
-        savename_mass = "data/mass_ratio_from_sigma_kF_with_factors"
-
-        # savename_mass = "data/mass_ratio_from_sigma_kF_gridtest"
-        # savename_mass = "data/mass_ratio_from_sigma_kF_gridtest_archive1"
+        savename_mass = "data/mass_ratio"
         print("Loading data from $savename_mass (lambda = $lambda)...")
-        param, ngrid, kgrid, mass_ratio = jldopen("$savename_mass.jld2", "r") do f
+        ngrid, kgrid, mass_ratio = jldopen("$savename_mass.jld2", "r") do f
             key = "$(UEG.short(loadparam))_idk=$(idk)"
+            param = UEG.ParaMC(string(split(key, "_idk=")[1]))
             return f[key]
         end
         # Derive kgrid indices & spacing δK from data
@@ -191,12 +173,11 @@ function main()
                 isFock=isFock,
             )
             # Load mass ratio data for each idk
-            savename_mass = "data/mass_ratio_from_sigma_kF_with_factors"
-            # savename_mass = "data/mass_ratio_from_sigma_kF_gridtest"
-            # savename_mass = "data/mass_ratio_from_sigma_kF_gridtest_archive1"
+            savename_mass = "data/mass_ratio"
             print("Loading 5th-order data from $savename_mass...")
-            param5, ngrid5, kgrid5, mass_ratio = jldopen("$savename_mass.jld2", "r") do f
+            ngrid5, kgrid5, mass_ratio = jldopen("$savename_mass.jld2", "r") do f
                 key = "$(UEG.short(loadparam))_idk=$(idk5)"
+                param5 = UEG.ParaMC(string(split(key, "_idk=")[1]))
                 return f[key]
             end
             @assert eachindex(mass_ratio) == Base.OneTo(5)
@@ -265,6 +246,15 @@ function main()
         # ax.set_ylim(0.87, 0.99)
         ax.set_xlim(0.75, 4.0)
         ax.set_ylim(0.87, 0.99)
+    elseif rs == 2.0
+        xloc = 1.35
+        yloc = 0.9775
+        ydiv = -0.0125
+        # ax.set_xlim(0.48, 2.0)
+        # ax.set_xlim(0.75, 2.0)
+        # ax.set_ylim(0.87, 0.99)
+        ax.set_xlim(1.25, 2.0)
+        ax.set_ylim(0.8, 0.99)
     elseif rs == 3.0
         yloc = 1.0375
         ydiv = -0.02

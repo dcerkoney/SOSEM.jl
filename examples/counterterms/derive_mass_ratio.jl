@@ -15,9 +15,11 @@ order = [4]
 beta = [40.0]
 
 ### rs = 1 ###
-rs = [1.0]
+# rs = [1.0]
+# mass2 = [3.5]
+# mass2 = [2.0]
 # mass2 = [2.5, 3.0, 3.5, 4.0]
-mass2 = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
+# mass2 = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
 
 ### rs = 2 ###
 # rs = [2.0]
@@ -77,44 +79,30 @@ if renorm_lambda
     ct_string *= "_lambda"
 end
 
-# Old parafile (mixed ngrid)
-# const parafilename = "data/para.csv"
-# const filename = "data/data_mass_ratio$(ct_string).jld2"
-# const filename = "data/data_mass_ratio$(ct_string)_kF_gridtest_archive1.jld2"
-#    const parafilename = "data/para_m10.csv"
-#    const filename = "data/data_mass_ratio$(ct_string)_kF_gridtest.jld2"
-
 # Location of mass shift data
-const filename = "data/data_mass_ratio_with_ct_mu_lambda_kF_with_factors.jld2"
+const filename = "data/data_mass_ratio.jld2"
 
 # Location of z/μ data
-# New parafile for ngrid = [-1, 0] only
-const parafilename = "data/para_with_factors.csv"
+const parafilename = "data/para.csv"
 
 # function process_mass_ratio(datatuple, δzi, δμ, isSave)
-function process_mass_ratio(datatuple, isSave, has_taylor_factors; idk=1, method=:central)
+function process_mass_ratio(
+    datatuple,
+    para,
+    isSave,
+    has_taylor_factors;
+    idk=1,
+    method=:central,
+)
     println("\nProcessing mass ratio (idk=$idk)...")
     @assert method in [:forward, :central]
     if method == :forward
         @warn "Forward difference method is deprecated, use `method = :central`!"
     end
     # df = UEG_MC.fromFile(parafilename)
-    para, ngrid, kgrid, data = datatuple
+    ngrid, kgrid, data = datatuple
     printstyled(UEG.short(para); color=:yellow)
     println()
-
-    # # Oldest grids for rs=1 check
-    # nk = length(kgrid)
-    # data_dks = round.(kgrid / para.kF .- 1; sigdigits=13)
-    # data_kspacings = trunc.(Int, round.(dks / δK; sigdigits=13))
-    # data_idks = collect(eachindex(kspacings[kspacings .>= 0])) .- 1
-    # println(data_dks)
-    # println(data_kspacings)
-    # println(kspacings)
-    # @assert data_dks == dks
-    # @assert data_kspacings == kspacings
-    # @assert data_idks[2:16] == idks
-    # @assert idk ∈ idks
 
     # Old k-spacing is 0.005, new k-spacing is 0.01
     nk = length(kgrid)
@@ -147,33 +135,6 @@ function process_mass_ratio(datatuple, isSave, has_taylor_factors; idk=1, method
     # Max order in RPT calculation
     max_order = para.order
     println("\nMax order: ", max_order)
-
-    # # Add Taylor factors to CT data
-    # # ct_filename = "data/data_Z$(ct_string)_kF.jld2"
-    # ct_filename = "data/data_Z$(ct_string)_kF_opt.jld2"
-    # # ct_filename = "data/data_Z$(ct_string).jld2"
-    # # ct_filename = "data/data_Z$(ct_string)_kF.jld2"
-    # # ct_filename = "data/data_Z$(ct_string)_kF_opt_archive1.jld2"
-    # z, μ, has_taylor_factors_zmu = UEG_MC.load_z_mu_old(para; ct_filename=ct_filename)
-    # if has_taylor_factors_zmu == false
-    #     for (p, v) in z
-    #         z[p] = v / (factorial(p[2]) * factorial(p[3]))
-    #     end
-    #     for (p, v) in μ
-    #         μ[p] = v / (factorial(p[2]) * factorial(p[3]))
-    #     end
-    # end
-    # # Get μ and z counterterms
-    # δzi, δμ, δz = CounterTerm.sigmaCT(max_order, μ, z; verbose=1)
-    # println("δzi:\n", δzi, "\nδμ:\n", δμ, "\nδz:\n", δz)
-
-    # Reexpand merged data in powers of μ
-    # z, μ = UEG_MC.load_z_mu(para; ct_filename=ct_filename)
-    # ct_filename = "data/data_Z$(ct_string)_k0.jld2"
-    # ct_filename = "data/data_Z$(ct_string).jld2"
-    # ct_filename = "data/before_taylor_factors/data_Z$(ct_string)_kF.jld2.bak"
-    # UEG_MC.load_z_mu_old(para; ct_filename=ct_filename, parafilename="data/para.csv")
-    # UEG_MC.load_z_mu_old(para; ct_filename=ct_filename, parafilename=parafilename)
 
     # Load counterterm data from CSV file
     mu, sw = UEG_MC.getSigma(para; parafile=parafilename)
@@ -245,21 +206,54 @@ function process_mass_ratio(datatuple, isSave, has_taylor_factors; idk=1, method
     # The inverse Z-factor is (1 - δs[ξ])
     zinv = Measurement{Float64}[1; accumulate(+, δzi; init=1)]
 
-    # Power series terms for (1 + δM[ξ]) = (1 + δm[ξ])⁻¹
-    δM = Measurement{Float64}[
-        -δm[1],
-        δm[1]^2 - δm[2],
-        -δm[1]^3 + 2 * δm[1] * δm[2] - δm[3],
-        δm[1]^4 - 3 * δm[1]^2 * δm[2] + 2 * δm[1] * δm[3] - δm[4],
-    ]
-    # Power series terms for (m⋆/m)[ξ] = (1 - δs[ξ]) ∘ (1 + δm[ξ])⁻¹ = (1 - δs[ξ]) ∘ (1 + δM[ξ])
-    δr = Measurement{Float64}[
-        1.0,
-        δM[1] - δs[1],
-        δM[2] - δM[1] * δs[1] - δs[2],
-        δM[3] - δM[2] * δs[1] - δM[1] * δs[2] - δs[3],
-        δM[4] - δM[3] * δs[1] - δM[2] * δs[2] - δM[1] * δs[3] - δs[4],
-    ]
+    # Power series terms for (1 + δM[ξ]) = (1 + δm[ξ])⁻¹ and
+    # (m⋆/m)[ξ] = (1 - δs[ξ]) ∘ (1 + δm[ξ])⁻¹ = (1 - δs[ξ]) ∘ (1 + δM[ξ])
+    δM = Measurement{Float64}[]
+    δr = Measurement{Float64}[1.0]
+    if max_order ≥ 1
+        push!(δM, -δm[1])
+        push!(δr, δM[1] - δs[1])
+    end
+    if max_order ≥ 2
+        push!(δM, δm[1]^2 - δm[2])
+        push!(δr, δM[2] - δM[1] * δs[1] - δs[2])
+    end
+    if max_order ≥ 3
+        push!(δM, -δm[1]^3 + 2 * δm[1] * δm[2] - δm[3])
+        push!(δr, δM[3] - δM[2] * δs[1] - δM[1] * δs[2] - δs[3])
+    end
+    if max_order ≥ 4
+        push!(δM, δm[1]^4 - 3 * δm[1]^2 * δm[2] + 2 * δm[1] * δm[3] - δm[4])
+        push!(δr, δM[4] - δM[3] * δs[1] - δM[2] * δs[2] - δM[1] * δs[3] - δs[4])
+    end
+    if max_order ≥ 5
+        push!(
+            δM,
+            -δm[1]^5 + 4 * δm[1]^3 * δm[2] - 3 * δm[1] * δm[2]^2 - 3 * δm[1]^2 * δm[3] +
+            2 * δm[2] * δm[3] +
+            2 * δm[1] * δm[4] - δm[5],
+        )
+        push!(
+            δr,
+            δM[5] - δM[4] * δs[1] - δM[3] * δs[2] - δM[2] * δs[3] - δM[1] * δs[4] - δs[5],
+        )
+    end
+    # δM = Measurement{Float64}[
+    #     -δm[1],
+    #     δm[1]^2 - δm[2],
+    #     -δm[1]^3 + 2 * δm[1] * δm[2] - δm[3],
+    #     δm[1]^4 - 3 * δm[1]^2 * δm[2] + 2 * δm[1] * δm[3] - δm[4],
+    #     -δm[1]^5 + 4 * δm[1]^3 * δm[2] - 3 * δm[1] * δm[2]^2 - 3 * δm[1]^2 * δm[3] + 2 * δm[2] * δm[3] + 2 * δm[1] * δm[4] - δm[5],
+    # ]
+    # # Power series terms for (m⋆/m)[ξ] = (1 - δs[ξ]) ∘ (1 + δm[ξ])⁻¹ = (1 - δs[ξ]) ∘ (1 + δM[ξ])
+    # δr = Measurement{Float64}[
+    #     1.0,
+    #     δM[1] - δs[1],
+    #     δM[2] - δM[1] * δs[1] - δs[2],
+    #     δM[3] - δM[2] * δs[1] - δM[1] * δs[2] - δs[3],
+    #     δM[4] - δM[3] * δs[1] - δM[2] * δs[2] - δM[1] * δs[3] - δs[4],
+    #     δM[5] - δM[4] * δs[1] - δM[3] * δs[2] - δM[2] * δs[3] - δM[1] * δs[4] - δs[5],
+    # ]
     # println(δM)
 
     # Aggregate terms in power series for (m⋆/m)[ξ]
@@ -278,32 +272,22 @@ function process_mass_ratio(datatuple, isSave, has_taylor_factors; idk=1, method
     if isSave
         println("Current working directory: $(pwd())")
         println("Saving data to JLD2...")
-        # jldopen("data/mass_ratio_from_sigma.jld2", "a+"; compress=true) do f
-        # jldopen("data/mass_ratio_from_sigma_gridtest.jld2", "a+"; compress=true) do f
-        # jldopen("data/mass_ratio_from_sigma_kF_gridtest.jld2", "a+"; compress=true) do f
-        # jldopen("data/mass_ratio_from_sigma_gridtest_old.jld2", "a+"; compress=true) do f
-        #     jldopen("data/mass_ratio_from_sigma_gridtest_new.jld2", "a+"; compress=true) do f
-
-        jldopen("data/mass_ratio_from_sigma_kF_with_factors.jld2", "a+"; compress=true) do f
+        jldopen("data/mass_ratio.jld2", "a+"; compress=true) do f
             key = "$(UEG.short(para))_idk=$(idk)"
             if haskey(f, key)
                 @warn("replacing existing data for $key")
                 delete!(f, key)
             end
-            return f[key] = (para, ngrid, kgrid, mass_ratios)
+            return f[key] = (ngrid, kgrid, mass_ratios)
         end
         if idk == 1
-            # jldopen("data/inverse_zfactor.jld2", "a+"; compress=true) do f
-            # jldopen("data/inverse_zfactor_old.jld2", "a+"; compress=true) do f
-            #     jldopen("data/inverse_zfactor_new.jld2", "a+"; compress=true) do f
-
-            jldopen("data/inverse_zfactor_with_factors.jld2", "a+"; compress=true) do f
+            jldopen("data/inverse_zfactor.jld2", "a+"; compress=true) do f
                 key = "$(UEG.short(para))"
                 if haskey(f, key)
                     @warn("replacing existing data for $key")
                     delete!(f, key)
                 end
-                return f[key] = (para, ngrid, kgrid, zinv)
+                return f[key] = (ngrid, kgrid, zinv)
             end
         end
     end
@@ -338,12 +322,13 @@ if abspath(PROGRAM_FILE) == @__FILE__
         has_taylor_factors::Bool = f["has_taylor_factors"]
         for key in keys(f)
             key == "has_taylor_factors" && continue
-            if UEG.paraid(f[key][1]) == UEG.paraid(para)
+            loadpara = UEG.ParaMC(key)
+            if UEG.paraid(loadpara) == UEG.paraid(para)
                 htf_str = has_taylor_factors ? "with" : "without"
                 println("Found data $(htf_str) Taylor factors...")
                 # Derive the list of positive index offsets from ikF via kgrid
-                # (f[key] = para, ngrid, kgrid, sigma)
-                kgrid = f[key][3]
+                # (f[key] = ngrid, kgrid, sigma)
+                kgrid = f[key][2]
                 ikF = searchsortedfirst(kgrid, para.kF)
                 idks = collect(eachindex(kgrid[(ikF + 1):end]))
                 @assert all(ikF + idk ∈ eachindex(kgrid) for idk in idks)
@@ -351,6 +336,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 for idk in idks
                     mass_ratio = process_mass_ratio(
                         f[key],
+                        loadpara,
                         isSave,
                         has_taylor_factors;
                         idk=idk,

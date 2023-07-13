@@ -55,7 +55,7 @@ function main()
 
         ######### calcualte Z factor ######################
         kgrid = [kF]
-        ngrid = [0, 1]
+        ngrid = [-1, 0]
         # ngrid = [-1, 0]
 
         # Build diagrams

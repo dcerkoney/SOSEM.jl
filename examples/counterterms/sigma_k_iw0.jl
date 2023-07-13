@@ -75,6 +75,7 @@ function main()
         ngrid = [-1, 0]  # for improved finite-temperature effects
 
         # Build diagrams
+        orders = 1:_order
         n_min, n_max = 1, _order
         partition = UEG_MC.counterterm_partitions(
             n_min,
@@ -127,7 +128,7 @@ function main()
                     @warn("replacing existing data for $key")
                     delete!(f, key)
                 end
-                f[key] = (para, ngrid, kgrid, sigma)
+                f[key] = (orders, para, ngrid, kgrid, sigma)
                 return
             end
             println("done!")
