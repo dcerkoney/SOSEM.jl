@@ -28,12 +28,12 @@ function main()
     # rs = [3.0]
     # mass2 = [1.25]
 
-    # rs = [2.0]
-    # mass2 = [1.75]
+    rs = [2.0]
+    mass2 = [1.75, 2.5]
 
-    rs = [1.0]
+    # rs = [1.0]
     # mass2 = [1.0, 1.75]
-    mass2 = [3.5]
+    # mass2 = [3.5]
 
     # Total number of MCMC evaluations
     neval = 1e10
@@ -113,11 +113,7 @@ function main()
         if isnothing(sigma) == false
             println("Current working directory: $(pwd())")
             println("Saving data to JLD2...")
-            jldopen(
-                "data/data_K$(ct_string)_with_factors.jld2",
-                "a+";
-                compress=true,
-            ) do f
+            jldopen("data/data_K.jld2", "a+"; compress=true) do f
                 if haskey(f, "has_taylor_factors")
                     @assert f["has_taylor_factors"] == true
                 else
@@ -128,7 +124,7 @@ function main()
                     @warn("replacing existing data for $key")
                     delete!(f, key)
                 end
-                f[key] = (orders, ngrid, kgrid, sigma)
+                f[key] = (ngrid, kgrid, sigma)
                 return
             end
             println("done!")
