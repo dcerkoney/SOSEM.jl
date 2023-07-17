@@ -23,7 +23,9 @@ beta = [40.0]
 
 ### rs = 2 ###
 rs = [2.0]
-mass2 = [1.25, 1.5, 1.625, 1.75, 1.875, 2.0]
+order = [5]
+mass2 = [1.625, 1.75, 1.875, 2.0]
+# mass2 = [0.1, 0.25, 0.5, 1.0, 1.25, 1.5, 1.625, 1.75, 1.875, 2.0, 2.5, 3.0]
 
 # rs = [2.0]
 # mass2 = [1.75]
@@ -104,19 +106,26 @@ function process_mass_ratio(
     printstyled(UEG.short(para); color=:yellow)
     println()
 
-    # Old k-spacing is 0.005, new k-spacing is 0.01
     nk = length(kgrid)
-    δK = nk == length(-15:15) ? 0.005 : 0.01
+    @assert nk == 7
+    δK = 0.01
+
+    # Old k-spacing is 0.005, new k-spacing is 0.01
+    # δK = nk == length(-15:15) ? 0.005 : 0.01
+
     # Derive kgrid indices & spacing δK from data
     dks = round.(kgrid / para.kF .- 1; sigdigits=13)
     kspacings = trunc.(Int, dks / δK)
-    if nk == length(-6:2:6)
-        @assert kspacings == collect(-6:2:6)
-    elseif nk == length(-15:15)
-        @assert kspacings == collect(-15:15)
-    else
-        error("kgrid spacing $(kspacings) not supported!")
-    end
+    @assert kspacings == collect(-6:2:6)
+
+    # if nk == length(-6:2:6)
+    #     @assert kspacings == collect(-6:2:6)
+    # elseif nk == length(-15:15)
+    #     @assert kspacings == collect(-15:15)
+    # else
+    #     error("kgrid spacing $(kspacings) not supported!")
+    # end
+
     idks = collect(eachindex(kspacings[kspacings .>= 0])) .- 1
     @assert idk ∈ idks
     @assert dks == δK * collect(kspacings)

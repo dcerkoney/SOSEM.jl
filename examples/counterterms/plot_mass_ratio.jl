@@ -33,8 +33,10 @@ function main()
     solver = :mcmc
     beta = 40.0
 
-    rs = 1.0
-    mass2list = [2.0, 3.5]
+    rs = 2.0
+    mass2list = [1.75, 2.0]
+    # mass2list = [1.625, 1.75, 1.875, 2.0]
+
     # mass2list = [2.0]
     # mass2list = [1.75]
     # mass2list = [1.0]
@@ -85,14 +87,9 @@ function main()
     end
 
     # Momentum spacing for finite-difference derivative of Sigma (in units of kF)
-    δK = 0.01     # new grid spacing
-    # δK = 0.005  # spacings n*δK = 0.15–0.3 not relevant for rs = 1.0 => reduce δK by half
+    δK = 0.01
 
     # We estimate the derivative wrt k using grid points kgrid[ikF] and kgrid[ikF + idk]
-    # idks = 1:10
-    # idks = -15:15
-    # idks = 1:15
-    # dks = δK * collect(idks)
     idks = [1, 2, 3]
     dks = δK * [2, 4, 6]
 
@@ -101,8 +98,6 @@ function main()
     local max_stationary_idk
     fig2, ax2 = plt.subplots()
     for mass2 in mass2list
-        # for rs in rslist
-        # mass2 = c1nl_mass2_optima[rs]
         # UEG parameters for MC integration
         loadparam = ParaMC(;
             order=max_order,
@@ -114,24 +109,14 @@ function main()
         )
 
         # Load mass ratio data for each idk
-        # savename_mass = "data/mass_ratio_from_sigma"
-        # savename_zinv = "data/inverse_zfactor"
-        # savename_zapprox = "data/zfactor_approx"
-        # savename_mass = "data/mass_ratio_from_sigma_kF_gridtest"
-        # savename_zinv = "data/inverse_zfactor"
-        #   savename_mass = "data/mass_ratio_from_sigma_gridtest_new"
-        #   savename_zinv = "data/inverse_zfactor_new"
-
-        # Testing ngrid at rs=1
-        savename_mass = "data/mass_ratio_from_sigma_kF_with_factors"
-        savename_zinv = "data/inverse_zfactor_with_factors"
+        savename_mass = "data/mass_ratio"
+        savename_zinv = "data/inverse_zfactor"
 
         local param
         mass_ratios = []
         print("Loading data from $savename_mass...")
         for idk in idks
-            # param, ngrid, kgrid, mass_ratio = jldopen("$savename_mass.jld2", "a+") do f
-            param, ngrid, kgrid, mass_ratio = jldopen("$savename_mass.jld2", "a+") do f
+            ngrid, kgrid, mass_ratio = jldopen("$savename_mass.jld2", "a+") do f
                 key = "$(UEG.short(loadparam))_idk=$(idk)"
                 return f[key]
             end
@@ -140,23 +125,13 @@ function main()
         print("Loading data from $savename_zinv...")
         local zinv
         for idk in idks
-            # param, ngrid, kgrid, zinv = jldopen("$savename_zinv.jld2", "a+") do f
-            param, ngrid, kgrid, zinv = jldopen("$savename_zinv.jld2", "a+") do f
+            ngrid, kgrid, zinv = jldopen("$savename_zinv.jld2", "a+") do f
                 key = "$(UEG.short(loadparam))"
                 return f[key]
             end
         end
-        # print("Loading data from $savename_zapprox...")
-        # local zapprox
-        # for idk in idks
-        #     # param, ngrid, kgrid, zapprox = jldopen("$savename_zapprox.jld2", "a+") do f
-        #     param, ngrid, kgrid, zapprox = jldopen("$savename_zapprox.jld2", "a+") do f
-        #         key = "$(UEG.short(loadparam))"
-        #         return f[key]
-        #     end
-        # end
         println("done!")
-        @assert param.order ≥ max_order
+        @assert loadparam.order ≥ max_order
 
         # Collect first order results
         r1s = [r[2] for r in mass_ratios]
@@ -197,8 +172,13 @@ function main()
             println("max_idk = $max_idk")
             push!(max_idks, max_idk)
         end
-        # max_stationary_idk = minimum(max_idks)
-        max_stationary_idk = 3
+
+        # Choose the largest stationary grid spacing
+        max_stationary_idk = minimum(max_idks)
+
+        # # Choose the largest grid spacing by hand
+        # max_stationary_idk = 3
+
         # max_stationary_idk_1 = max_idks[2]
         # max_stationary_idk_max_order = max_idks[end]
 
@@ -206,7 +186,7 @@ function main()
         println("Total maximum stationary index: $max_stationary_idk")
 
         # Get exact zero-temperature first order (HF) result
-        fock_mass_ratio_ex = mass_ratio_screened_fock(param)
+        fock_mass_ratio_ex = mass_ratio_screened_fock(loadparam)
 
         # Get maximum T=0 compatible index
         max_zt_compatible_idk = 1
@@ -242,13 +222,13 @@ function main()
         # yloc = 0.916
         # ydiv = -0.001
         ### rs = 1, lambda = 1.0 ###
-        xloc = 0.03
-        yloc = 0.97
-        ydiv = -0.003
-        ### rs = 2, lambda = 1.5 ###
         # xloc = 0.03
         # yloc = 0.97
         # ydiv = -0.003
+        ### rs = 2, lambda = 1.5 ###
+        xloc = 0.03
+        yloc = 0.97
+        ydiv = -0.003
         ### rs = 3, lambda = 1.5 ###
         # xloc = 0.04
         # yloc = 0.97675
@@ -281,18 +261,9 @@ function main()
         fig.tight_layout()
         fig.savefig(
             "../../results/effective_mass_ratio/first_order_mass_ratio_vs_dK_" *
-            "rs=$(param.rs)_beta_ef=$(param.beta)_lambda=$(param.mass2)_" *
-            "neval=$(neval)_$(solver)_$(ct_string)_kF_m10.pdf",
-            # "../../results/effective_mass_ratio/first_order_mass_ratio_vs_dK_" *
-            # "rs=$(param.rs)_beta_ef=$(param.beta)_lambda=$(param.mass2)_" *
-            # "neval=$(neval)_$(solver)_$(ct_string)_kF_0p1.pdf",
+            "rs=$(loadparam.rs)_beta_ef=$(loadparam.beta)_lambda=$(loadparam.mass2)_" *
+            "neval=$(neval)_$(solver)_$(ct_string).pdf",
         )
-        # fig.savefig(
-        #     "../../results/effective_mass_ratio/first_order_mass_ratio_vs_dK_" *
-        #     "rs=$(param.rs)_beta_ef=$(param.beta)_lambda=$(param.mass2)_" *
-        #     "neval=$(neval)_$(solver)_$(ct_string)_kF_gridtest_new.pdf",
-        #     # "$(solver)_$(ct_string).pdf",
-        # )
 
         # Plot max order vs δK
         fig, ax = plt.subplots()
@@ -318,17 +289,17 @@ function main()
         # yloc = 0.93
         # ydiv = -0.01
         ### rs = 2, lambda = 1.5 ###
-        # xloc = 0.0325
-        # yloc = 0.93
-        # ydiv = -0.01
+        xloc = 0.0325
+        yloc = 0.93
+        ydiv = -0.01
         ### rs = 3, lambda = 1.5 ###
         # xloc = 0.04
         # yloc = 0.9605
         # ydiv = -0.001
         ### rs = 4, lambda = 1.0 ###
-        xloc = 0.04
-        yloc = 0.9575
-        ydiv = -0.0025
+        # xloc = 0.04
+        # yloc = 0.9575
+        # ydiv = -0.0025
         ### rs = 5, lambda = 0.875 ###
         # xloc = 0.04
         # yloc = 0.97
@@ -354,11 +325,8 @@ function main()
         fig.tight_layout()
         fig.savefig(
             "../../results/effective_mass_ratio/mass_ratio_N=$(max_order)_vs_dK_" *
-            "rs=$(param.rs)_beta_ef=$(param.beta)_lambda=$(param.mass2)_" *
-            "neval=$(neval)_$(solver)_$(ct_string)_kF_m10.pdf",
-            # "../../results/effective_mass_ratio/mass_ratio_N=$(max_order)_vs_dK_" *
-            # "rs=$(param.rs)_beta_ef=$(param.beta)_lambda=$(param.mass2)_" *
-            # "neval=$(neval)_$(solver)_$(ct_string)_kF_0p1.pdf",
+            "rs=$(loadparam.rs)_beta_ef=$(loadparam.beta)_lambda=$(loadparam.mass2)_" *
+            "neval=$(neval)_$(solver)_$(ct_string).pdf",
         )
 
         mass_val = round(mass_ratios[max_stationary_idk][end].val; digits=4)
@@ -387,8 +355,8 @@ function main()
                     stdevs;
                     capsize=4,
                     zorder=10 * idk,
-                    label="\$\\lambda = $(mass2)\\epsilon_{\\mathrm{Ry}}\$",
-                    # label="\$\\lambda = $(mass2),\,\$ $(scheme_str)\$\\delta K = $(dks[idk]) k_F\$",
+                    # label="\$\\lambda = $(mass2)\\epsilon_{\\mathrm{Ry}}\$",
+                    label="\$\\lambda = $(mass2),\\,\$ $(scheme_str)\$\\delta K = $(dks[idk]) k_F\$",
                 )
             end
         end
@@ -401,6 +369,7 @@ function main()
             xloc,
             yloc,
             "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta), \\delta K = $(dks[max_stationary_idk]) k_F,\$";
+            # "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta), \\delta K = $(dks[max_stationary_idk]) k_F,\$";
             fontsize=14,
         )
         ax.text(
@@ -425,20 +394,12 @@ function main()
         # ax.legend(; loc="lower left")
         fig.tight_layout()
         fig.savefig(
-            "../../results/effective_mass_ratio/effective_mass_ratio_rs=$(param.rs)_beta_ef=$(param.beta)_" *
-            "lambda=$(param.mass2)_neval=$(neval)_$(solver)_$(ct_string)_kF_m10.pdf",
-            # "../../results/effective_mass_ratio/effective_mass_ratio_rs=$(param.rs)_beta_ef=$(param.beta)_" *
-            # "lambda=$(param.mass2)_neval=$(neval)_$(solver)_$(ct_string)_kF_0p1.pdf",
+            "../../results/effective_mass_ratio/effective_mass_ratio_rs=$(loadparam.rs)_beta_ef=$(loadparam.beta)_" *
+            "lambda=$(loadparam.mass2)_neval=$(neval)_$(solver)_$(ct_string).pdf",
         )
-        # fig.savefig(
-        #     "../../results/effective_mass_ratio/effective_mass_ratio_rs=$(param.rs)_beta_ef=$(param.beta)_" *
-        #     "lambda=$(param.mass2)_neval=$(neval)_$(solver)_$(ct_string)_kF_new.pdf",
-        #     # "lambda=$(param.mass2)_neval=$(neval)_$(solver)_$(ct_string)_kF_gridtest.pdf",
-        #     # "lambda=$(param.mass2)_neval=$(neval)_$(solver)_$(ct_string).pdf",
-        # )
 
         fig, ax = plt.subplots()
-        orders = 0:(param.order)
+        orders = 0:(loadparam.order)
         means, stdevs = Measurements.value.(zinv), Measurements.uncertainty.(zinv)
         ax.errorbar(orders, means, stdevs; capsize=4, zorder=10)
         # xloc = 2.0
@@ -466,72 +427,37 @@ function main()
         ax.set_xticklabels(orders)
         fig.tight_layout()
         fig.savefig(
-            "../../results/effective_mass_ratio/inverse_zfactor_rs=$(param.rs)_beta_ef=$(param.beta)_" *
-            "lambda=$(param.mass2)_neval=$(neval)_$(solver)_$(ct_string)_kF_m10.pdf",
-            # "../../results/effective_mass_ratio/inverse_zfactor_rs=$(param.rs)_beta_ef=$(param.beta)_" *
-            # "lambda=$(param.mass2)_neval=$(neval)_$(solver)_$(ct_string)_kF_0p1.pdf",
+            "../../results/effective_mass_ratio/inverse_zfactor_rs=$(loadparam.rs)_beta_ef=$(loadparam.beta)_" *
+            "lambda=$(loadparam.mass2)_neval=$(neval)_$(solver)_$(ct_string).pdf",
         )
-        # fig.savefig(
-        #     "../../results/effective_mass_ratio/inverse_zfactor_rs=$(param.rs)_beta_ef=$(param.beta)_" *
-        #     "lambda=$(param.mass2)_neval=$(neval)_$(solver)_$(ct_string)_kF_new.pdf",
-        #     # "lambda=$(param.mass2)_neval=$(neval)_$(solver)_$(ct_string)_kF.pdf",
-        #     # "lambda=$(param.mass2)_neval=$(neval)_$(solver)_$(ct_string)_kF_gridtest.pdf",
-        #     # "lambda=$(param.mass2)_neval=$(neval)_$(solver)_$(ct_string).pdf",
-        # )
 
-        # fig, ax = plt.subplots()
-        # orders = 0:max_order
-        # means, stdevs = Measurements.value.(zapprox), Measurements.uncertainty.(zapprox)
-        # ax.errorbar(orders, means, stdevs; capsize=4, zorder=10)
-        # xloc = 2.125
-        # yloc = 0.98
-        # ydiv = -0.01
-        # ax.text(
-        #     xloc,
-        #     yloc,
-        #     "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
-        #     fontsize=14,
-        # )
-        # ax.text(
-        #     xloc,
-        #     yloc + ydiv,
-        #     "\$\\lambda = $(mass2)\\epsilon_{\\mathrm{Ry}},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)}\$";
-        #     fontsize=14,
-        # )
-        # ax.set_xlabel("\$N\$")
-        # ax.set_ylabel("\$Z_N \\approx 1 / (Z^{-1})_N\$")
-        # ax.set_xticks(orders)
-        # ax.set_xticklabels(orders)
-        # fig.tight_layout()
-        # fig.savefig(
-        #     "../../results/effective_mass_ratio/zfactor_approximation_rs=$(param.rs)_beta_ef=$(param.beta)_" *
-        #     "lambda=$(param.mass2)_neval=$(neval)_$(solver)_$(ct_string)_kF.pdf",
-        #     # "lambda=$(param.mass2)_neval=$(neval)_$(solver)_$(ct_string)_kF_gridtest.pdf",
-        #     # "lambda=$(param.mass2)_neval=$(neval)_$(solver)_$(ct_string).pdf",
-        # )
     end
     # Print out mass values for each lambda
     for (mass2, mass_val, mass_err) in zip(mass2list, mass_vals, mass_errs)
         println("\$\\lambda = $(mass2)\\epsilon_{\\mathrm{Ry}},\\, m^\\star / m \\approx $(mass_val) \\pm $(mass_err)\$")
     end
     orders = 0:max_order
+    # xloc = 1.5
+    # yloc = 0.995
+    # ydiv = -0.0075
     xloc = 1.5
-    yloc = 0.995
+    yloc = 0.985
     ydiv = -0.0075
     # ydiv = -0.01
     # ydiv = -0.005
     ax2.text(
         xloc,
         yloc,
-        "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
+        "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)}\$";
+        # "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
         fontsize=14,
     )
-    ax2.text(
-        xloc,
-        yloc + ydiv,
-        "\$\\delta K = $(dks[max_stationary_idk]) k_F,\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)}\$";
-        fontsize=14,
-    )
+    # ax2.text(
+    #     xloc,
+    #     yloc + ydiv,
+    #     "\$\\delta K = $(dks[max_stationary_idk]) k_F,\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)}\$";
+    #     fontsize=14,
+    # )
     # ax2.text(
     #     xloc,
     #     yloc + ydiv,
@@ -548,7 +474,7 @@ function main()
     fig2.tight_layout()
     fig2.savefig(
         "../../results/effective_mass_ratio/effective_mass_ratio_rs=$(rs)_beta_ef=$(beta)_" *
-        "lambdas=$(mass2list)_neval=$(neval)_$(solver)_$(ct_string)_kF_m10.pdf",
+        "lambdas=$(mass2list)_neval=$(neval)_$(solver)_$(ct_string).pdf",
     )
     plt.close("all")
     return

@@ -45,8 +45,9 @@ function main()
 
     ### rs = 2 ###
     rs = 2.0
-    lambdas = [1.25, 1.5, 1.625, 1.75, 1.875, 2.0]
-    lambdas5 = nothing
+    lambdas = [0.5, 1.0, 1.25, 1.5, 1.625, 1.75, 1.875, 2.0, 2.5, 3.0]
+    lambdas5 = [1.625, 1.75, 1.875, 2.0]
+    # lambdas5 = nothing
     # # lambdas = [0.1, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
 
     ### rs = 3 ###
@@ -73,13 +74,13 @@ function main()
     # lambdas = [0.1, 0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
 
     min_order = 0
-    max_order = 4
-    # max_order = 5
+    # max_order = 4
+    max_order = 5
 
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
     min_order_plot = 1
-    max_order_plot = 4
-    # max_order_plot = 5
+    # max_order_plot = 4
+    max_order_plot = 5
 
     # Distinguish results with fixed vs re-expanded bare interactions
     intn_str = ""
@@ -180,10 +181,12 @@ function main()
                 param5 = UEG.ParaMC(string(split(key, "_idk=")[1]))
                 return f[key]
             end
-            @assert eachindex(mass_ratio) == Base.OneTo(5)
-            push!(mass_ratios_5_vs_lambda5, mass_ratio[5])
+            println(mass_ratio)
+            # N = 0, 1, 2, 3, 4, 5 => idx5 = 6
+            @assert eachindex(mass_ratio) == Base.OneTo(6)
+            push!(mass_ratios_5_vs_lambda5, mass_ratio[6])
             println("done!")
-            @assert param.order == 5
+            @assert param5.order == 5
         end
     else
         mass_ratios_5_vs_lambda5 = nothing
@@ -203,21 +206,31 @@ function main()
         means = Measurements.value.(mass_ratios_N_vs_lambda[i])
         stdevs = Measurements.uncertainty.(mass_ratios_N_vs_lambda[i])
         # small lambda list at fifth order, full list otherwise
-        ax.plot(
+        ax.errorbar(
             lambdas,
-            means,
-            "o-";
+            means;
+            yerr=stdevs,
+            fmt="o-",
             color="C$(i-2)",
             markersize=3,
             label="\$N=$N\$ ($solver)",
+            zorder=10*i,
         )
-        ax.fill_between(
-            lambdas,
-            (means - stdevs),
-            (means + stdevs);
-            color="C$(i-2)",
-            alpha=0.3,
-        )
+        # ax.plot(
+        #     lambdas,
+        #     means,
+        #     "o-";
+        #     color="C$(i-2)",
+        #     markersize=3,
+        #     label="\$N=$N\$ ($solver)",
+        # )
+        # ax.fill_between(
+        #     lambdas,
+        #     (means - stdevs),
+        #     (means + stdevs);
+        #     color="C$(i-2)",
+        #     alpha=0.3,
+        # )
     end
     if max_order == 5
         # Plot 5th order over small lambda list
@@ -225,14 +238,24 @@ function main()
         means5 = Measurements.value.(mass_ratios_5_vs_lambda5)
         stdevs5 = Measurements.uncertainty.(mass_ratios_5_vs_lambda5)
         # small lambda list at fifth order, full list otherwise
-        ax.plot(lambdas5, means5, "o-"; color="k", markersize=3, label="\$N=5\$ ($solver)")
-        ax.fill_between(
+        ax.errorbar(
             lambdas5,
-            (means5 - stdevs5),
-            (means5 + stdevs5);
+            means5;
+            yerr=stdevs5,
+            fmt="o-",
             color="k",
-            alpha=0.3,
+            markersize=3,
+            label="\$N=5\$ ($solver)",
+            zorder=1000,
         )
+        # ax.plot(lambdas5, means5, "o-"; color="k", markersize=3, label="\$N=5\$ ($solver)")
+        # ax.fill_between(
+        #     lambdas5,
+        #     (means5 - stdevs5),
+        #     (means5 + stdevs5);
+        #     color="k",
+        #     alpha=0.3,
+        # )
     end
 
     xloc = 1.25
@@ -248,13 +271,12 @@ function main()
         ax.set_ylim(0.87, 0.99)
     elseif rs == 2.0
         xloc = 1.35
-        yloc = 0.975
-        ydiv = -0.0075
+        yloc = 0.93
+        ydiv = -0.0125
         # ax.set_xlim(0.48, 2.0)
         # ax.set_xlim(0.75, 2.0)
-        # ax.set_ylim(0.87, 0.99)
-        ax.set_xlim(1.25, 2.0)
-        ax.set_ylim(0.93, 0.98)
+        ax.set_xlim(0.45, 3.05)
+        ax.set_ylim(0.87, 1.0)
     elseif rs == 3.0
         yloc = 1.0375
         ydiv = -0.02
