@@ -128,7 +128,7 @@ function main()
                     @warn("replacing existing data for $key")
                     delete!(f, key)
                 end
-                f[key] = (orders, para, ngrid, kgrid, sigma)
+                f[key] = (orders, ngrid, kgrid, sigma)
                 return
             end
             println("done!")

@@ -248,13 +248,13 @@ function main()
         ax.set_ylim(0.87, 0.99)
     elseif rs == 2.0
         xloc = 1.35
-        yloc = 0.9775
-        ydiv = -0.0125
+        yloc = 0.975
+        ydiv = -0.0075
         # ax.set_xlim(0.48, 2.0)
         # ax.set_xlim(0.75, 2.0)
         # ax.set_ylim(0.87, 0.99)
         ax.set_xlim(1.25, 2.0)
-        ax.set_ylim(0.8, 0.99)
+        ax.set_ylim(0.93, 0.98)
     elseif rs == 3.0
         yloc = 1.0375
         ydiv = -0.02
@@ -286,7 +286,7 @@ function main()
     if rs == 1.0
         # ax.axvline(1.0; linestyle="--", color="dimgray", label="\$\\lambda^\\star = 1\$")
     elseif rs == 2.0
-        ax.axvline(1.0; linestyle="--", color="dimgray", label="\$\\lambda^\\star = 1\$")
+        # ax.axvline(1.0; linestyle="--", color="dimgray", label="\$\\lambda^\\star = 1\$")
     elseif rs == 3.0
         # ax.axvline(1.0; linestyle="--", color="dimgray", label="\$\\lambda^\\star = 1\$")
     elseif rs == 4.0

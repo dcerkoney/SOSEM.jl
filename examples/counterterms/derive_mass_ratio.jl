@@ -22,8 +22,8 @@ beta = [40.0]
 # mass2 = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
 
 ### rs = 2 ###
-# rs = [2.0]
-# mass2 = [1.25, 1.5, 1.625, 1.75, 1.875, 2.0]
+rs = [2.0]
+mass2 = [1.25, 1.5, 1.625, 1.75, 1.875, 2.0]
 
 # rs = [2.0]
 # mass2 = [1.75]
@@ -322,7 +322,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         has_taylor_factors::Bool = f["has_taylor_factors"]
         for key in keys(f)
             key == "has_taylor_factors" && continue
-            loadpara = UEG.ParaMC(key)
+            loadpara = UEG.ParaMC(string(split(key, "_idk=")[1]))
             if UEG.paraid(loadpara) == UEG.paraid(para)
                 htf_str = has_taylor_factors ? "with" : "without"
                 println("Found data $(htf_str) Taylor factors...")

@@ -134,7 +134,7 @@ function main()
             println("Current working directory: $(pwd())")
             println("Saving data to JLD2...")
             jldopen(
-                "data/data_mass_ratio$(ct_string)_kF_with_factors.jld2",
+                "data/data_mass_ratio.jld2",
                 "a+";
                 compress=true,
             ) do f
@@ -148,7 +148,7 @@ function main()
                     @warn("replacing existing data for $key")
                     delete!(f, key)
                 end
-                f[key] = (orders, para, ngrid, kgrid, sigma)
+                f[key] = (ngrid, kgrid, sigma)
                 return
             end
             println("done!")
