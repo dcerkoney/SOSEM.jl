@@ -56,7 +56,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 5e10
+    neval = 1e8
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -115,14 +115,14 @@ function main()
         savename =
             "results/data/c1nl_k=$(extK)_n=$(param.order)_rs=$(param.rs)_" *
             "beta_ef=$(param.beta)_lambda=$(param.mass2)_" *
-            "neval=$(neval)_$(intn_str)$(solver)$(ct_string)"
+            "neval=$(neval)_$(intn_str)$(solver)$(ct_string)_test"
         jldopen("$savename.jld2", "a+"; compress=true) do f
             key = "$(short(param))"
             if haskey(f, key)
                 @warn("replacing existing data for $key")
                 delete!(f, key)
             end
-            return f[key] = (settings, param, extK, partitions, res)
+            return f[key] = (settings, extK, partitions, res)
         end
     end
 end
