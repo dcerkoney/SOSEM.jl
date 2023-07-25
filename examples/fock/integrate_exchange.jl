@@ -345,6 +345,10 @@ function main()
     # # Dimensionless k-grid
     k_kf_grid = kgrid / param.kF
 
+    # # Reduced number of kpoint
+    # kgrid = kgrid[k_kf_grid .≤ 2.1]
+    # k_kf_grid = k_kf_grid[k_kf_grid .≤ 2.1]
+
     # Build diagram/expression trees for the exchange self-energy to order
     # ξᴺ in the renormalized perturbation theory (includes CTs in μ and λ)
     partitions, diagparams, diagtrees, exprtrees =
@@ -386,15 +390,28 @@ function main()
     # Save to JLD2 on main thread
     if !isnothing(res)
         savename =
-            "results/data/sigma_x_n=$(param.order)_rs=$(param.rs)_" *
-            "beta_ef=$(param.beta)_lambda=$(param.mass2)_neval=$(neval)_$(solver)$(ct_string)"
+            "results/data/exchange/sigma_x_n=$(param.order)_rs=$(param.rs)_" *
+            "beta_ef=$(param.beta)_lambda=$(param.mass2)_neval=$(neval)_$(solver)$(ct_string)_new"
         jldopen("$savename.jld2", "a+"; compress=true) do f
             key = "$(UEG.short(param))"
             if haskey(f, key)
                 @warn("replacing existing data for $key")
                 delete!(f, key)
             end
-            return f[key] = (orders, param, kgrid, partitions, res)
+            # Convert result to dictionary
+            datadict = Dict{eltype(partitions),Any}()
+            if length(diagparams) == 1
+                avg, std = res.mean, res.stdev
+                data = measurement.(avg, std)
+                datadict[partitions[1]] = data
+            else
+                for o in eachindex(diagparams)
+                    avg, std = res.mean[o], res.stdev[o]
+                    data = measurement.(avg, std)
+                    datadict[partitions[o]] = data
+                end
+            end
+            return f[key] = (orders, kgrid, partitions, datadict)
         end
         # Test the Fock self-energy
         if 1 in orders
