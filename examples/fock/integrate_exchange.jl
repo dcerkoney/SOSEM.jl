@@ -345,9 +345,9 @@ function main()
     # # Dimensionless k-grid
     k_kf_grid = kgrid / param.kF
 
-    # Reduced number of kpoint
-    k_kf_grid = k_kf_grid[k_kf_grid .≤ 2.1]
-    kgrid = kgrid[k_kf_grid .≤ 2.1]
+    # # Reduced number of kpoint
+    # kgrid = kgrid[k_kf_grid .≤ 2.1]
+    # k_kf_grid = k_kf_grid[k_kf_grid .≤ 2.1]
 
     # Build diagram/expression trees for the exchange self-energy to order
     # ξᴺ in the renormalized perturbation theory (includes CTs in μ and λ)
@@ -398,8 +398,8 @@ function main()
                 @warn("replacing existing data for $key")
                 delete!(f, key)
             end
-	    # Convert result to dictionary
-	    datadict = Dict{eltype(partitions),Any}()
+            # Convert result to dictionary
+            datadict = Dict{eltype(partitions),Any}()
             if length(diagparams) == 1
                 avg, std = res.mean, res.stdev
                 data = measurement.(avg, std)
