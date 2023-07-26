@@ -26,8 +26,11 @@ function main()
     # rs = [2.0]
     # mass2 = [1.5, 1.75, 2.0]
 
-    rs = [1.0]
-    mass2 = [3.5]
+    #rs = [1.0]
+    #mass2 = [3.5]
+
+    rs = [4.0]
+    mass2 = [0.875, 1.0, 1.125, 1.25, 1.5]
 
     # Momentum spacing for finite-difference derivative of Sigma (in units of para.kF)
     δK = 0.01
