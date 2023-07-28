@@ -14,26 +14,17 @@ elseif haskey(ENV, "SOSEM_HOME")
     cd("$(ENV["SOSEM_HOME"])/examples/counterterms")
 end
 
+const lambda_opt = Dict(
+    1.0 => [2.0,   2.0,   2.0,  2.0,  2.0],
+    2.0 => [1.75,  1.75,  1.75, 1.75, 1.75],
+    4.0 => [0.625, 0.625, 0.75, 1.0,  1.125],
+)
+
 function main()
     # Physical params matching data for SOSEM observables
-    order = [5]
-    beta = [40.0]
-
-    # rs = [5.0]
-    # mass2 = [0.5, 0.625, 0.875, ...]
-
-    rs = [4.0]
-    mass2 = [1.5]
-
-    # rs = [3.0]
-    # mass2 = [1.25]
-
-    # rs = [2.0]
-    # mass2 = [1.75, 2.5]
-
-    # rs = [1.0]
-    # mass2 = [1.0, 1.75]
-    # mass2 = [3.5]
+    max_orders = [2, 3, 4, 5] # calculate orders 1 & 2 together, and run the rest separately
+    beta = 40.0
+    rs = 4.0
 
     # Total number of MCMC evaluations
     neval = 1e11
@@ -55,12 +46,15 @@ function main()
     end
 
     # Get self-energy data needed for the chemical potential and Z-factor measurements
-    for (_rs, _mass2, _beta, _order) in Iterators.product(rs, mass2, beta, order)
+    @assert haskey(lambda_opt, rs) "Lambda optima for rs = $(rs) not found!"
+    lambdas = lambda_opt[rs]
+    for order in max_orders
+        mass2 = lambdas[order]
         para = UEG.ParaMC(;
-            order=_order,
-            rs=_rs,
-            beta=_beta,
-            mass2=_mass2,
+            order=order,
+            rs=rs,
+            beta=beta,
+            mass2=mass2,
             isDynamic=false,
             isFock=isFock,
             dim=3,
@@ -75,8 +69,8 @@ function main()
         ngrid = [-1, 0]  # for improved finite-temperature effects
 
         # Build diagrams
-        orders = 1:_order
-        n_min, n_max = 1, _order
+        orders = 1:order
+        n_min, n_max = 1, order
         partition = UEG_MC.counterterm_partitions(
             n_min,
             n_max;
