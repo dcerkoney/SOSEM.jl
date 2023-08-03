@@ -393,6 +393,11 @@ function main()
             "results/data/exchange/sigma_x_n=$(param.order)_rs=$(param.rs)_" *
             "beta_ef=$(param.beta)_lambda=$(param.mass2)_neval=$(neval)_$(solver)$(ct_string)_new"
         jldopen("$savename.jld2", "a+"; compress=true) do f
+            if haskey(f, "has_taylor_factors")
+                @assert f["has_taylor_factors"] == false
+            else
+                f["has_taylor_factors"] = false
+            end
             key = "$(UEG.short(param))"
             if haskey(f, key)
                 @warn("replacing existing data for $key")
@@ -400,12 +405,12 @@ function main()
             end
             # Convert result to dictionary
             datadict = Dict{eltype(partitions),Any}()
-            if length(diagparams) == 1
+            if length(partitions) == 1
                 avg, std = res.mean, res.stdev
                 data = measurement.(avg, std)
                 datadict[partitions[1]] = data
             else
-                for o in eachindex(diagparams)
+                for o in eachindex(partitions)
                     avg, std = res.mean[o], res.stdev[o]
                     data = measurement.(avg, std)
                     datadict[partitions[o]] = data

@@ -7,14 +7,42 @@ using LsqFit
 using Measurements
 using Polynomials
 using PyCall
+using PyPlot
 using SOSEM
+
+# For style "science"
+@pyimport scienceplots
 
 # For saving/loading numpy data
 @pyimport numpy as np
-@pyimport matplotlib.pyplot as plt
+@pyimport scipy.interpolate as interp
+
+# @pyimport matplotlib.pyplot as plt
+# @pyimport mpl_toolkits.axes_grid1.inset_locator as il
 
 # Dimensionless expansion parameter α for the UEG (powers of αrₛ)
 const alpha = (4 / 9π)^(1 / 3)
+
+# Vibrant qualitative colour scheme from https://personal.sron.nl/~pault/
+const cdict = Dict([
+    "orange" => "#EE7733",
+    "blue" => "#0077BB",
+    "cyan" => "#33BBEE",
+    "magenta" => "#EE3377",
+    "red" => "#CC3311",
+    "teal" => "#009988",
+    "grey" => "#BBBBBB",
+]);
+
+function spline(x, y, e)
+    # generate knots with spline without constraints
+    w = 1.0 ./ e
+    spl = interp.UnivariateSpline(x, y; w=w, k=3)
+    __x = collect(LinRange(x[1], x[end], 1000))
+    # __x = collect(LinRange(x[1], x[end], 100))
+    yfit = spl(__x)
+    return __x, yfit
+end
 
 """
 Exact expression for the Fock self-energy
@@ -74,6 +102,26 @@ function main()
         cd(ENV["SOSEM_HOME"])
     end
 
+    # Setup plot styles
+    style = PyPlot.matplotlib."style"
+    style.use(["science", "std-colors"])
+    color = [
+        "k",
+        cdict["orange"],
+        cdict["blue"],
+        cdict["cyan"],
+        cdict["magenta"],
+        cdict["red"],
+        # cdict["teal"],
+    ]
+    # color = [cdict["blue"], cdict["orange"], "green", cdict["red"], "black"]
+    rcParams = PyPlot.PyDict(PyPlot.matplotlib."rcParams")
+
+    # Use LaTex fonts for plots
+    rcParams["font.size"] = 16
+    rcParams["mathtext.fontset"] = "cm"
+    # rcParams["font.family"] = "Times New Roman"
+
     rs = 2.0
     beta = 40.0
     mass2 = 0.4
@@ -92,7 +140,8 @@ function main()
     max_order_plot = 5
 
     # Save total results
-    save = true
+    save = false
+    # save = true
 
     # Distinguish results with fixed vs re-expanded bare interactions
     intn_str = ""
@@ -120,7 +169,7 @@ function main()
         max_together = max_order
     end
     savename =
-        "results/data/sigma_x_n=$(max_together)_rs=$(rs)_" *
+        "results/data/exchange/sigma_x_n=$(max_together)_rs=$(rs)_" *
         "beta_ef=$(beta)_lambda=$(mass2)_neval=$(neval123)_$(solver)$(ct_string)"
     orders, param, kgrid, partitions, res = jldopen("$savename.jld2", "a+") do f
         key = "$(UEG.short(loadparam))"
@@ -128,7 +177,7 @@ function main()
     end
     if max_order == 4
         savename =
-            "results/data/sigma_x_n=$(max_order)_rs=$(rs)_" *
+            "results/data/exchange/sigma_x_n=$(max_order)_rs=$(rs)_" *
             "beta_ef=$(beta)_lambda=$(mass2)_neval=$(neval4)_$(solver)$(ct_string)"
         orders4, param4, kgrid4, partitions4, res4 = jldopen("$savename.jld2", "a+") do f
             key = "$(UEG.short(loadparam))"
@@ -218,8 +267,8 @@ function main()
 
     if save
         savename =
-            "results/data/rs=$(param.rs)_beta_ef=$(param.beta)_" *
-            "lambda=$(param.mass2)_$(intn_str)$(solver)$(ct_string)"
+            "results/data/processed/rs=$(param.rs)/rs=$(param.rs)_beta_ef=$(param.beta)_" *
+            "lambda=$(param.mass2)_$(intn_str)$(solver)$(ct_string)_archive1"
         f = jldopen("$savename.jld2", "a+"; compress=true)
         # NOTE: no bare result for c1b observable (accounted for in c1b0)
         for N in min_order_plot:max_order
@@ -238,14 +287,11 @@ function main()
         end
     end
 
-    # Use LaTex fonts for plots
-    plt.rc("text"; usetex=true)
-    plt.rc("font"; family="serif")
-
     # Plot for each aggregate order
+    fig1 = figure(; figsize=(6, 4))
+    ax1 = fig1.axes[1]
 
     # Σₓ(k) / eTF (dimensionless moment)
-    fig1, ax1 = plt.subplots()
     # Compare result to exact non-dimensionalized Fock self-energy (-F(k / kF))
     ax1.plot(k_kf_grid, -UEG_MC.lindhard.(k_kf_grid), "k"; label="\$N=1\$ (exact, \$T=0\$)")
     for (i, N) in enumerate(min_order:max_order_plot)
@@ -333,7 +379,9 @@ function main()
     Ek_over_eTF_quad = Ek_quad / eTF
     ikF_quad = findall(x -> x == 1.0, k_kf_grid_quad)
 
-    fig12, ax12 = plt.subplots()
+    fig12 = figure(; figsize=(6, 4))
+    ax12 = fig12.axes[1]
+
     k_kf_dense = np.linspace(0.0, 2.0; num=600)
     ax12.axhline(
         1.0 ./ fock_mass_ratio_k0(param);
@@ -360,7 +408,8 @@ function main()
 
     # Moment quasiparticle energy
     # Extract effective masses from quadratic fits to data for k ≤ kF
-    fig2, ax2 = plt.subplots()
+    fig2 = figure(; figsize=(6, 4))
+    ax2 = fig2.axes[1]
 
     # First order from exact expressions
     sigma_fock_exact_quad = fock_self_energy_exact(kgrid_quad, param)

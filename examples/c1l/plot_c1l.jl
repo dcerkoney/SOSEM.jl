@@ -7,13 +7,32 @@ using Interpolations
 using JLD2
 using Measurements
 using PyCall
+using PyPlot
 using SOSEM
+
+# For style "science"
+@pyimport scienceplots
 
 # For saving/loading numpy data
 @pyimport numpy as np
-@pyimport matplotlib.pyplot as plt
+@pyimport scipy.interpolate as interp
+
+# @pyimport matplotlib.pyplot as plt
+# @pyimport mpl_toolkits.axes_grid1.inset_locator as il
+
+# Vibrant qualitative colour scheme from https://personal.sron.nl/~pault/
+const cdict = Dict([
+    "orange" => "#EE7733",
+    "blue" => "#0077BB",
+    "cyan" => "#33BBEE",
+    "magenta" => "#EE3377",
+    "red" => "#CC3311",
+    "teal" => "#009988",
+    "grey" => "#BBBBBB",
+]);
 
 const vzn_dir = "results/vzn_paper"
+const parafilename = "examples/counterterms/data/para.csv"
 
 function load_csv(filename)
     # assumes csv format: (x, y)
@@ -67,6 +86,14 @@ function main()
     # max_order = maximum(orders)
     min_order_plot = 1
     max_order_plot = 5
+    n_min = 1
+
+    # We measure the 5th order (and above) individually
+    if max_order > 4
+        max_together = 4
+    else
+        max_together = max_order
+    end
 
     # Settings
     alpha = 3.0
@@ -83,23 +110,30 @@ function main()
     # Remove Fock insertions?
     isFock = false
 
-    # Plot the local moment vs N and compare with VZN QMC data?
-    plot = true
-
     # Save to JLD2?
-    # save = false
-    save = true
+    save = false
+    # save = true
 
     # UEG parameters for MC integration
-    loadparam = ParaMC(;
-        order=max_order,
+    param = ParaMC(;
+        order=max_together,
         rs=1.0,
         beta=40.0,
         mass2=1.0,
         isDynamic=false,
         isFock=isFock,  # remove Fock insertions
     )
-    @debug "β * EF = $(loadparam.beta), β = $(loadparam.β), EF = $(loadparam.EF)"
+    if max_order == 5
+        param5 = ParaMC(;
+            order=5,
+            rs=1.0,
+            beta=40.0,
+            mass2=1.0,
+            isDynamic=false,
+            isFock=isFock,  # remove Fock insertions
+        )
+    end
+    @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)"
 
     # Distinguish results with different counterterm schemes used in the original run
     ct_string = (renorm_mu || renorm_lambda) ? "_with_ct" : ""
@@ -115,28 +149,23 @@ function main()
     end
 
     # Load the raw data
-    if max_order > 4
-        max_together = 4
-    else
-        max_together = max_order
-    end
     savename =
-        "results/data/c1l_n=$(max_together)_rs=$(loadparam.rs)_beta_ef=$(loadparam.beta)_" *
-        "lambda=$(loadparam.mass2)_neval=$(neval)_$(solver)$(ct_string)"
+        "results/data/c1l/c1l_n=$(max_together)_rs=$(param.rs)_beta_ef=$(param.beta)_" *
+        "lambda=$(param.mass2)_neval=$(neval)_$(solver)$(ct_string)"
     println(savename)
-    orders, param, partitions, res = jldopen("$savename.jld2", "a+") do f
-        key = "$(UEG.short(loadparam))"
+    orders, partitions, res = jldopen("$savename.jld2", "a+") do f
+        key = "$(UEG.short(param))"
         return f[key]
     end
     println("done 4!")
     if max_order >= 5
         # 5th order 
         savename =
-            "results/data/c1l_n=5_rs=$(loadparam.rs)_beta_ef=$(loadparam.beta)_" *
-            "lambda=$(loadparam.mass2)_neval=$(neval5)_$(solver)$(ct_string)"
+            "results/data/c1l/c1l_n=5_rs=$(param.rs)_beta_ef=$(param.beta)_" *
+            "lambda=$(param.mass2)_neval=$(neval5)_$(solver)$(ct_string)"
         println("Loading 5th order data from $savename...")
-        orders5, param5, partitions5, res5 = jldopen("$savename.jld2", "a+") do f
-            key = "$(UEG.short(loadparam))"
+        orders5, partitions5, res5 = jldopen("$savename.jld2", "a+") do f
+            key = "$(UEG.short(param5))"
             return f[key]
         end
         println("done!")
@@ -178,21 +207,28 @@ function main()
     end
 
     # Load counterterm data
-    δμ = load_mu_counterterm(
-        param;
-        max_order=max_order,
-        parafilename="examples/counterterms/data/para.csv",
-        ct_filename="examples/counterterms/data/data_Z$(ct_string_short).jld2",
-        isFock=isFock,
-        verbose=1,
-    )
+    zparam = param
+    zparam.order = max_order - n_min
+    # mu, sw = CounterTerm.getSigma(zparam; parafile=parafilename, root_dir=ENV["SOSEM_HOME"])
+    # _, δμ, _ = CounterTerm.sigmaCT(max_order, mu, sw)
+
+    # δμ = load_mu_counterterm(
+    #     zparam;
+    #     max_order=max_order,
+    #     parafilename="examples/counterterms/data/para.csv",
+    #     ct_filename="examples/counterterms/data/data_Z.jld2",
+    #     # ct_filename="examples/counterterms/data/data_Z$(ct_string_short).jld2",
+    #     isFock=isFock,
+    #     verbose=1,
+    # )
+    δμ = UEG_MC.load_mu_counterterm(zparam)
     println("Computed δμ: ", δμ)
 
     # Reexpand merged data in powers of μ
     c1l = UEG_MC.chemicalpotential_renormalization(
         merged_data,
         δμ;
-        n_min=1,
+        n_min=n_min,
         min_order=min_order,
         max_order=max_order,
     )
@@ -204,8 +240,9 @@ function main()
     # Save to JLD2
     if save
         savename =
-            "results/data/rs=$(param.rs)_beta_ef=$(param.beta)_" *
-            "lambda=$(param.mass2)_$(solver)$(ct_string)"
+            "results/data/processed/rs=1.0/rs=$(param.rs)_beta_ef=$(param.beta)_" *
+            "lambda=$(param.mass2)_$(solver)$(ct_string)_archive1"
+        # "lambda=$(param.mass2)_$(solver)$(ct_string)"
         # "lambda=$(param.mass2)_$(intn_str)$(solver)$(ct_string)"
         f = jldopen("$savename.jld2", "a+"; compress=true)
         for o in all_orders
@@ -240,6 +277,7 @@ function main()
     for o in sort(collect(keys(c1l_total)))
         println(" • N = $o:\t$(c1l_total[o][1])")
     end
+    println(c1l_total)
 
     if min_order == 1
         # calc = data[(1, 0, 0)][1]
@@ -252,117 +290,146 @@ function main()
         # @assert zscore ≤ 20
     end
 
-    if plot
-        # Use LaTex fonts for plots
-        plt.rc("text"; usetex=true)
-        plt.rc("font"; family="serif")
+    # Setup plot styles
+    style = PyPlot.matplotlib."style"
+    style.use(["science", "std-colors"])
+    color = [
+        cdict["orange"],
+        cdict["blue"],
+        cdict["cyan"],
+        cdict["magenta"],
+        cdict["red"],
+        cdict["teal"],
+    ]
+    # color = [cdict["blue"], cdict["orange"], "green", cdict["red"], "black"]
+    rcParams = PyPlot.PyDict(PyPlot.matplotlib."rcParams")
 
-        # Get RPA value of the local moment at this rs
-        k_kf_grid_rpa, c1l_rpa_over_rs2 = load_csv("$vzn_dir/c1l_over_rs2_rpa.csv")
-        P = sortperm(k_kf_grid_rpa)
-        c1l_rpa_over_rs2_interp = linear_interpolation(
-            k_kf_grid_rpa[P],
-            c1l_rpa_over_rs2[P];
-            extrapolation_bc=Line(),
-        )
-        eTF = param.qTF^2 / (2 * param.me)
-        c1l_rpa = c1l_rpa_over_rs2_interp(param.rs) * param.rs^2
-        c1l_rpa_over_eTF2 = c1l_rpa * (param.EF / eTF)^2
-        println("C⁽¹⁾ˡ (RPA, rs = $(param.rs)): $c1l_rpa")
-        println("C⁽¹⁾ˡ / eTF² (RPA, rs = $(param.rs)): $c1l_rpa_over_eTF2")
+    # Use LaTex fonts for plots
+    rcParams["font.size"] = 16
+    rcParams["mathtext.fontset"] = "cm"
+    # rcParams["font.family"] = "Times New Roman"
 
-        # Get QMC value of the local moment at this rs
-        k_kf_grid_qmc, c1l_qmc_over_rs2 = load_csv("$vzn_dir/c1l_over_rs2_qmc.csv")
-        P = sortperm(k_kf_grid_qmc)
-        c1l_qmc_over_rs2_interp = linear_interpolation(
-            k_kf_grid_qmc[P],
-            c1l_qmc_over_rs2[P];
-            extrapolation_bc=Line(),
-        )
-        eTF = param.qTF^2 / (2 * param.me)
-        c1l_qmc = c1l_qmc_over_rs2_interp(param.rs) * param.rs^2
-        c1l_qmc_over_eTF2 = c1l_qmc * (param.EF / eTF)^2
-        println("C⁽¹⁾ˡ (QMC, rs = $(param.rs)): $c1l_qmc")
-        println("C⁽¹⁾ˡ / eTF² (QMC, rs = $(param.rs)): $c1l_qmc_over_eTF2")
+    figure(; figsize=(6, 4))
 
-        # Plot the local moment vs order N and compare to QMC value
-        fig, ax = plt.subplots()
-        # Ns = orders .+ 1
-        Ns = all_orders .+ 1
-        ax.axhline(c1l_qmc_over_eTF2; color="k", linestyle="--", label="QMC")
-        marker = "o-"
-        ax.plot(
-            Ns,
-            c1l_means,
-            marker;
-            color="C0",
-            markersize=4,
-            label="RPT ($solver, \$N_{eval} = $neval\$)",
+    # Get RPA value of the local moment at this rs
+    k_kf_grid_rpa, c1l_rpa_over_rs2 = load_csv("$vzn_dir/c1l_over_rs2_rpa.csv")
+    P = sortperm(k_kf_grid_rpa)
+    c1l_rpa_over_rs2_interp =
+        linear_interpolation(k_kf_grid_rpa[P], c1l_rpa_over_rs2[P]; extrapolation_bc=Line())
+    eTF = param.qTF^2 / (2 * param.me)
+    c1l_rpa = c1l_rpa_over_rs2_interp(param.rs) * param.rs^2
+    c1l_rpa_over_eTF2 = c1l_rpa * (param.EF / eTF)^2
+    println("C⁽¹⁾ˡ (RPA, rs = $(param.rs)): $c1l_rpa")
+    println("C⁽¹⁾ˡ / eTF² (RPA, rs = $(param.rs)): $c1l_rpa_over_eTF2")
+
+    # Get QMC value of the local moment at this rs
+    k_kf_grid_qmc, c1l_qmc_over_rs2 = load_csv("$vzn_dir/c1l_over_rs2_qmc.csv")
+    P = sortperm(k_kf_grid_qmc)
+    c1l_qmc_over_rs2_interp =
+        linear_interpolation(k_kf_grid_qmc[P], c1l_qmc_over_rs2[P]; extrapolation_bc=Line())
+    eTF = param.qTF^2 / (2 * param.me)
+    c1l_qmc = c1l_qmc_over_rs2_interp(param.rs) * param.rs^2
+    c1l_qmc_over_eTF2 = c1l_qmc * (param.EF / eTF)^2
+    println("C⁽¹⁾ˡ (QMC, rs = $(param.rs)): $c1l_qmc")
+    println("C⁽¹⁾ˡ / eTF² (QMC, rs = $(param.rs)): $c1l_qmc_over_eTF2")
+
+    # Plot the local moment vs order N and compare to QMC value
+    # Ns = orders .+ 1
+    Ns = all_orders .+ 1
+    axhline(c1l_qmc_over_eTF2; color="k", linestyle="--", label="QMC")
+    # marker = "o-"
+    # plot(
+    #     Ns,
+    #     c1l_means,
+    #     marker;
+    #     color="C0",
+    #     markersize=4,
+    #     label="RPT ($solver, \$N_\\mathrm{eval} = $neval\$)",
+    # )
+    # fill_between(
+    #     Ns,
+    #     c1l_means - c1l_stdevs,
+    #     c1l_means + c1l_stdevs;
+    #     color="C0",
+    #     alpha=0.4,
+    # )
+    errorbar(
+        Ns,
+        c1l_means;
+        yerr=c1l_stdevs,
+        color=cdict["blue"],
+        capsize=2,
+        markersize=2,
+        fmt="o-",
+        # markerfacecolor="none",
+        label="RPT (\$N_\\mathrm{eval} = $neval\$)",
+        # label="RPT ($solver, \$N_\\mathrm{eval} = $neval\$)",
+        zorder=10,
+    )
+    # Darken last point (OOM lower eval)
+    if max_order == 5
+        errorbar(
+            Ns[end],
+            c1l_means[end];
+            yerr=c1l_stdevs[end],
+            color=cdict["cyan"],
+            capsize=2,
+            markersize=2,
+            fmt="o",
+            # markerfacecolor="none",
+            label="RPT (\$N_\\mathrm{eval} = $neval5\$)",
+            # label="RPT ($solver, \$N_\\mathrm{eval} = $neval5\$)",
+            zorder=10,
         )
-        ax.fill_between(
-            Ns,
-            c1l_means - c1l_stdevs,
-            c1l_means + c1l_stdevs;
-            color="C0",
-            alpha=0.4,
-        )
-        # Darken last point (OOM lower eval)
-        if max_order == 5
-            ax.plot(
-                Ns[end],
-                c1l_means[end],
-                marker;
-                color="mediumblue",
-                markersize=4,
-                label="RPT ($solver, \$N_{eval} = $neval5\$)",
-            )
-            ax.fill_between(
-                Ns[end],
-                c1l_means[end] - c1l_stdevs[end],
-                c1l_means[end] + c1l_stdevs[end];
-                color="mediumblue",
-                alpha=0.4,
-            )
-        end
-        ax.legend(; loc="best")
-        ax.set_xticks(Ns)
-        ax.set_xlim(minimum(Ns), maximum(Ns))
-        # ax.set_ylim(nothing, 1.25)
-        ax.set_xlabel("Perturbation order \$N\$")
-        # ax.set_ylabel("\$C^{(1)l} / \\epsilon^2_{\\mathrm{TF}}\$")
-        ax.set_ylabel("\$C^{(1)l} \\,/\\, {\\epsilon}^{\\hspace{0.1em}2}_{\\mathrm{TF}}\$")
-        # ax.set_ylabel("\$S(q)\$")
-        # xloc = 1.5
-        xloc = 3.5
-        yloc = 1.04
-        ydiv = -0.035
-        ax.text(
-            xloc,
-            yloc,
-            "\$r_s = $(param.rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(param.beta),\\, \\lambda = $(param.mass2)\\epsilon_{\\mathrm{Ry}}\$";
-            fontsize=14,
-        )
-        ax.text(
-            xloc,
-            yloc + ydiv,
-            # yloc + 2 * ydiv,
-            "\${\\epsilon}_{\\mathrm{TF}}\\equiv\\frac{\\hbar^2 q^2_{\\mathrm{TF}}}{2 m_e}=2\\pi\\mathcal{N}_F\$ (a.u.)";
-            fontsize=12,
-        )
-        # ax.text(
-        #     xloc,
-        #     yloc + ydiv,
-        #     # "\$\\lambda = $(param.mass2)\\epsilon_{\\mathrm{Ry}}\$";
-        #     # "\$\\lambda = $(param.mass2)\\epsilon_{\\mathrm{Ry}},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)}\$";
-        #     fontsize=14,
+        # fill_between(
+        #     Ns[(end - 1):end],
+        #     c1l_means[(end - 1):end] - c1l_stdevs[(end - 1):end],
+        #     c1l_means[(end - 1):end] + c1l_stdevs[(end - 1):end];
+        #     color="mediumblue",
+        #     alpha=0.4,
         # )
-        fig.tight_layout()
-        fig.savefig(
-            "results/c1l/c1l_N=$(max_order + 1)_rs=$(param.rs)_beta_ef=$(param.beta)_" *
-            "lambda=$(param.mass2)_neval=$(neval)_$(neval5)_$(solver)$(ct_string).pdf",
-        )
-        plt.close("all")
     end
+    legend(; loc="lower right")
+    # legend(; loc="best")
+    xticks(Ns)
+    # xlim(minimum(Ns), maximum(Ns))
+    xlim(1.8, 6.2)
+    # ylim(nothing, 1.25)
+    xlabel("Perturbation order \$N\$")
+    # ylabel("\$C^{(1)l} / \\epsilon^2_{\\mathrm{TF}}\$")
+    ylabel("\$C^{(1)l} \\,/\\, {\\epsilon}^{\\hspace{0.1em}2}_{\\mathrm{TF}}\$")
+    # ylabel("\$S(q)\$")
+    # xloc = 1.5
+    xloc = 2.1
+    yloc = 1.14
+    ydiv = -0.035
+    text(
+        xloc,
+        yloc,
+        "\$r_s = $(param.rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(param.beta),\$";
+        fontsize=14,
+    )
+    text(
+        xloc,
+        yloc + ydiv,
+        # yloc + 2 * ydiv,
+        "\$\\lambda = $(param.mass2)\\epsilon_{\\mathrm{Ry}}\$";
+        # "\${\\epsilon}_{\\mathrm{TF}}\\equiv\\frac{\\hbar^2 q^2_{\\mathrm{TF}}}{2 m_e}=2\\pi\\mathcal{N}_F\$ (a.u.)";
+        fontsize=14,
+    )
+    # text(
+    #     xloc,
+    #     yloc + ydiv,
+    #     # "\$\\lambda = $(param.mass2)\\epsilon_{\\mathrm{Ry}}\$";
+    #     # "\$\\lambda = $(param.mass2)\\epsilon_{\\mathrm{Ry}},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)}\$";
+    #     fontsize=14,
+    # )
+    PyPlot.tight_layout()
+    savefig(
+        "results/c1l/c1l_N=$(max_order + 1)_rs=$(param.rs)_beta_ef=$(param.beta)_" *
+        "lambda=$(param.mass2)_neval=$(neval)_$(neval5)_$(solver)$(ct_string).pdf",
+    )
+    close("all")
 
     println("Done!")
     return

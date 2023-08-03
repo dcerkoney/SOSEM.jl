@@ -7,14 +7,93 @@ using LsqFit
 using Measurements
 using Polynomials
 using PyCall
+using PyPlot
 using SOSEM
+
+# For style "science"
+@pyimport scienceplots
 
 # For saving/loading numpy data
 @pyimport numpy as np
-@pyimport matplotlib.pyplot as plt
+@pyimport scipy.interpolate as interp
+
+# @pyimport matplotlib.pyplot as plt
+# @pyimport mpl_toolkits.axes_grid1.inset_locator as il
 
 # Dimensionless expansion parameter α for the UEG (powers of αrₛ)
 const alpha = (4 / 9π)^(1 / 3)
+
+# Vibrant qualitative colour scheme from https://personal.sron.nl/~pault/
+const cdict = Dict([
+    "orange" => "#EE7733",
+    "blue" => "#0077BB",
+    "cyan" => "#33BBEE",
+    "magenta" => "#EE3377",
+    "red" => "#CC3311",
+    "teal" => "#009988",
+    "grey" => "#BBBBBB",
+]);
+
+function spline(x, y, e)
+    # generate knots with spline without constraints
+    w = 1.0 ./ e
+    spl = interp.UnivariateSpline(x, y; w=w, k=3)
+    __x = collect(LinRange(x[1], x[end], 1000))
+    yfit = spl(__x)
+    return __x, yfit
+end
+
+function spline_with_bc(
+    x,
+    y,
+    e;
+    navg_low=2,
+    ncut_low=7,
+    ncut_high=1,
+    # kstart=-1.0,
+    kend=-0.1,
+    kderiv_end=0.06434,
+    left_bc=true,
+    right_bc=true,
+)
+    # yfit = signal.savgol_filter(y, 5, 3)
+    w = 1.0 ./ e
+    @assert ncut_low > navg_low
+    @assert x[ncut_low] > 0.01
+    _x, _y =
+        deepcopy(x[(ncut_low):(end - ncut_high)]), deepcopy(y[(ncut_low):(end - ncut_high)])
+    _w = 1.0 ./ e[(ncut_low):(end - ncut_high)]
+
+    #enforce left boundary condition: the derivative at k=0 is zero
+    if left_bc
+        rescale = 10000
+        pushfirst!(_x, 0.01)
+        pushfirst!(_x, 0.0)
+        yavr = sum(y[1:navg_low] .* w[1:navg_low]) / sum(w[1:navg_low])
+        pushfirst!(_y, yavr)
+        pushfirst!(_y, yavr)
+        pushfirst!(_w, _w[1] * rescale)
+        pushfirst!(_w, _w[1] * rescale)
+    end
+
+    #enforce right boundary conditions: the value/derivative at max k are kend/kderiv_end
+    if right_bc
+        dx = 0.01
+        rescale = 10000
+        push!(_x, x[end])
+        push!(_y, kend)
+        push!(_w, _w[end] * rescale)
+        push!(_x, x[end] + dx)
+        push!(_y, kend + kderiv_end * dx)
+        push!(_w, _w[end] * rescale)
+    end
+
+    # generate knots with spline without constraints
+    spl = interp.UnivariateSpline(_x, _y; w=_w, k=3)
+    __x = collect(LinRange(0.0, x[end], 100))
+    yfit = spl(__x)
+    return __x, yfit
+end
 
 """
 Exact expression for the Fock self-energy
@@ -43,7 +122,7 @@ end
 """x ≡ k / kF (dimensionless wavenumber)."""
 function fock_mass_ratio_exact(x::Float64, p::ParaMC)
     # return 1 +
-    #        (param.e0^2 * param.me / (2pi * param.kF)) *
+    #        (para.e0^2 * para.me / (2pi * para.kF)) *
     #        ((1 + x^2) * log(abs((1 + x) / (1 - x))) / x - 2) / x^2
     return 1 + (alpha * p.rs / 2π) * ((1 + x^2) * log(abs((1 + x) / (1 - x))) / x - 2) / x^2
 end
@@ -74,6 +153,27 @@ function main()
         cd(ENV["SOSEM_HOME"])
     end
 
+    # Setup plot styles
+    style = PyPlot.matplotlib."style"
+    style.use(["science", "std-colors"])
+    color = [
+        "k",
+        cdict["orange"],
+        cdict["blue"],
+        cdict["cyan"],
+        cdict["magenta"],
+        cdict["red"],
+        # cdict["teal"],
+    ]
+    # color = [cdict["blue"], cdict["orange"], "green", cdict["red"], "black"]
+    rcParams = PyPlot.PyDict(PyPlot.matplotlib."rcParams")
+
+    # Use LaTex fonts for plots
+    rcParams["font.size"] = 16
+    rcParams["mathtext.fontset"] = "cm"
+    # rcParams["font.family"] = "Times New Roman"
+
+    # rs = 1 runs: N = [[1, 2, 3, 4], [5]]
     rs = 2.0
     beta = 40.0
     mass2 = 0.4
@@ -82,7 +182,8 @@ function main()
     # Number of evals below and above kF
     neval4 = 5e10
     neval5 = 5e10
-    neval = max(neval4, neval5)
+    neval5_new = 5e10
+    neval = max(neval4, neval5 + neval5_new)
 
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
     n_min = 1  # True minimal loop order for this observable
@@ -92,7 +193,8 @@ function main()
     max_order_plot = 5
 
     # Save total results
-    save = true
+    save = false
+    # save = true
 
     # Distinguish results with fixed vs re-expanded bare interactions
     intn_str = ""
@@ -110,51 +212,83 @@ function main()
         ct_string *= "_lambda"
     end
 
-    # UEG parameters for MC integration
-    loadparam = ParaMC(; order=max_order, rs=rs, beta=beta, mass2=mass2, isDynamic=false)
-
-    # Load raw data
     if max_order >= 5
         max_together = 4
     else
         max_together = max_order
     end
+
+    # UEG parameters for MC integration
+    para = ParaMC(; order=4, rs=rs, beta=beta, mass2=mass2, isDynamic=false)
+    para5 = ParaMC(; order=5, rs=rs, beta=beta, mass2=mass2, isDynamic=false)
+
+    # Load raw data
+    local htf4, htf5, htf5_new
     savename =
-        "results/data/sigma_x_n=$(max_together)_rs=$(rs)_" *
+        "results/data/exchange/sigma_x_n=$(max_together)_rs=$(rs)_" *
         "beta_ef=$(beta)_lambda=$(mass2)_neval=$(neval4)_$(solver)$(ct_string)"
-    orders, param, kgrid, partitions, res = jldopen("$savename.jld2", "a+") do f
-        key = "$(UEG.short(loadparam))"
+    orders, kgrid, partitions, res = jldopen("$savename.jld2", "a+") do f
+        htf4 = f["has_taylor_factors"]
+        key = "$(UEG.short(para))"
         return f[key]
     end
     if max_order >= 5
         savename =
-            "results/data/sigma_x_n=5_rs=$(rs)_" *
+            "results/data/exchange/sigma_x_n=5_rs=$(rs)_" *
             "beta_ef=$(beta)_lambda=$(mass2)_neval=$(neval5)_$(solver)$(ct_string)"
-        orders5, param5, kgrid5, partitions5, res5 = jldopen("$savename.jld2", "a+") do f
-            key = "$(UEG.short(loadparam))"
+        orders5, kgrid5, partitions5, res5 = jldopen("$savename.jld2", "a+") do f
+            htf5 = f["has_taylor_factors"]
+            key = "$(UEG.short(para5))"
+            return f[key]
+        end
+        savename_new =
+            "results/data/exchange/sigma_x_n=5_rs=$(rs)_" *
+            "beta_ef=$(beta)_lambda=$(mass2)_neval=$(neval5_new)_$(solver)$(ct_string)_new"
+            # "beta_ef=$(beta)_lambda=$(mass2)_neval=$(neval5_new)_$(solver)$(ct_string)"
+        orders5, kgrid5, partitions5, datadict5 = jldopen("$savename_new.jld2", "a+") do f
+            htf5_new = f["has_taylor_factors"]
+            key = "$(UEG.short(para5))"
             return f[key]
         end
     end
 
     # Get dimensionless k-grid (k / kF) and index corresponding to the Fermi energy
-    k_kf_grid = kgrid / param.kF
+    k_kf_grid = kgrid / para.kF
     if max_order >= 5
-        k_kf_grid5 = kgrid5 / param.kF
+        k_kf_grid5 = kgrid5 / para.kF
     end
     ikF = findfirst(x -> x == 1.0, k_kf_grid)
 
     # Convert results to a Dict of measurements at each order with interaction counterterms merged
     data = UEG_MC.restodict(res, partitions)
-    for (k, v) in data
-        data[k] = v / (factorial(k[2]) * factorial(k[3]))
+    if htf4 == false
+        for (k, v) in data
+            data[k] = v / (factorial(k[2]) * factorial(k[3]))
+        end
     end
     # Add 5th order results to data dict
     if max_order >= 5
+        # Old data
         data5 = UEG_MC.restodict(res5, partitions5)
-        for (k, v) in data5
-            data5[k] = v / (factorial(k[2]) * factorial(k[3]))
+        if htf5 == false
+            for (k, v) in data5
+                data5[k] = v / (factorial(k[2]) * factorial(k[3]))
+            end
         end
-        merge!(data, data5)
+        # New data
+        if htf5_new == false
+            for (k, v) in datadict5
+                datadict5[k] = v / (factorial(k[2]) * factorial(k[3]))
+            end
+        end
+        # Combine data from new and old runs
+        combined_data5 = Dict{eltype(partitions),Any}()
+        @assert keys(data5) == keys(datadict5)
+        for k in keys(data5)
+            combined_data5[k] = (data5[k] + datadict5[k]) / 2
+        end
+        neval5 = neval5 + neval5_new
+        merge!(data, combined_data5)
     end
 
     merged_data = CounterTerm.mergeInteraction(data)
@@ -164,7 +298,7 @@ function main()
     if min_order_plot == 1
         if 1 in orders
             # The nondimensionalized Fock self-energy is the negative Lindhard function
-            exact = -UEG_MC.lindhard.(kgrid / param.kF)
+            exact = -UEG_MC.lindhard.(kgrid / para.kF)
             # Check the MC result at k = 0 against the exact (non-dimensionalized)
             # Fock (exhange) self-energy: Σx(0) / E_{TF} = -F(0) = -1
             meas = merged_data[(1, 0)]
@@ -186,19 +320,38 @@ function main()
         merged_data[(1, 0)] = measurement.(sigma_fock_over_eTF_exact, 0.0)  # treat quadrature data as numerically exact
     end
 
+    # # Reexpand merged data in powers of μ
+    # δμ = UEG_MC.load_mu_counterterm(
+    #     para;
+    #     max_order=4,
+    #     # max_order=max_order - n_min,
+    #     parafilename="examples/counterterms/data/para.csv",
+    #     ct_filename="examples/counterterms/data/data_Z.jld2",
+    #     verbose=1,
+    # )
+    # println("Computed δμ: ", δμ)
+    # sigma_x =
+    #     UEG_MC.chemicalpotential_renormalization_sigma(merged_data, δμ; max_order=max_order)
+
     # Reexpand merged data in powers of μ
-    δμ = load_mu_counterterm(
-        param;
-        max_order=max_order - n_min,
-        parafilename="examples/counterterms/data/para.csv",
-        ct_filename="examples/counterterms/data/data_Z$(ct_string).jld2",
-        verbose=1,
-    )
+    ct_filename = "examples/counterterms/data/data_Z.jld2"
+    z, μ, has_taylor_factors = UEG_MC.load_z_mu_old(para5; ct_filename=ct_filename)
+    # Add Taylor factors to CT data
+    if has_taylor_factors == false
+        for (p, v) in z
+            z[p] = v / (factorial(p[2]) * factorial(p[3]))
+        end
+        for (p, v) in μ
+            μ[p] = v / (factorial(p[2]) * factorial(p[3]))
+        end
+    end
+    _, δμ, _ = CounterTerm.sigmaCT(max_order - n_min, μ, z; verbose=1)
     println("Computed δμ: ", δμ)
     sigma_x =
         UEG_MC.chemicalpotential_renormalization_sigma(merged_data, δμ; max_order=max_order)
+
     # Test manual renormalization with exact lowest-order chemical potential
-    δμ1_exact = UEG_MC.delta_mu1(param)  # = ReΣ₁[λ](kF, 0)
+    δμ1_exact = UEG_MC.delta_mu1(para)  # = ReΣ₁[λ](kF, 0)
     # Σₓ⁽²⁾ = Σₓ_{2,0} + δμ₁ Σₓ_{1,1}
     sigma_x_2_manual = merged_data[(2, 0)] + δμ1_exact * merged_data[(1, 1)]
     stdscores = stdscore.(sigma_x[2], sigma_x_2_manual)
@@ -212,14 +365,14 @@ function main()
     # Aggregate the full results for Σₓ up to order N
     sigma_x_over_eTF_total = UEG_MC.aggregate_orders(sigma_x)
 
-    println(UEG.paraid(param))
+    println(UEG.paraid(para))
     println(partitions)
     println(res)
 
     if save
         savename =
-            "results/data/rs=$(param.rs)_beta_ef=$(param.beta)_" *
-            "lambda=$(param.mass2)_$(intn_str)$(solver)$(ct_string)"
+            "results/data/processed/rs=$(para.rs)/rs=$(para.rs)_beta_ef=$(para.beta)_" *
+            "lambda=$(para.mass2)_$(intn_str)$(solver)$(ct_string)_archive1"
         f = jldopen("$savename.jld2", "a+"; compress=true)
         # NOTE: no bare result for c1b observable (accounted for in c1b0)
         for N in min_order_plot:max_order
@@ -241,140 +394,175 @@ function main()
                 delete!(f["sigma_x/N=$N"], "neval=$num_eval")
             end
             f["sigma_x/N=$N/neval=$num_eval/meas"] = sigma_x_over_eTF_total[N]
-            f["sigma_x/N=$N/neval=$num_eval/param"] = param
+            f["sigma_x/N=$N/neval=$num_eval/para"] = para
             f["sigma_x/N=$N/neval=$num_eval/kgrid"] = kgrid
         end
     end
 
-    # Use LaTex fonts for plots
-    plt.rc("text"; usetex=true)
-    plt.rc("font"; family="serif")
-
     # Plot for each aggregate order
+    fig1 = figure(; figsize=(6, 4))
 
     # Σₓ(k) / eTF (dimensionless moment)
-    fig1, ax1 = plt.subplots()
     # Compare result to exact non-dimensionalized Fock self-energy (-F(k / kF))
-    ax1.plot(k_kf_grid, -UEG_MC.lindhard.(k_kf_grid), "k"; label="\$N=1\$ (exact, \$T=0\$)")
+    plot(k_kf_grid, -UEG_MC.lindhard.(k_kf_grid), "k"; label="\$N=1\$")
+    # plot(k_kf_grid, -UEG_MC.lindhard.(k_kf_grid), "k"; label="\$N=1\$ (exact, \$T=0\$)")
     for (i, N) in enumerate(min_order:max_order_plot)
-        # N == 1 && continue
+        N == 1 && continue
         # Get means and error bars from the result up to this order
         means = Measurements.value.(sigma_x_over_eTF_total[N])
         stdevs = Measurements.uncertainty.(sigma_x_over_eTF_total[N])
-        # Data gets noisy above 3rd loop order
-        # marker = N > 2 ? "o-" : "-"
-        marker = "o-"
-        ax1.plot(
+        _x, _y = spline(k_kf_grid, means, stdevs)
+        # # if N == 5
+        # #     kstart = Measurements.value.(sigma_x_over_eTF_total[4])[1]
+        # # else
+        # #     kstart = means[1]
+        # # end
+        # dk = 1e-5
+        # kend = -UEG_MC.lindhard.(k_kf_grid[end])
+        # kendpdk = -UEG_MC.lindhard.(k_kf_grid[end] + dk)
+        # kderiv_end = (kendpdk - kend) / dk
+        # println("kend: $kend")
+        # println("kderiv_end: $kderiv_end")
+        # _x, _y = spline_with_bc(
+        #     k_kf_grid,
+        #     means,
+        #     stdevs;
+        #     navg_low=1,
+        #     ncut_low=2,
+        #     # navg_low=N == 5 ? 2 : 1,
+        #     # ncut_low=N == 5 ? 3 : 2,
+        #     kend=kend,
+        #     kderiv_end=kderiv_end,
+        #     left_bc=true,
+        #     right_bc=true,
+        # )
+        plot(_x, _y; color=color[i], linestyle="--", zorder=10 * i + 3)
+        errorbar(
             k_kf_grid,
-            means,
-            marker;
+            means;
+            yerr=stdevs,
+            color=color[i],
+            capsize=2,
             markersize=2,
-            color="C$(i-1)",
-            label="\$N=$(N)\$ ($solver)",
+            fmt="o",
+            markerfacecolor="none",
+            label="\$N = $N\$",
+            zorder=10 * i + 3,
         )
-        ax1.fill_between(
-            k_kf_grid,
-            means - stdevs,
-            means + stdevs;
-            color="C$(i-1)",
-            alpha=0.4,
-        )
+        # plot(
+        #     k_kf_grid,
+        #     means,
+        #     marker;
+        #     markersize=2,
+        #     color="C$(i-1)",
+        #     label="\$N=$(N)\$ ($solver)",
+        # )
+        # fill_between(
+        #     k_kf_grid,
+        #     means - stdevs,
+        #     means + stdevs;
+        #     color="C$(i-1)",
+        #     alpha=0.4,
+        # )
     end
-    ax1.legend(; loc="lower right")
-    ax1.set_xlim(minimum(k_kf_grid), maximum(k_kf_grid))
-    ax1.set_xlabel("\$k / k_F\$")
-    ax1.set_ylabel(
-        "\$C^{(0)}_\\sigma(k) \\,/\\, \\epsilon_{\\mathrm{TF}} = \\Sigma_{x}(k) \\,/\\, \\epsilon_{\\mathrm{TF}}\$",
+    legend(; loc="lower right")
+    # xlim(minimum(k_kf_grid), maximum(k_kf_grid))
+    xlim(0, 2)
+    ylim(nothing, 0.0)
+    xlabel("\$k / k_F\$")
+    ylabel(
+        "\$C^{(0)}_\\sigma(k) \\,/\\, \\epsilon_{\\mathrm{TF}}\$",
+        # "\$C^{(0)}_\\sigma(k) \\,/\\, \\epsilon_{\\mathrm{TF}} = \\Sigma_{x}(k) \\,/\\, \\epsilon_{\\mathrm{TF}}\$",
     )
-    # ax1.set_ylabel("\$\\Sigma_{x}(k) \\,/\\, \\epsilon_{\\mathrm{TF}}\$")
-    xloc = 1.5
-    yloc = -0.4
-    ydiv = -0.095
+    # ylabel("\$\\Sigma_{x}(k) \\,/\\, \\epsilon_{\\mathrm{TF}}\$")
+    xloc = 0.15
+    yloc = -0.15
+    ydiv = -0.125
     # xloc = 1.5
     # yloc = -0.6
     # ydiv = -0.175
-    ax1.text(
+    text(
         xloc,
         yloc,
         "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
-        fontsize=14,
-    )
-    ax1.text(
-        xloc,
-        yloc + ydiv,
-        "\$\\lambda = $(mass2)\\epsilon_{\\mathrm{Ry}},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)},\$";
-        # "\$\\lambda = \\frac{\\epsilon_{\\mathrm{Ry}}}{10},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)},\$";
-        fontsize=14,
-    )
-    ax1.text(
-        xloc,
-        yloc + 2 * ydiv,
-        "\${\\epsilon}_{\\mathrm{TF}}\\equiv\\frac{\\hbar^2 q^2_{\\mathrm{TF}}}{2 m_e}=2\\pi\\mathcal{N}_F\$ (a.u.)";
         fontsize=12,
     )
-    fig1.tight_layout()
-    fig1.savefig(
-        "results/fock/sigma_x_N=$(max_order_plot)_rs=$(param.rs)_" *
-        "beta_ef=$(param.beta)_lambda=$(param.mass2)_neval=$(neval)_$(solver).pdf",
+    text(
+        xloc,
+        yloc + ydiv,
+        "\$\\lambda = $(mass2)\\epsilon_{\\mathrm{Ry}},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)}\$";
+        # "\$\\lambda = \\frac{\\epsilon_{\\mathrm{Ry}}}{10},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)},\$";
+        fontsize=12,
     )
+    # text(
+    #     xloc,
+    #     yloc + 2 * ydiv,
+    #     "\${\\epsilon}_{\\mathrm{TF}}\\equiv\\frac{\\hbar^2 q^2_{\\mathrm{TF}}}{2 m_e}=2\\pi\\mathcal{N}_F\$ (a.u.)";
+    #     fontsize=12,
+    # )
+    plt.tight_layout()
+    savefig(
+        "results/fock/sigma_x_N=$(max_order_plot)_rs=$(para.rs)_" *
+        "beta_ef=$(para.beta)_lambda=$(para.mass2)_neval=$(neval)_$(solver).pdf",
+    )
+    plt.close("all")
 
     # Thomas-Fermi energy
-    eTF = param.qTF^2 / (2 * param.me)
+    eTF = para.qTF^2 / (2 * para.me)
 
     # Bare dispersion in units of the Thomas-Fermi energy (for effective mass related plots)
-    Ek = kgrid .^ 2 / (2 * param.me)
+    Ek = kgrid .^ 2 / (2 * para.me)
     Ek_over_eTF = Ek / eTF
 
     # Fock self-energy
-    sigma_fock_exact = fock_self_energy_exact(kgrid, param)
+    sigma_fock_exact = fock_self_energy_exact(kgrid, para)
     # Exact Fock energy at the Fermi surface
-    EF_fock = qp_fock_exact(param.kF, param)
+    EF_fock = qp_fock_exact(para.kF, para)
     println("ΣF(k = 0) (pred, exact):", sigma_fock_exact[1], " ", -eTF)
-    println("EqpF(k = kF) (pred, exact):", EF_fock, " ", param.EF - eTF / 2)
+    println("EqpF(k = kF) (pred, exact):", EF_fock, " ", para.EF - eTF / 2)
     # @assert sigma_fock_exact[1] ≈ -eTF
-    # @assert EF_fock ≈ param.EF - eTF / 2
+    # @assert EF_fock ≈ para.EF - eTF / 2
 
     # Exact results on dense (quadrature) grids
-    kgrid_quad = param.kF * np.linspace(0.0, 3.0; num=600)
+    kgrid_quad = para.kF * np.linspace(0.0, 3.0; num=600)
     k_kf_grid_quad = np.linspace(0.0, 3.0; num=600)
-    Ek_quad = kgrid_quad .^ 2 / (2 * param.me)
+    Ek_quad = kgrid_quad .^ 2 / (2 * para.me)
     Ek_over_eTF_quad = Ek_quad / eTF
     ikF_quad = findall(x -> x == 1.0, k_kf_grid_quad)
 
-    fig12, ax12 = plt.subplots()
+    fig12 = figure(; figsize=(6, 4))
+
     k_kf_dense = np.linspace(0.0, 2.0; num=600)
-    ax12.axhline(
-        1.0 ./ fock_mass_ratio_k0(param);
+    axhline(
+        1.0 ./ fock_mass_ratio_k0(para);
         label="\$\\left(1 + \\frac{4}{3\\pi}(\\alpha r_s)\\right)^{-1}\$",
         color="gray",
     )
-    ax12.plot(k_kf_dense, 1.0 ./ fock_mass_ratio_exact(k_kf_dense, param))
-    ax12.legend(; loc="best")
-    ax12.set_xlim(0, 2)
-    ax12.set_xlabel("\$k / k_F\$")
-    ax12.set_ylabel("\$\\left(m^\\star_F \\left/ m\\right)\\right.(k)\$")
+    plot(k_kf_dense, 1.0 ./ fock_mass_ratio_exact(k_kf_dense, para))
+    legend(; loc="best")
+    xlim(0, 2)
+    xlabel("\$k / k_F\$")
+    ylabel("\$\\left(m^\\star_F \\left/ m\\right)\\right.(k)\$")
     xloc = 1.25
     yloc = 0.7
-    ax12.text(
+    text(
         xloc,
         yloc,
         "\$r_s = $rs,\\, \\beta \\hspace{0.1em} \\epsilon_F = $beta\$";
         fontsize=14,
     )
-    fig12.tight_layout()
-    fig12.savefig(
-        "results/fock/fock_eff_mass_ratio_exact_rs=$(param.rs)_beta_ef=$(param.beta).pdf",
-    )
+    plt.tight_layout()
+    savefig("results/fock/fock_eff_mass_ratio_exact_rs=$(para.rs)_beta_ef=$(para.beta).pdf")
 
     # Moment quasiparticle energy
     # Extract effective masses from quadratic fits to data for k ≤ kF
-    fig2, ax2 = plt.subplots()
+    fig2 = figure(; figsize=(6, 4))
 
     # First order from exact expressions
-    sigma_fock_exact_quad = fock_self_energy_exact(kgrid_quad, param)
+    sigma_fock_exact_quad = fock_self_energy_exact(kgrid_quad, para)
 
     # Fock quasiparticle energy
-    E_fock_quad = qp_fock_exact(kgrid_quad, param)
+    E_fock_quad = qp_fock_exact(kgrid_quad, para)
     E_fock_over_eTF_quad = E_fock_quad / eTF
 
     # No fixed point (zpe is a free parameter)
@@ -385,8 +573,8 @@ function main()
     p0_fock = [1.0]        # m=mₑ
 
     # Gridded data for k ≤ kF
-    k_data = kgrid_quad[kgrid_quad .< param.kF]
-    E_fock_data = E_fock_quad[kgrid_quad .< param.kF]
+    k_data = kgrid_quad[kgrid_quad .< para.kF]
+    E_fock_data = E_fock_quad[kgrid_quad .< para.kF]
 
     # Least-squares fit to (exact) Fock data
     fit_fock = curve_fit(
@@ -406,39 +594,40 @@ function main()
     r2 = rsquared(k_data, E_fock_data, qp_fit_fock(k_data), fit_fock)
 
     # Low-energy effective mass ratio (mₑ/m⋆)(k≈0) from quasiparticle fit
-    low_en_mass_ratio_fock = param.me / meff_fock
+    low_en_mass_ratio_fock = para.me / meff_fock
     println(
         "Fock low-energy effective mass ratio from quadratic fit: " *
         "(mₑ/m⋆)(k=0) ≈ $low_en_mass_ratio_fock, r2=$r2",
     )
     mass_ratio_fit   = 1 / low_en_mass_ratio_fock
-    mass_ratio_exact = 1 / fock_mass_ratio_k0(param)
+    mass_ratio_exact = 1 / fock_mass_ratio_k0(para)
     rel_error        = abs(mass_ratio_exact - mass_ratio_fit) / mass_ratio_exact
     println("Percent error vs exact low-energy limit: $(rel_error * 100)%")
 
-    ax2.axhline(0; linestyle="--", color="gray", linewidth=1)
-    # ax2.plot(
+    axhline(0; linestyle="--", color="gray", linewidth=1)
+    # plot(
     #     k_kf_grid_quad,
     #     Ek_quad / eTF,
     #     "k";
     #     linestyle="--",
     #     label="\$\\epsilon_k / \\epsilon_{\\mathrm{TF}} = (k / q_{\\mathrm{TF}})^2\$",
     # )
-    ax2.plot(
+    plot(
         k_kf_grid_quad,
-        -1 .+ (π / (4alpha * param.rs) + 1 / 3) * k_kf_grid_quad .^ 2;
+        -1 .+ (π / (4alpha * para.rs) + 1 / 3) * k_kf_grid_quad .^ 2;
         color="k",
-        # linestyle="--",
-        label="\$\\epsilon_{\\mathrm{HF}}(k \\rightarrow 0) / \\epsilon_{\\mathrm{TF}} \\sim -1 + \\left(\\frac{\\pi}{4\\alpha r_s} + \\frac{1}{3}\\right) \\left( \\frac{k}{k_F} \\right)^2\$",
+        linestyle="--",
+        # label="\$\\epsilon_{\\mathrm{HF}}(k \\rightarrow 0) / \\epsilon_{\\mathrm{TF}} \\sim -1 + \\left(\\frac{\\pi}{4\\alpha r_s} + \\frac{1}{3}\\right) \\left( \\frac{k}{k_F} \\right)^2\$",
     )
-    # ax2.plot(
-    #     kgrid_quad / param.kF,
-    #     E_fock_quad / eTF,
-    #     "k";
-    #     label="\$N=1\$ (exact, \$T=0\$)",
-    # )
-    # ax2.plot(
-    #     kgrid_quad / param.kF,
+    plot(
+        kgrid_quad / para.kF,
+        E_fock_quad / eTF,
+        "k";
+        label="\$N=1\$",
+        # label="\$N=1\$ (exact, \$T=0\$)",
+    )
+    # plot(
+    #     kgrid_quad / para.kF,
     #     qp_fit_fock(kgrid_quad) / eTF,
     #     "C0";
     #     linestyle="--",
@@ -450,7 +639,7 @@ function main()
     m_test = [0.2, 0.3, 0.4, 0.5]
     e_test = [-1.0, -1.25, -1.5, -1.75]
     for (i, N) in enumerate(min_order:max_order_plot)
-        # N == 1 && continue
+        N == 1 && continue
 
         # Eqp = ϵ(k) + Σₓ(k)
         Eqp_over_eTF = Ek_over_eTF .+ sigma_x_over_eTF_total[N]
@@ -460,8 +649,8 @@ function main()
         stdevs_qp = Measurements.uncertainty.(Eqp_over_eTF)
 
         # Gridded data for k < kF
-        k_data = kgrid[kgrid .< param.kF]
-        Eqp_data = means_qp[kgrid .< param.kF] * eTF
+        k_data = kgrid[kgrid .< para.kF]
+        Eqp_data = means_qp[kgrid .< para.kF] * eTF
         # Eqp_data = e_test[i] .+ k_data .^ 2 / (2 * m_test[i])
 
         # Least-squares quasiparticle fit
@@ -473,92 +662,103 @@ function main()
 
         # Low-energy effective mass ratio (mₑ/m⋆)(k≈0) from quasiparticle fit
         meff_N = fit_N.param[2]
-        low_en_mass_ratio_N = param.me / meff_N
+        low_en_mass_ratio_N = para.me / meff_N
         println(
             "(N=$N) Low-energy effective mass ratio from quadratic fit: " *
             "(mₑ/m⋆)(k=0) ≈ $low_en_mass_ratio_N, r2=$r2",
         )
         if N == max_order_plot
-            ax2.text(
-                0.175,
-                0.5,
-                "\$(N=$N) \\; m^\\star / m \\approx $(round(meff_N / param.me; digits=5))\$";
+            text(
+                0.8,
+                -1.8,
+                "\$m^\\star / m \\approx $(round(meff_N / para.me; digits=3))\$";
                 fontsize=12,
             )
         end
-
-        # Data gets noisy above 3rd loop order
-        # marker = N > 2 ? "o-" : "-"
-        marker = "o-"
-        ax2.plot(
+        # _x, _y = spline(k_kf_grid, means, stdevs)
+        # plot(_x, _y; color=color[i], linestyle="--", zorder=10 * i + 3)
+        errorbar(
             k_kf_grid,
-            means_qp,
-            marker;
+            means_qp;
+            yerr=stdevs_qp,
+            color=color[i],
+            capsize=2,
             markersize=2,
-            color="C$ic",
-            label="\$N=$(N)\$ ($solver)",
+            fmt="o",
+            markerfacecolor="none",
+            label="\$N = $N\$",
+            zorder=10 * i + 3,
         )
-        ax2.fill_between(
-            k_kf_grid,
-            means_qp - stdevs_qp,
-            means_qp + stdevs_qp;
-            color="C$ic",
-            alpha=0.4,
-        )
-        ax2.plot(
-            kgrid_quad / param.kF,
+        # plot(
+        #     k_kf_grid,
+        #     means_qp,
+        #     marker;
+        #     markersize=2,
+        #     color=color[i],
+        #     label="\$N=$N\$",
+        #     # label="\$N=$(N)\$ ($solver)",
+        # )
+        # fill_between(
+        #     k_kf_grid,
+        #     means_qp - stdevs_qp,
+        #     means_qp + stdevs_qp;
+        #     color=color[i],
+        #     alpha=0.4,
+        # )
+        plot(
+            kgrid_quad / para.kF,
             qp_fit_N(kgrid_quad) / eTF;
-            color="C$ic",
+            color=color[i],
             linestyle="--",
             # label="\$N=$N\$ (quasiparticle fit)",
         )
         ic += 1
     end
-    ax2.legend(; loc="upper left")
-    # ax2.set_xlim(minimum(k_kf_grid), 1)
-    ax2.set_xlim(minimum(k_kf_grid), 1.5)
-    ax2.set_ylim(-2.0, 3.0)
-    # ax2.set_ylim(-2.0, 1.0)
-    ax2.set_xlabel("\$k / k_F\$")
-    ax2.set_ylabel(
+    legend(; loc="upper left")
+    # xlim(minimum(k_kf_grid), 1)
+    xlim(minimum(k_kf_grid), 1.5)
+    ylim(-2.2, 3.2)
+    # ylim(-2.0, 1.0)
+    xlabel("\$k / k_F\$")
+    ylabel(
         "\$M^{(1)}_\\sigma(k) \\,/\\, \\epsilon_{\\mathrm{TF}} =  \\left(\\epsilon_{k} + \\Sigma_{x}(k)\\right) \\,/\\, \\epsilon_{\\mathrm{TF}} \$",
     )
-    # ax2.set_ylabel(
+    # ylabel(
     #     "\$\\epsilon_{\\mathrm{momt.}}(k) \\,/\\, \\epsilon_{\\mathrm{TF}} =  \\left(\\epsilon_{k} + \\Sigma_{x}(k)\\right) \\,/\\, \\epsilon_{\\mathrm{TF}} \$",
     # )
     xloc = 0.8
-    yloc = -0.6
+    yloc = -0.8
     # yloc = -0.5
     ydiv = -0.5
     # xloc = 0.8
     # yloc = -1.25
     # ydiv = -0.25
-    ax2.text(
+    text(
         xloc,
         yloc,
         "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
-        fontsize=14,
+        fontsize=12,
     )
-    ax2.text(
+    text(
         xloc,
         yloc + ydiv,
         "\$\\lambda = $(mass2)\\epsilon_{\\mathrm{Ry}},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)},\$";
         # "\$\\lambda = \\frac{\\epsilon_{\\mathrm{Ry}}}{10},\\, N_{\\mathrm{eval}} = \\mathrm{$(neval)},\$";
-        fontsize=14,
-    )
-    ax2.text(
-        xloc,
-        yloc + 2 * ydiv,
-        "\${\\epsilon}_{\\mathrm{TF}}\\equiv\\frac{\\hbar^2 q^2_{\\mathrm{TF}}}{2 m_e}=2\\pi\\mathcal{N}_F\$ (a.u.)";
         fontsize=12,
     )
-    fig2.tight_layout()
-    fig2.savefig(
-        "results/fock/moment_qp_energy_N=$(max_order_plot)_rs=$(param.rs)_" *
-        "beta_ef=$(param.beta)_lambda=$(param.mass2)_neval=$(neval)_$(solver).pdf",
+    # text(
+    #     xloc,
+    #     yloc + 2 * ydiv,
+    #     "\${\\epsilon}_{\\mathrm{TF}}\\equiv\\frac{\\hbar^2 q^2_{\\mathrm{TF}}}{2 m_e}=2\\pi\\mathcal{N}_F\$ (a.u.)";
+    #     fontsize=12,
+    # )
+    plt.tight_layout()
+    savefig(
+        "results/fock/moment_qp_energy_N=$(max_order_plot)_rs=$(para.rs)_" *
+        "beta_ef=$(para.beta)_lambda=$(para.mass2)_neval=$(neval)_$(solver).pdf",
     )
-
     plt.close("all")
+
     return
 end
 

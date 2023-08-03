@@ -34,7 +34,7 @@ function main()
     beta = 40.0
 
     rs = 2.0
-    mass2list = [1.75, 2.0]
+    mass2list = [1.75, 2.5]
     # mass2list = [1.625, 1.75, 1.875, 2.0]
 
     # mass2list = [2.0]
@@ -97,7 +97,7 @@ function main()
     mass_errs = []
     local max_stationary_idk
     fig2, ax2 = plt.subplots()
-    for mass2 in mass2list
+    for (i, mass2) in enumerate(mass2list)
         # UEG parameters for MC integration
         loadparam = ParaMC(;
             order=max_order,
@@ -354,7 +354,7 @@ function main()
                     means,
                     stdevs;
                     capsize=4,
-                    zorder=10 * idk,
+                    zorder=10 * i,
                     # label="\$\\lambda = $(mass2)\\epsilon_{\\mathrm{Ry}}\$",
                     label="\$\\lambda = $(mass2),\\,\$ $(scheme_str)\$\\delta K = $(dks[idk]) k_F\$",
                 )

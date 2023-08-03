@@ -3,8 +3,7 @@ function chemicalpotential_renormalization(data, δμ; n_min, min_order=n_min, m
     # println(δμ)
     @assert length(δμ) ≥ max_order - n_min
     d = CounterTerm.mergeInteraction(data)  # interaction-merged data
-    T = valtype(d)
-    d_renorm = RenormMeasType{T}()
+    d_renorm = RenormMeasType{valtype(d)}()
     # Renormalize data to maximum supported counterterm order: 
     # [𝓞_{nmin}, 𝓞_{nmin+1}, 𝓞_{nmin+2}, 𝓞_{nmin+3}, 𝓞_{nmin+4}]
     if min_order ≤ n_min ≤ max_order
@@ -124,26 +123,26 @@ potential renormalization δμ₁ = ReΣ₁[λ](kF, 0). Note
 that using N&O convention, there is an extra overall
 minus sign.
 """
-function delta_mu1(param::UEG.ParaMC)
+function delta_mu1(para::UEG.ParaMC)
     # Dimensionless wavenumber at the Fermi surface (x = k / kF)
     x = 1
     # Dimensionless Yukawa mass squared (lambda = λ / kF²)
-    lambda = param.mass2 / param.kF^2
+    lambda = para.mass2 / para.kF^2
     # Dimensionless screened Lindhard function
     F_x_lambda = screened_lindhard(x; lambda=lambda)
     # δμ₁ cancels the real part of the Fock self-energy
     # at the Fermi surface for a Yukawa-screened UEG.
-    return -(param.e0^2 * param.kF / (2 * pi^2 * param.ϵ0)) * F_x_lambda
+    return -(para.e0^2 * para.kF / (2 * pi^2 * para.ϵ0)) * F_x_lambda
 end
 
 """Computes the exact first-order (screened HF) effective mass ratio"""
-function fock_mass_ratio(param::UEG.ParaMC)
+function fock_mass_ratio(para::UEG.ParaMC)
     return
 end
 
 """Load counterterm data from CSV file."""
 function load_z_mu_old(
-    param::UEG.ParaMC;
+    para::UEG.ParaMC;
     ct_filename="examples/counterterms/data/data_Z.jld2",
     # parafilename="examples/counterterms/data/para.csv",
 )
@@ -161,16 +160,17 @@ function load_z_mu_old(
     has_taylor_factors::Bool = f["has_taylor_factors"]
     for key in keys(f)
         key == "has_taylor_factors" && continue
-        if UEG.paraid(f[key][1]) == UEG.paraid(param)
+        if UEG.paraid(UEG.ParaMC(key)) == UEG.paraid(para)
             ct_data = f[key]
             filefound = true
         end
     end
     if !filefound
-        throw(KeyError(UEG.paraid(param)))
+        throw(KeyError(UEG.paraid(para)))
     end
     # df = fromFile(parafilename)
-    para, _, _, data = ct_data
+    # para, _, _, data = ct_data
+    _, _, data = ct_data
     printstyled(UEG.short(para); color=:yellow)
     println()
 
@@ -196,7 +196,7 @@ end
 
 """Load z and μ data from JLD2 file."""
 function load_z_mu(
-    param::UEG.ParaMC;
+    para::UEG.ParaMC;
     ct_filename="examples/counterterms/data/data_Z_with_ct_mu_lambda.jld2",
 )
     # Derive z and μ from JLD2 data
@@ -213,7 +213,7 @@ function load_z_mu(
     has_taylor_factors::Bool = f["has_taylor_factors"]
     for key in keys(f)
         key == "has_taylor_factors" && continue
-        if UEG.paraid(f[key][1]) == UEG.paraid(param)
+        if UEG.paraid(f[key][1]) == UEG.paraid(para)
             ct_data = f[key]
             filefound = true
         end
@@ -263,18 +263,20 @@ end
 
 """Load counterterm data from CSV/JLD2 file."""
 function load_z_mu_counterterms(
-    param::UEG.ParaMC;
-    max_order=param.order,
-    parafilename="examples/counterterms/data/para_0m1.csv",
-    ct_filename="examples/counterterms/data/data_Z_with_ct_mu_lambda_kF.jld2",
+    para::UEG.ParaMC;
+    max_order=para.order,
+    parafilename="examples/counterterms/data/para.csv",
+    ct_filename="examples/counterterms/data/data_Z.jld2",
     isFock=false,
     verbose=1,
+    root_dir=get(ENV, "SOSEM_HOME", ""),
 )
     # Load z and μ data from file
     print("Loading counterterm data from CSV...")
+    local mu, sw
     try
         # First, try loading data from CSV file
-        mu, sw = UEG_MC.getSigma(para; parafile=parafilename)
+        mu, sw = CounterTerm.getSigma(para; parafile=parafilename, root_dir=root_dir)
     catch
         # Fallback mode: Re-derive counterterms from JLD2 file
         error("falling back to JLD2 data...")
@@ -291,13 +293,13 @@ function load_z_mu_counterterms(
         has_taylor_factors::Bool = f["has_taylor_factors"]
         for key in keys(f)
             key == "has_taylor_factors" && continue
-            if UEG.paraid(f[key][1]) == UEG.paraid(param)
+            if UEG.paraid(f[key][1]) == UEG.paraid(para)
                 ct_data = f[key]
                 filefound = true
             end
         end
         if !filefound
-            throw(KeyError(UEG.paraid(param)))
+            throw(KeyError(UEG.paraid(para)))
         end
         # df = fromFile(parafilename)
         para, _, _, data = ct_data

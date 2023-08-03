@@ -11,20 +11,32 @@ using SOSEM
 # For style "science"
 @pyimport scienceplots
 
-const Zrenorm = false     # turn off Z renormalization 
-# const Zrenorm = true        # turn on Z renormalization 
+# Physical parameters
+const rs = 4.0
+const Fs = -0.0
+const beta = 40.0
+const max_order = 5
+
+# const Zrenorm = false     # turn off Z renormalization 
+const Zrenorm = true        # turn on Z renormalization 
 
 const filename = "data/data_K.jld2"
 const parafilename = "data/para.csv"
 
+const lambda_opt = Dict(
+    1.0 => [2.0, 2.0, 2.0, 2.0, 2.0],
+    2.0 => [1.75, 1.75, 1.75, 1.75, 1.75],
+    4.0 => [0.625, 0.625, 0.75, 1.0, 1.125],
+)
+
 # Vibrant qualitative colour scheme from https://personal.sron.nl/~pault/
 const cdict = Dict([
+    "orange" => "#EE7733",
     "blue" => "#0077BB",
     "cyan" => "#33BBEE",
-    "teal" => "#009988",
-    "orange" => "#EE7733",
-    "red" => "#CC3311",
     "magenta" => "#EE3377",
+    "red" => "#CC3311",
+    "teal" => "#009988",
     "grey" => "#BBBBBB",
 ]);
 
@@ -36,7 +48,6 @@ function spline_k(x, y, e)
     kidx = searchsortedfirst(x, 0.5)
     _x, _y = deepcopy(x[kidx:end]), deepcopy(y[kidx:end])
     _w = 1.0 ./ e[kidx:end]
-
     #enforce the boundary condition: the derivative at k=0 is zero
     pushfirst!(_x, 0.01)
     pushfirst!(_x, 0.0)
@@ -46,7 +57,6 @@ function spline_k(x, y, e)
     pushfirst!(_y, yavr)
     pushfirst!(_w, _w[1] * 10000)
     pushfirst!(_w, _w[1] * 10000)
-
     # generate knots with spline without constraints
     spl = interp.UnivariateSpline(_x, _y; w=_w, k=3)
     __x = collect(LinRange(0.0, x[end], 100))
@@ -59,7 +69,6 @@ function spline_orders(x, y, e)
     interp = pyimport("scipy.interpolate")
     # yfit = signal.savgol_filter(y, 5, 3)
     w = 1.0 ./ e
-
     # generate knots with spline without constraints
     spl = interp.UnivariateSpline(x, y; w=w, k=3)
     __x = collect(LinRange(x[1], x[end], 100))
@@ -70,61 +79,38 @@ end
 function loaddata(para, FileName=filename)
     key = UEG.short(para)
     f = jldopen(FileName, "r")
-    # println(key)
-    # println(keys(f))
-    p = UEG.ParaMC(key)
-    @assert p == para
     ngrid, kgrid, sigma = f[key]
-    # println(sigma)
-    order = p.order
-    _partition = UEG.partition(para.order)
     rdata, idata = Dict(), Dict()
-    for (ip, p) in enumerate(_partition)
+    for p in UEG.partition(para.order)
         rdata[p] = real(sigma[p][:, :])
         idata[p] = imag(sigma[p][:, :])
-        # rdata[p] = real(sigma[p][:, :])
-        # idata[p] = imag(sigma[p][:, :])
     end
     return ngrid, kgrid, rdata, idata
 end
 
 function renormalize(para, sigma, Zrenorm)
-    dim, β, kF = para.dim, para.β, para.kF
-
     mu, sw = UEG_MC.getSigma(para; parafile=parafilename)
     δzi, δμ, δz = CounterTerm.sigmaCT(para.order, mu, sw)
     println("Max order: $(para.order)")
     println("δzi:\n", δzi, "\nδμ:\n", δμ, "\nδz:\n", δz, "\n")
-
-    if para.rs == 1.0 && para.mass2 == 1.0 && contains(parafilename, "m10")
-        @assert stdscore(δzi[4] - (0.04071 ± 0.00045), 0) < 5
-        @assert stdscore(δμ[4] - (-0.05946 ± 0.00089), 0) < 5
-        @assert stdscore(δz[4] - (-0.03220 ± 0.00450), 0) < 5
-    elseif para.rs == 1.0 && para.mass2 == 1.0 && contains(parafilename, "0p1")
-        @assert stdscore(δzi[4] - (0.00801 ± 0.00018), 0) < 5
-        @assert stdscore(δμ[4] - (-0.05956 ± 0.00028), 0) < 5
-        @assert stdscore(δz[4] - (-0.00523 ± 0.00018), 0) < 5
-    end
-    # error("done testing")    
-
-    # sigma = CounterTerm.chemicalpotential_renormalization(para.order, sigma, δμ)
-    # return sigma
-
     # sigma_R = sigma * z if zrenorm is True, else sigma_R = sigma
-    # sigma_R = CounterTerm.renormalization(para.order, sigma, δμ, δz; zrenorm=false)
-    sigma_R = CounterTerm.renormalization(para.order, sigma, δμ, δz; zrenorm=Zrenorm)
-    return sigma_R
+    return CounterTerm.renormalization(para.order, sigma, δμ, δz; zrenorm=Zrenorm)
 end
 
 function process(para, Zrenorm)
-    dim, β, kF = para.dim, para.β, para.kF
-
     ngrid, kgrid, rdata, idata = loaddata(para, filename)
-
     rdata_R = renormalize(para, rdata, Zrenorm)
     idata_R = renormalize(para, idata, Zrenorm)
-
     return rdata_R, idata_R, kgrid, ngrid
+end
+
+function ds_dk(sigma, order, kgrid)
+    # derivative ds/dk from non-uniform first-order central difference method
+    dsdk = [
+        (sigma[o][1, 3:end] - sigma[o][1, 1:(end - 1)]) /
+        (kgrid[3:end] - kgrid[1:(end - 1)]) for o in 1:order
+    ]
+    return kgrid[2:end], sum(dsdk)
 end
 
 function sk(sigma, order, kgrid, para)
@@ -160,22 +146,27 @@ function sw_inv(sigma, order, kgrid, para)
     return kgrid, dw
 end
 
-function plotS_k(para, rSw_k, iSw_k, kgrid; Zrenorm=true)
-    # # Get order-dependent params and ReΣ / ImΣ
-    # paralist = para isa Vector ? para : repeat([para], para.order)
-    # rSw_ks = rSw_k isa Vector ? rSw_k : repeat([rSw_k], para.order)
-    # iSw_ks = iSw_k isa Vector ? iSw_k : repeat([iSw_k], para.order)
+function plotS_k(paralist::Vector{ParaMC}, rSw_ks, iSw_ks, kgrid; Zrenorm=true)
+    max_order = maximum([para.order for para in paralist])
+    @assert length(paralist) == length(rSw_k) == length(iSw_k) == max_order
 
-    # para = paralist[1]  # All params except lambda are the same for each order
-    # dim, β, kF = para.dim, para.β, para.kF
-    # kF_label = searchsortedfirst(kgrid, kF)
-    # # zk[1] = zk[1] .- zk[1][kF_label]
-    # # zk[2] = zk[2] .- zk[2][kF_label]
+    lambdas = [para.mass2 for para in paralist]
+    para = paralist[end]  # All params except mass2 and order are the same
+    kF = para.kF
 
     # plot = pyimport("plot")
     style = PyPlot.matplotlib."style"
     style.use(["science", "std-colors"])
-    color = [cdict["blue"], "green", cdict["orange"], cdict["red"], "black"]
+    color = [
+        "k",
+        cdict["orange"],
+        cdict["blue"],
+        cdict["cyan"],
+        cdict["magenta"],
+        cdict["red"],
+        cdict["teal"],
+    ]
+    # color = [cdict["blue"], cdict["orange"], "green", cdict["red"], "black"]
     # color = ["green", cdict["blue"], cdict["red"], "black"]
     #cmap = get_cmap("Paired")
     rcParams = PyPlot.PyDict(PyPlot.matplotlib."rcParams")
@@ -187,7 +178,8 @@ function plotS_k(para, rSw_k, iSw_k, kgrid; Zrenorm=true)
     figure(; figsize=(12, 4))
     # figure(; figsize=(8, 4))
 
-    kF = para.kF
+    mu2, sw2 = UEG_MC.getSigma(para; parafile=parafilename)
+    δzi, δμ, δz = CounterTerm.sigmaCT(para.order, mu2, sw2)
 
     # Plot ∂_ϵₖ Σ(k, iω0) ≈ (Σ(k, iω0) - Σ(0, iω0)) / ϵ_k,
     # multiplying by (1/z)[ξ] if Zrenorm is true
@@ -195,8 +187,16 @@ function plotS_k(para, rSw_k, iSw_k, kgrid; Zrenorm=true)
     # subplot(1, 3, 3)
     for o in 1:(para.order)
         _kgrid, s_k = sk(rSw_k, o, kgrid, para)
-        z = s_k
-        y = [-z.val for z in z]
+        s_k = -s_k  # we measure -Σ
+        # z = s_k
+        if Zrenorm
+            zF = 1 + sum(δz[i] for i in 1:o)
+            z = [(zF + e) for e in s_k]
+        else
+            z = [(1 + e) for e in s_k]
+        end
+        # y = [-z.val for z in z]
+        y = [z.val for z in z]
         e = [z.err for z in z]
         errorbar(
             _kgrid / kF,
@@ -204,9 +204,11 @@ function plotS_k(para, rSw_k, iSw_k, kgrid; Zrenorm=true)
             yerr=e,
             color=color[o],
             capsize=4,
+            # markersize=4,
             fmt="o",
             markerfacecolor="none",
-            label="Order $o",
+            label="\$N = $o\$",
+            zorder=10 * o + 3,
         )
 
         _x, _y = spline_k(_kgrid / kF, y, e)
@@ -214,83 +216,49 @@ function plotS_k(para, rSw_k, iSw_k, kgrid; Zrenorm=true)
     end
     xlim([kgrid[1] / kF, 2.0])
     if para.rs == 1.0
-        ylim([nothing, 0.28])
+        # ylim([nothing, 0.28])
         # ylim([-0.07, 0.23])
+        if Zrenorm
+            ylim([nothing, 1.2])
+        else
+            ylim([nothing, 1.35])
+        end
     elseif para.rs == 2.0
         # ylim([-0.07, 0.25])
-        ylim([nothing, 0.28])
+        # ylim([nothing, 0.3])
+        if Zrenorm
+            ylim([nothing, 1.2])
+        else
+            ylim([nothing, 1.35])
+        end
+    elseif para.rs == 4.0
+        # ylim([-0.07, 0.25])
+        # ylim([nothing, 0.3])
+        if Zrenorm
+            ylim([1.0, 1.1])
+        else
+            ylim([1.0, 1.22])
+        end
     end
     xlabel("\$k/k_F\$")
     if Zrenorm
         ylabel(
-            "\$z \\cdot \\left(\\Sigma(k, i\\omega_0) - \\Sigma(0, i\\omega_0)\\right)/(k^2/2m)\$",
+            "\$z \\cdot \\epsilon(k)/(k^2/2m)\$",
+            # "\$z \\cdot \\left(\\Sigma(k, i\\omega_0) - \\Sigma(0, i\\omega_0)\\right)/(k^2/2m)\$",
         )
     else
         ylabel(
-            "\$\\left(\\Sigma(k, i\\omega_0) - \\Sigma(0, i\\omega_0)\\right)/(k^2/2m)\$",
+            "\$\\epsilon(k)/(k^2/2m)\$",
+            # "\$\\left(\\Sigma(k, i\\omega_0) - \\Sigma(0, i\\omega_0)\\right)/(k^2/2m)\$",
         )
     end
     legend(; ncol=2, loc="upper right")
     PyPlot.tight_layout()
 
-    # # Plot Z(k) = 1 - ∂_iω Σ(k, iω)|_{ω=0},
-    # # multiplying by (1/z)[ξ] if Zrenorm is true
-    # subplot(1, 3, 2)
-    # for o in 1:(para.order)
-    #     _kgrid, s_w = sw_inv(iSw_k, o, kgrid, para)
-    #     z = s_w
-    #     # z = [(1.0 + e) for e in s_w]
-    #     # _kgrid, s_w = sw(iSw_k, o, kgrid)
-    #     # z = [1.0 / (1.0 + e) for e in s_w]
-    #     y = [z.val for z in z]
-    #     e = [z.err for z in z]
-    #     kidx = searchsortedfirst(_kgrid, kF)
-
-    #     println("order $o at k=$(_kgrid[1]/kF): $(z[1])")
-    #     println("order $o at k=$(_kgrid[kidx]/kF): $(z[kidx])")
-
-    #     errorbar(
-    #         _kgrid / kF,
-    #         y;
-    #         yerr=e,
-    #         color=color[o],
-    #         capsize=4,
-    #         fmt="o",
-    #         markerfacecolor="none",
-    #         label="Order $o",
-    #     )
-
-    #     _x, _y = spline_k(_kgrid / kF, y, e)
-    #     plot(_x, _y; color=color[o], linestyle="--")
-    # end
-    # xlim([kgrid[1] / kF, 2.0])
-    # # ylim([0.98, 1.275])
-    # if para.rs == 1.0
-    #     ylim([0.73, 1.02])
-    # elseif para.rs == 2.0
-    #     ylim([0.78, 1.02])
-    # end
-    # xlabel("\$k/k_F\$")
-    # if Zrenorm
-    #     ylabel(
-    #         "\$\\frac{1}{z} \\cdot Z(k) = \\frac{1}{z} \\cdot \\left( 1 - \\partial_{i\\omega}\\operatorname{Im}\\Sigma(k, i\\omega)\\big|_{\\omega = 0}\\right)^{-1}\$",
-    #     )
-    # else
-    #     ylabel(
-    #         "\$Z(k) = \\left( 1 - \\partial_{i\\omega}\\operatorname{Im}\\Sigma(k, i\\omega)\\big|_{\\omega = 0}\\right)^{-1}\$",
-    #     )
-    # end
-    # legend(; ncol=2)
-    # PyPlot.tight_layout()
-    # println()
-
     # Plot (1/Z)(k) = (1 - ∂_iω Σ(k, iω)|_{ω=0})^{-1},
     # multiplying by z[ξ] if Zrenorm is true
     subplot(1, 2, 1)
     # subplot(1, 3, 1)
-
-    mu2, sw2 = UEG_MC.getSigma(para; parafile=parafilename)
-    δzi, δμ, δz = CounterTerm.sigmaCT(para.order, mu2, sw2)
 
     for o in 1:(para.order)
         _kgrid, s_w = sw(iSw_k, o, kgrid, para)
@@ -299,12 +267,6 @@ function plotS_k(para, rSw_k, iSw_k, kgrid; Zrenorm=true)
         else
             z = s_w
         end
-        # z = [(1.0 + e) for e in s_w]
-        # z = [(1.0 - e) for e in s_w]
-
-        # _kgrid, s_w = sw(iSw_k, o, kgrid)
-        # z = [1.0 / (1.0 + e) for e in s_w]
-        # y = [z.val for z in z]
         y = [-z.val for z in z]
         e = [z.err for z in z]
         kidx = searchsortedfirst(_kgrid, kF)
@@ -318,9 +280,11 @@ function plotS_k(para, rSw_k, iSw_k, kgrid; Zrenorm=true)
             yerr=e,
             color=color[o],
             capsize=4,
+            # markersize=4,
             fmt="o",
             markerfacecolor="none",
-            label="Order $o",
+            label="\$N = $o\$",
+            zorder=10 * o + 3,
         )
 
         _x, _y = spline_k(_kgrid / kF, y, e)
@@ -330,41 +294,35 @@ function plotS_k(para, rSw_k, iSw_k, kgrid; Zrenorm=true)
     if para.rs == 1.0
         if Zrenorm
             ylim([-0.01, 0.09])
-            # ylim([-0.09, 0.012])
-            # ylim([-0.1, 0.012])
         else
             ylim([-0.17, 0.02])
         end
     elseif para.rs == 2.0
-        ylim([-0.17, 0.02])
-        # ylim([0.98, 1.18])
-        # ylim([nothing, 0.25])
+        if Zrenorm
+            ylim([-0.015, 0.09])
+            # ylim([-0.015, 0.06])
+        else
+            ylim([-0.22, 0.02])
+            # ylim([-0.17, 0.02])
+        end
+    elseif para.rs == 4.0
+        if Zrenorm
+            # ylim([-0.015, 0.09])
+            # ylim([-0.015, 0.06])
+        else
+            ylim([-0.17, 0.02])
+            # ylim([-0.17, 0.02])
+        end
     end
-    # if para.rs == 1.0
-    #     ylim([0.98, 1.275])
-    # elseif para.rs == 2.0
-    #     ylim([0.98, 1.18])
-    # end
     if Zrenorm
         ylabel(
             "\$(z - 1) \\cdot \\partial_{i\\omega}\\operatorname{Im}\\Sigma(k, i\\omega)\\big|_{\\omega = 0}\$",
-            # "\$-(z - 1) \\cdot \\partial_{i\\omega}\\operatorname{Im}\\Sigma(k, i\\omega)\\big|_{\\omega = 0}\$",
         )
     else
         ylabel(
             "\$\\partial_{i\\omega}\\operatorname{Im}\\Sigma(k, i\\omega)\\big|_{\\omega = 0}\$",
-            # "\$-\\partial_{i\\omega}\\operatorname{Im}\\Sigma(k, i\\omega)\\big|_{\\omega = 0}\$",
         )
     end
-    # if Zrenorm
-    #     ylabel(
-    #         "\$z \\cdot Z^{-1}(k) = z \\cdot \\left(1 - \\partial_{i\\omega}\\operatorname{Im}\\Sigma(k, i\\omega)\\big|_{\\omega = 0}\\right)\$",
-    #     )
-    # else
-    #     ylabel(
-    #         "\$Z^{-1}(k) = 1 - \\partial_{i\\omega}\\operatorname{Im}\\Sigma(k, i\\omega)\\big|_{\\omega = 0}\$",
-    #     )
-    # end
     xlabel("\$k/k_F\$")
     if Zrenorm
         legend(; ncol=2, loc="upper left")
@@ -375,44 +333,22 @@ function plotS_k(para, rSw_k, iSw_k, kgrid; Zrenorm=true)
 
     zrenormstr = Zrenorm ? "_zrenorm" : ""
     savefig(
-        "../../results/sigma_k_iw0/sigma_k_iw0_rs=$(para.rs)_lambda=$(para.mass2)_beta=$(para.beta)$(zrenormstr).pdf",
+        "../../results/sigma_k_iw0/sigma_k_iw0_rs=$(para.rs)_lambdas=$(lambdas)_beta=$(para.beta)$(zrenormstr).pdf",
+        # "../../results/sigma_k_iw0/sigma_k_iw0_rs=$(para.rs)_lambda=$(para.mass2)_beta=$(para.beta)$(zrenormstr).pdf",
     )
     return
+end
 
-    # zkF, μkF, has_taylor_factors =
-    #     UEG_MC.load_z_mu(para; ct_filename=ct_filename, parafilename=parafilename)
-    # # Add Taylor factors to CT data
-    # if has_taylor_factors == false
-    #     println("Adding Taylor factors to CT data...")
-    #     for (p, v) in zkF
-    #         zkF[p] = v / (factorial(p[2]) * factorial(p[3]))
-    #     end
-    #     for (p, v) in μkF
-    #         μkF[p] = v / (factorial(p[2]) * factorial(p[3]))
-    #     end
-    # else
-    #     println("Taylor factors already present in CT data...")
-    # end
-    # δzikF, δμkF, _ = CounterTerm.sigmaCT(para.order, μkF, zkF; verbose=1)
-    # # The inverse Z-factor is (1 - δs[ξ])
-    # zinvkF = Measurement{Float64}[1; accumulate(+, δzikF; init=1)]
-
-    # println("\nδμ(k = kF):\n")
-    # for (o, dmu) in enumerate(δμkF)
-    #     println(" • (N = $o) $dmu")
-    # end
-    # println("\nδ(1/z)(k = kF):\n")
-    # for (o, dzinv) in enumerate(δzikF)
-    #     println(" • (N = $o) $dzinv")
-    # end
-    # println("\n(1/z)(k = kF):\n")
-    # for (op1, zinv) in enumerate(zinvkF)
-    #     println(" • (N = $(op1 - 1)) $zinv")
-    # end
-    # println()
+function plotS_k(para::ParaMC, rSw_k, iSw_k, kgrid; Zrenorm=true)
+    paralist = repeat([para], para.order)
+    rSw_ks = repeat([rSw_k], para.order)
+    iSw_ks = repeat([iSw_k], para.order)
+    plotS_k(paralist, rSw_ks, iSw_ks, kgrid; Zrenorm=Zrenorm)
+    return
 end
 
 function plotS_k0(paralist; Zrenorm=true, ktarget=0.5)
+    lambdas = [para.mass2 for para in paralist]
     para = paralist[1]
     local kval
     s_ks = []
@@ -447,7 +383,16 @@ function plotS_k0(paralist; Zrenorm=true, ktarget=0.5)
     # plot = pyimport("plot")
     style = PyPlot.matplotlib."style"
     style.use(["science", "std-colors"])
-    color = [cdict["blue"], "green", cdict["orange"], cdict["red"], "black"]
+    color = [
+        "k",
+        cdict["orange"],
+        cdict["blue"],
+        cdict["cyan"],
+        cdict["magenta"],
+        cdict["red"],
+        cdict["teal"],
+    ]
+    # color = [cdict["blue"], cdict["orange"], "green", cdict["red"], "black"]
     # color = ["green", cdict["blue"], cdict["red"], "black"]
     #cmap = get_cmap("Paired")
     rcParams = PyPlot.PyDict(PyPlot.matplotlib."rcParams")
@@ -464,21 +409,35 @@ function plotS_k0(paralist; Zrenorm=true, ktarget=0.5)
     for (i, p) in enumerate(paralist)
         lambda = p.mass2
         orders = collect(1:(p.order))
-        z = s_ks[i]
-        y = [-z.val for z in z]
+        mu2, sw2 = UEG_MC.getSigma(p; parafile=parafilename)
+        _, _, δz = CounterTerm.sigmaCT(p.order, mu2, sw2)
+        if Zrenorm
+            zF = [1 + sum(δz[i] for i in 1:o) for o in orders]
+            z = [(zF[o] - e) for (o, e) in enumerate(s_ks[i])]
+        else
+            z = [(1 - e) for e in s_ks[i]]
+        end
+        # y = [-z.val for z in z]
+        y = [z.val for z in z]
         e = [z.err for z in z]
+
+        # z = s_ks[i]
+        # y = [-z.val for z in z]
+        # e = [z.err for z in z]
         errorbar(
             orders,
             y;
             yerr=e,
-            color=color[i],
+            color=color[i + 1],
             capsize=4,
+            # markersize=4,
             fmt="o",
             markerfacecolor="none",
             label="\$\\lambda = $lambda\$",
+            zorder=10 * i + 3,
         )
         _x, _y = spline_orders(orders, y, e)
-        plot(_x, _y; color=color[i], linestyle="--")
+        plot(_x, _y; color=color[i + 1], linestyle="--")
     end
     # xlim([kgrid[1] / kF, 2.0])
     if para.rs == 1.0
@@ -501,11 +460,13 @@ function plotS_k0(paralist; Zrenorm=true, ktarget=0.5)
     )
     if Zrenorm
         ylabel(
-            "\$z \\cdot \\left(\\Sigma(k, i\\omega_0) - \\Sigma(0, i\\omega_0)\\right)/(k^2/2m)\$",
+            "\$z \\cdot \\epsilon(k) / (k^2/2m)\$",
+            # "\$z \\cdot \\left(\\Sigma(k, i\\omega_0) - \\Sigma(0, i\\omega_0)\\right)/(k^2/2m)\$",
         )
     else
         ylabel(
-            "\$\\left(\\Sigma(k, i\\omega_0) - \\Sigma(0, i\\omega_0)\\right)/(k^2/2m)\$",
+            "\$\\epsilon(k) / (k^2/2m)\$",
+            # "\$\\left(\\Sigma(k, i\\omega_0) - \\Sigma(0, i\\omega_0)\\right)/(k^2/2m)\$",
         )
     end
     legend(; ncol=2, loc="best")
@@ -530,14 +491,16 @@ function plotS_k0(paralist; Zrenorm=true, ktarget=0.5)
             orders,
             y;
             yerr=e,
-            color=color[i],
+            color=color[i + 1],
             capsize=4,
+            # markersize=4,
             fmt="o",
             markerfacecolor="none",
             label="\$\\lambda = $lambda\$",
+            zorder=10 * i + 3,
         )
         _x, _y = spline_orders(orders, y, e)
-        plot(_x, _y; color=color[i], linestyle="--")
+        plot(_x, _y; color=color[i + 1], linestyle="--")
     end
     # xlim([kgrid[1] / kF, 2.0])
     if para.rs == 1.0
@@ -549,7 +512,7 @@ function plotS_k0(paralist; Zrenorm=true, ktarget=0.5)
             # ylim([-0.17, 0.02])
         end
     elseif para.rs == 2.0
-        ylim([-0.12, 0.01])
+        # ylim([-0.12, 0.01])
         # ylim([0.98, 1.18])
     end
     if Zrenorm
@@ -594,56 +557,65 @@ function plotS_k0(paralist; Zrenorm=true, ktarget=0.5)
 
     zrenormstr = Zrenorm ? "_zrenorm" : ""
     savefig(
-        "../../results/sigma_k_iw0/sigma_iw0_k=$(round(kval; sigdigits=3))kF_rs=$(para.rs)_lambda=$(para.mass2)_beta=$(para.beta)$(zrenormstr).pdf",
+        "../../results/sigma_k_iw0/sigma_iw0_k=$(round(kval; sigdigits=3))kF_rs=$(para.rs)_lambda=$(lambdas)_beta=$(para.beta)$(zrenormstr).pdf",
     )
 
     return
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
-    # para = ParaMC(; rs=1.0, beta=40.0, Fs=-0.0, order=4, mass2=1.0, isDynamic=false)
-    # para = ParaMC(; rs=1.0, beta=40.0, Fs=-0.0, order=4, mass2=1.75, isDynamic=false)
+    @assert haskey(lambda_opt, rs) "Lambda optima for rs = $(rs) not found!"
+    @assert length(lambda_opt[rs]) ≥ max_order "Lambda optimum at N = $max_order not found for rs = $(rs)!"
+    lambdas = lambda_opt[rs][1:max_order]
+
+    paralist = [
+        ParaMC(; rs=rs, beta=beta, Fs=Fs, order=order, mass2=lambda, isDynamic=false)
+        for (order, lambda) in enumerate(lambdas)
+    ]
+
+    # Using order-by-order lambda optima
+    rSw_ks, iSw_ks = [], []
+    for para in paralist
+        rSw_k, iSw_k, kgrid, ngrid = process(para, Zrenorm)
+        push!(rSw_ks, rSw_k)
+        push!(iSw_ks, iSw_k)
+    end
+    rSw_k, iSw_k, kgrid, ngrid = process(paralist, Zrenorm)
+    plotS_k(paralist, rSw_k, iSw_k, kgrid; Zrenorm=Zrenorm)
+
+
+    # # Using single lambda for all orders
     # para = ParaMC(; rs=1.0, beta=40.0, Fs=-0.0, order=5, mass2=2.0, isDynamic=false)
     # para = ParaMC(; rs=1.0, beta=40.0, Fs=-0.0, order=5, mass2=3.5, isDynamic=false)
+    # para = ParaMC(; rs=2.0, beta=40.0, Fs=-0.0, order=5, mass2=1.75, isDynamic=false)
+    # para = ParaMC(; rs=2.0, beta=40.0, Fs=-0.0, order=5, mass2=2.5, isDynamic=false)
+    # para = ParaMC(; rs=4.0, beta=40.0, Fs=-0.0, order=5, mass2=1.5, isDynamic=false)
+    # rSw_k, iSw_k, kgrid, ngrid = process(para, Zrenorm)
+    # kF_label = searchsortedfirst(kgrid, para.kF)
+    # for k in keys(rSw_k)
+    #     println(k, ": ", rSw_k[k][1, kF_label])
+    # end
+    # plotS_k(para, rSw_k, iSw_k, kgrid; Zrenorm=Zrenorm)
 
-    para = ParaMC(; rs=2.0, beta=40.0, Fs=-0.0, order=4, mass2=1.75, isDynamic=false)
-
-    # Using single lambda for all orders at rs=1,2
-    rSw_k, iSw_k, kgrid, ngrid = process(para, Zrenorm)
-    kF_label = searchsortedfirst(kgrid, para.kF)
-    for k in keys(rSw_k)
-        println(k, ": ", rSw_k[k][1, kF_label])
-    end
-    plotS_k(para, rSw_k, iSw_k, kgrid; Zrenorm=Zrenorm)
-
-    # kF = para.kF
-
+    # # Compare results for two calculations using single lambda at all orders
+    ### rs = 1 ###
     # mass2list = [2.0, 3.5]
     # paralist = [
     #     ParaMC(; rs=1.0, beta=40.0, Fs=-0.0, order=5, mass2=mass2, isDynamic=false) for
     #     mass2 in mass2list
     # ]
+    ### rs = 2 ###
+    # mass2list = [1.75, 2.5]
+    # paralist = [
+    #     ParaMC(; rs=2.0, beta=40.0, Fs=-0.0, order=5, mass2=mass2, isDynamic=false) for
+    #     mass2 in mass2list
+    # ]
+    ### rs = 4 ###
+    # mass2list = [1.5]
+    # paralist = [
+    #     ParaMC(; rs=2.0, beta=40.0, Fs=-0.0, order=5, mass2=mass2, isDynamic=false) for
+    #     mass2 in mass2list
+    # ]
     # plotS_k0(paralist; Zrenorm=Zrenorm, ktarget=0.5)
-    # plotS_k0(paralist; Zrenorm=Zrenorm, ktarget=1.0)
-    # plotS_k0(paralist; Zrenorm=Zrenorm, ktarget=1.5)
 
-    # # Using order-by-order lambda optima for rs=3,4,5
-    # para1 = ParaMC(; rs=4.0, beta=40.0, Fs=-0.0, order=4, mass2=0.5625, isDynamic=false)
-    # para2 = ParaMC(; rs=4.0, beta=40.0, Fs=-0.0, order=4, mass2=0.625, isDynamic=false)
-    # para3 = ParaMC(; rs=4.0, beta=40.0, Fs=-0.0, order=4, mass2=0.75, isDynamic=false)
-    # para4 = ParaMC(; rs=4.0, beta=40.0, Fs=-0.0, order=4, mass2=1.0, isDynamic=false)
-    # paralist = [para1, para2, para3, para4]
-    # local kgrid, ngrid
-    # rSw_ks = []
-    # iSw_ks = []
-    # for para in paralist
-    #     rSw_k, iSw_k, kgrid, ngrid = process(para, false)
-    #     push!(rSw_ks, rSw_k)
-    #     push!(iSw_ks, iSw_k)
-    # end
-    # kF_label = searchsortedfirst(kgrid, para.kF)
-    # for k in keys(rSw_k)
-    #     println(k, ": ", rSw_k[k][1, kF_label])
-    # end
-    # plotS_k(paralist, rSw_ks, iSw_ks, kgrid, Zrenorm)
 end

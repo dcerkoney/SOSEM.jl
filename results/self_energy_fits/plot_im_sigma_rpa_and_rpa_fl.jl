@@ -79,6 +79,25 @@ const rpa_fl_moments_ko_takada_converged = Dict(
     10.0 => 0.021207322984162568,
 )
 
+# function limit_at_infinity(f; x0=x0, dx=dx, atol=1e-13, maxstep=1e9)
+#     x1 = x0 + dx
+#     f0 = f(x0)
+#     f1 = f(x1)
+#     step = 1
+#     while abs(f1 - f0) > atol
+#         if step > maxstep
+#             @warn "Requested atol was not obtainable within $maxstep steps!"
+#             break
+#         end
+#         step += 1
+#         x0 = x1
+#         f0 = f1
+#         x1 += dx
+#         f1 = f(x1)
+#     end
+#     return f1, x1, step
+# end
+
 function rsquared(xs, ys, yhats)
     ybar = sum(yhats) / length(yhats)
     ss_res = sum((yhats .- ys) .^ 2)
@@ -295,6 +314,7 @@ function main()
     # rslist = [1.0]
     # rslist = [1 / α]  # Gives kF = EF = 1
     rslist_small = [1.0, 5.0, 10.0]
+    # rslist_small = [1.0]
     rslist = [0.01, 0.1, 0.5, 1.0, 2.0, 3.0, 4.0, 5.0, 7.5, 10.0]
     # rslist = [0.1, 0.5, 1.0, 2.0, 3.0, 4.0, 5.0, 7.5, 10.0]
     # rslist = rslist_small
@@ -511,13 +531,15 @@ function main()
             )
             ax5.plot(
                 wns_over_EF,
-                -imag(sigma_rpa_wn_dyn) / EF;
+                -imag(sigma_rpa_wn_dyn_over_EF);
+                # -imag(sigma_rpa_wn_dyn) / EF;
                 color="C$(idx-1)",
                 label="\$RPA\$ (\$r_s=$(rs)\$)",
             )
             ax5.plot(
                 wns_over_EF,
-                -imag(sigma_rpa_fl_wn_dyn) / EF;
+                -imag(sigma_rpa_fl_wn_dyn_over_EF);
+                # -imag(sigma_rpa_fl_wn_dyn) / EF;
                 color="$(darkcolors[idx])",
                 label="\$RPA+FL\$ (\$r_s=$(rs)\$)",
             )
@@ -549,18 +571,24 @@ function main()
         push!(zfactors_rpa, zfactor_rpa)
         push!(zfactors_rpa_fl, zfactor_rpa_fl)
 
+        # Low-high interpolation: f(ω) = B / (iω + Ωₜ)
+        function lo_hi_fit_rpa(omega_over_EF)
+            return (rpa_c1 / EF^2) / (im * omega_over_EF + w0_rpa / EF)
+        end
+        function lo_hi_fit_rpa_fl(omega_over_EF)
+            return (rpa_fl_c1 / EF^2) / (im * omega_over_EF + w0_rpa_fl / EF)
+        end
+
         # Plot -ImΣ, low and high frequency tails together at each rs
         if rs in rslist_small
             fig6, ax6 = plt.subplots()
             ax6.axvline(
-                # w0_rpa / eTF;
                 w0_rpa / EF;
                 color="gray",
                 linestyle="-",
                 label="\$\\Omega_t\$ (\$RPA\$)",
             )
             ax6.axvline(
-                # w0_rpa_fl / eTF;
                 w0_rpa_fl / EF;
                 color="k",
                 linestyle="-",
@@ -568,23 +596,17 @@ function main()
             )
             # Set the upper ylim as 10% larger than the tail intersection
             max_tail_intersection = max(
-                # coeff_low_freq_rpa * w0_rpa / eTF,
-                # coeff_low_freq_rpa_fl * w0_rpa_fl / eTF,
                 coeff_low_freq_rpa * w0_rpa / EF,
                 coeff_low_freq_rpa_fl * w0_rpa_fl / EF,
             )
             # High-frequency behavior of -ImΣ
             ax6.plot(
-                # wns_over_eTF,
-                # coeff_high_freq_rpa ./ wns ./ eTF;
                 wns_over_EF,
                 coeff_high_freq_rpa ./ wns ./ EF;
                 color="C$(idx-1)",
                 linestyle="--",
             )
             ax6.plot(
-                # wns_over_eTF,
-                # coeff_high_freq_rpa_fl ./ wns ./ eTF;
                 wns_over_EF,
                 coeff_high_freq_rpa_fl ./ wns ./ EF;
                 color="$(darkcolors[idx])",
@@ -592,55 +614,54 @@ function main()
             )
             # Low-frequency behavior of -ImΣ
             ax6.plot(
-                # wns_over_eTF,
-                # coeff_low_freq_rpa .* wns_over_eTF;
                 wns_over_EF,
                 coeff_low_freq_rpa .* wns_over_EF;
                 color="C$(idx-1)",
                 linestyle="--",
             )
             ax6.plot(
-                # wns_over_eTF,
-                # coeff_low_freq_rpa_fl .* wns_over_eTF;
                 wns_over_EF,
                 coeff_low_freq_rpa_fl .* wns_over_EF;
                 color="$(darkcolors[idx])",
                 linestyle="--",
             )
+            # Low-high interpolation -ImΣ ≈ -Im{f(ω)}
+            ax6.plot(
+                wns_over_EF,
+                -imag.(lo_hi_fit_rpa.(wns_over_EF));
+                color="C$(idx)",
+                linestyle="-",
+                label="\$\\mathrm{Im}\\left\\lbrace\\frac{B}{i\\omega_n + \\Omega_t}\\right\\rbrace\$ (\$RPA\$)",
+            )
+            ax6.plot(
+                wns_over_EF,
+                -imag.(lo_hi_fit_rpa_fl.(wns_over_EF));
+                color="$(darkcolors[idx+1])",
+                linestyle="-",
+                label="\$\\mathrm{Im}\\left\\lbrace\\frac{B}{i\\omega_n + \\Omega_t}\\right\\rbrace\$ (\$RPA+FL\$)",
+            )
             # -ImΣ
             ax6.plot(
-                # wns_over_eTF,
-                # -imag(sigma_rpa_wn_dyn) / eTF;
                 wns_over_EF,
                 -imag(sigma_rpa_wn_dyn) / EF;
                 color="C$(idx-1)",
                 label="\$RPA\$ (\$r_s=$(rs)\$)",
             )
             ax6.plot(
-                # wns_over_eTF,
-                # -imag(sigma_rpa_fl_wn_dyn) / eTF;
                 wns_over_EF,
                 -imag(sigma_rpa_fl_wn_dyn) / EF;
                 color="$(darkcolors[idx])",
                 label="\$RPA+FL\$ (\$r_s=$(rs)\$)",
             )
-            # ax6.set_xlim(0, 20)
-            ax6.set_xlim(0, 50)
+            ax6.set_xlim(0, 20)
+            # ax6.set_xlim(0, 50)
             ax6.set_ylim(0, 1.1 * max_tail_intersection)
-            # ax6.set_xlabel("\$\\omega_n / \\epsilon_{\\mathrm{TF}}\$")
-            # ax6.set_ylabel(
-            #     "\$-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n) / \\epsilon_{\\mathrm{TF}}\$",
-            # )
             ax6.set_xlabel("\$\\omega_n / \\epsilon_F\$")
             ax6.set_ylabel(
                 "\$-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n) / \\epsilon_F\$",
             )
             ax6.legend(; loc="best")
             plt.tight_layout()
-            # fig6.savefig(
-            #     "results/self_energy_fits/$(int_type)/im_sigma_and_tails_" *
-            #     "rs=$(rs)_beta_ef=$(beta)_k=$(ktarget)_eTF_$(int_type).pdf",
-            # )
             fig6.savefig(
                 "results/self_energy_fits/$(int_type)/im_sigma_and_tails_" *
                 "rs=$(rs)_beta_ef=$(beta)_k=$(ktarget)_EF_$(int_type).pdf",
@@ -648,33 +669,37 @@ function main()
 
             # -ωₙImΣ one-by-one
             peak_this_sigma = max(
-                maximum(-imag(sigma_rpa_wn_dyn) .* wns_over_EF),
-                maximum(-imag(sigma_rpa_fl_wn_dyn) .* wns_over_EF),
+                maximum(-imag(sigma_rpa_wn_dyn_over_EF) .* wns_over_EF),
+                maximum(-imag(sigma_rpa_fl_wn_dyn_over_EF) .* wns_over_EF),
             )
             fig8, ax8 = plt.subplots()
             ax8.plot(
                 wns_over_EF,
-                rpa_c1 * one.(wns_over_EF) / EF,
+                (rpa_c1 / EF^2) * one.(wns_over_EF),
+                # rpa_c1 * one.(wns_over_EF) / EF,
                 "C$(idx-1)";
                 linestyle="dashed",
-                label="\$C^{(1)}_{RPA} / \\omega_n \\epsilon_F\$ (\$r_s=$rs\$)",
+                label="\$B_{RPA}\$ (\$r_s=$rs\$)",
+                # label="\$C^{(1)}_{RPA} / \\epsilon^2_F\$ (\$r_s=$rs\$)",
             )
             ax8.plot(
                 wns_over_EF,
-                -imag(sigma_rpa_wn_dyn) .* wns_over_EF,
+                -imag(sigma_rpa_wn_dyn_over_EF) .* wns_over_EF,
                 "C$(idx-1)";
                 label="\$RPA\$ (\$r_s=$rs\$)",
             )
             ax8.plot(
                 wns_over_EF,
-                rpa_fl_c1 * one.(wns_over_EF) / EF,
+                (rpa_fl_c1 / EF^2) * one.(wns_over_EF),
+                # rpa_fl_c1 * one.(wns_over_EF) / EF,
                 "$(darkcolors[idx])";
                 linestyle="dashed",
-                label="\$C^{(1)}_{RPA+FL} / \\omega_n \\epsilon_F\$ (\$r_s=$rs\$)",
+                label="\$B_{RPA+FL}\$ (\$r_s=$rs\$)",
+                # label="\$C^{(1)}_{RPA+FL} / \\epsilon^2_F\$ (\$r_s=$rs\$)",
             )
             ax8.plot(
                 wns_over_EF,
-                -imag(sigma_rpa_fl_wn_dyn) .* wns_over_EF,
+                -imag(sigma_rpa_fl_wn_dyn_over_EF) .* wns_over_EF,
                 "$(darkcolors[idx])";
                 label="\$RPA+FL\$ (\$r_s=$rs\$)",
             )
@@ -683,13 +708,166 @@ function main()
             ax8.legend(; loc="best")
             ax8.set_xlabel("\$\\omega_n / \\epsilon_F\$")
             ax8.set_ylabel(
-                "\$-\\omega_n \\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n) / \\epsilon_F\$",
+                "\$-\\omega_n \\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n) / \\epsilon^2_F\$",
+                # "\$-\\widetilde{omega}_n \\mathrm{Im}\\Sigma(k = $ktarget, i\\widetilde{omega}_n)\$",
             )
             plt.tight_layout()
-            # fig8.savefig(
-            #     "results/self_energy_fits/$(int_type)/wn_times_im_sigma_" *
-            #     "rs=$(rs)_beta_ef=$(beta)_k=$(ktarget)_EF_$(int_type).pdf",
+            fig8.savefig(
+                "results/self_energy_fits/$(int_type)/wn_times_im_sigma_" *
+                "rs=$(rs)_beta_ef=$(beta)_k=$(ktarget)_EF_$(int_type).pdf",
+            )
+
+            # -ωₙImΣ one-by-one
+            peak_this_sigma = max(
+                maximum(-imag(sigma_rpa_wn_dyn_over_EF) .* wns_over_EF),
+                maximum(-imag(sigma_rpa_fl_wn_dyn_over_EF) .* wns_over_EF),
+            )
+            fig8, ax8 = plt.subplots()
+            ax8.plot(
+                wns_over_EF,
+                (rpa_c1 / EF^2) * one.(wns_over_EF),
+                # rpa_c1 * one.(wns_over_EF) / EF,
+                "C$(idx-1)";
+                linestyle="dashed",
+                label="\$B_{RPA}\$ (\$r_s=$rs\$)",
+                # label="\$C^{(1)}_{RPA} / \\epsilon^2_F\$ (\$r_s=$rs\$)",
+            )
+            ax8.plot(
+                wns_over_EF,
+                -imag(sigma_rpa_wn_dyn_over_EF) .* wns_over_EF,
+                "C$(idx-1)";
+                label="\$RPA\$ (\$r_s=$rs\$)",
+            )
+            ax8.plot(
+                wns_over_EF,
+                (rpa_fl_c1 / EF^2) * one.(wns_over_EF),
+                # rpa_fl_c1 * one.(wns_over_EF) / EF,
+                "$(darkcolors[idx])";
+                linestyle="dashed",
+                label="\$B_{RPA+FL}\$ (\$r_s=$rs\$)",
+                # label="\$C^{(1)}_{RPA+FL} / \\epsilon^2_F\$ (\$r_s=$rs\$)",
+            )
+            ax8.plot(
+                wns_over_EF,
+                -imag(sigma_rpa_fl_wn_dyn_over_EF) .* wns_over_EF,
+                "$(darkcolors[idx])";
+                label="\$RPA+FL\$ (\$r_s=$rs\$)",
+            )
+            ax8.set_xlim(0, wns_over_EF[end])
+            ax8.set_ylim(; bottom=0, top=1.1 * peak_this_sigma)
+            ax8.legend(; loc="best")
+            ax8.set_xlabel("\$\\omega_n / \\epsilon_F\$")
+            ax8.set_ylabel(
+                "\$-\\omega_n \\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n) / \\epsilon^2_F\$",
+                # "\$-\\widetilde{omega}_n \\mathrm{Im}\\Sigma(k = $ktarget, i\\widetilde{omega}_n)\$",
+            )
+            plt.tight_layout()
+            fig8.savefig(
+                "results/self_energy_fits/$(int_type)/wn_times_im_sigma_" *
+                "rs=$(rs)_beta_ef=$(beta)_k=$(ktarget)_EF_$(int_type).pdf",
+            )
+
+            # Estimate measured B ≈ -(ω_max / EF) (ImΣ(ω_max) / EF)
+            coeff_B_tail_rpa    = rpa_c1 / EF^2
+            coeff_B_tail_rpa_fl = rpa_fl_c1 / EF^2
+            coeff_B_meas_rpa    = -wns_over_EF[end] * imag(sigma_rpa_wn_dyn_over_EF[end])
+            coeff_B_meas_rpa_fl = -wns_over_EF[end] * imag(sigma_rpa_fl_wn_dyn_over_EF[end])
+            println(
+                "(RPA) Percent error in B: ",
+                100 * abs(coeff_B_meas_rpa - coeff_B_tail_rpa) / (coeff_B_tail_rpa),
+            )
+            println(
+                "(RPA+FL) Percent error in B: ",
+                100 * abs(coeff_B_meas_rpa_fl - coeff_B_tail_rpa_fl) /
+                (coeff_B_tail_rpa_fl),
+            )
+
+            # # Get the local-field factor fs = Fs / NF
+            # local fs_int_type
+            # if int_type == :ko
+            #     # NOTE: The Takada ansatz for fs is q-dependent!
+            #     # fs_int_type = Interaction.landauParameterTakada(ktarget, 0, param)[1]
+            #     fs_int_type = Interaction.landauParameterTakada(1e5, 0, param)[1]
+            # elseif int_type == :ko_const
+            #     # fs = Fs / NF
+            #     Fs = get_Fs(rs)
+            #     fs_int_type = Fs / param.NF
+            # else
+            #     error("Not yet implemented!")
+            # end
+
+            # Analytic coefficients D_{RPA(+FL)} from VZN paper
+            alpha = (4 / 9π)^(1 / 3)
+            coeff_D_rpa_exact = -(16 / 3π) * (alpha * rs)^2
+
+            # Plot isolated 1/ω^{3/2} dependence of -ImΣ
+            sigma_rpa_residual =
+                -wns_over_EF .* imag(sigma_rpa_wn_dyn_over_EF) .- coeff_B_meas_rpa
+            sigma_rpa_fl_residual =
+                -wns_over_EF .* imag(sigma_rpa_fl_wn_dyn_over_EF) .- coeff_B_meas_rpa_fl
+            @assert sigma_rpa_residual[end] == 0.0
+            @assert sigma_rpa_fl_residual[end] == 0.0
+            sigma_32_rpa = sigma_rpa_residual .* sqrt.(wns_over_EF)
+            sigma_32_rpa_fl = sigma_rpa_fl_residual .* sqrt.(wns_over_EF)
+            # The limiting values are D_{RPA(+FL)}
+            coeff_D_meas_rpa    = sigma_32_rpa[end]
+            coeff_D_meas_rpa_fl = sigma_32_rpa_fl[end]
+            # Check percent error of D coefficients
+            println(
+                "(RPA) Percent error in D: ",
+                100 * abs(coeff_D_meas_rpa - coeff_D_rpa_exact) / (coeff_D_rpa_exact),
+            )
+            # println(
+            #     "(RPA+FL) Percent error in D: ",
+            #     100 * abs(coeff_D_meas_rpa_fl - coeff_D_rpa_fl_exact) /
+            #     (coeff_D_rpa_fl_exact),
             # )
+            # Plot the 1/ω^{3/2} dependence of -ImΣ
+            fig11, ax11 = plt.subplots()
+            ax11.axhline(
+                -coeff_D_rpa_exact;
+                color="k",
+                linestyle="--",
+                label="\$\\frac{16}{3\\pi}\\left(\\alpha r_s\\right)^2\$",
+            )
+            # ax11.axhline(
+            #     -coeff_D_meas_rpa;
+            #     color="C$(idx-1)",
+            #     linestyle="--",
+            #     label="\$D_{RPA}\$ (\$r_s=$rs\$)",
+            # )
+            ax11.plot(
+                wns_over_EF,
+                -sigma_32_rpa;
+                color="C$(idx-1)",
+                label="\$RPA\$ (\$r_s=$rs\$)",
+            )
+            # ax11.axhline(
+            #     -coeff_D_meas_rpa_fl;
+            #     color="$(darkcolors[idx])",
+            #     linestyle="--",
+            #     label="\$D_{RPA+FL}\$ (\$r_s=$rs\$)",
+            # )
+            ax11.plot(
+                wns_over_EF,
+                -sigma_32_rpa_fl;
+                color="$(darkcolors[idx])",
+                label="\$RPA+FL\$ (\$r_s=$rs\$)",
+            )
+            # ax11.set_xlim(0, wns_over_EF[end])
+            ax11.set_xlim(0, 50)
+            # ax11.set_ylim(; bottom=0, top=1.1 * maximum(sigma_32_rpa))
+            ax11.legend(; loc="best")
+            ax11.set_xlabel("\$\\omega_n\$")
+            ax11.set_ylabel(
+                "\$\\sqrt{\\omega_n} \\left(\\omega_n \\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n) - \\lim_{\\omega_n \\rightarrow \\infty}\\omega_n \\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n)\\right)\$",
+                # "\$-\\sqrt{\\widetilde{\\omega}_n} \\left(\\widetilde{\\omega}_n \\mathrm{Im}\\widetilde{\\Sigma}(k = $ktarget, i\\widetilde{\\omega}_n) - \\lim_{\\widetilde{\\omega}_n \\rightarrow \\infty}\\widetilde{\\omega}_n \\mathrm{Im}\\widetilde{\\Sigma}(k = $ktarget, i\\widetilde{\\omega}_n)\\right)\$",
+            )
+            plt.tight_layout()
+            fig11.savefig(
+                "results/self_energy_fits/$(int_type)/sigma_wn32_dependence_" *
+                "rs=$(rs)_beta_ef=$(beta)_k=$(ktarget)_EF_$(int_type).pdf",
+            )
         end
     end
     # ax.set_xlim(0, 50)
