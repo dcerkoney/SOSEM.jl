@@ -15,18 +15,26 @@ using SOSEM
 const rs = 4.0
 const Fs = -0.0
 const beta = 40.0
-const max_order = 5
+const max_order_plot = 5
 
-# const Zrenorm = false     # turn off Z renormalization 
-const Zrenorm = true        # turn on Z renormalization 
+const Zrenorm = false     # turn off Z renormalization 
+# const Zrenorm = true        # turn on Z renormalization 
 
 const filename = "data/data_K.jld2"
 const parafilename = "data/para.csv"
 
+# Calculated lambda optima and associated max run orders for each calculation
 const lambda_opt = Dict(
     1.0 => [2.0, 2.0, 2.0, 2.0, 2.0],
     2.0 => [1.75, 1.75, 1.75, 1.75, 1.75],
     4.0 => [0.625, 0.625, 0.75, 1.0, 1.125],
+    #
+)
+const max_orders = Dict(
+    1.0 => [5, 5, 5, 5, 5],
+    2.0 => [5, 5, 5, 5, 5],
+    4.0 => [2, 2, 3, 4, 5],
+    #
 )
 
 # Vibrant qualitative colour scheme from https://personal.sron.nl/~pault/
@@ -89,7 +97,9 @@ function loaddata(para, FileName=filename)
 end
 
 function renormalize(para, sigma, Zrenorm)
-    mu, sw = UEG_MC.getSigma(para; parafile=parafilename)
+    zpara = deepcopy(para)
+    zpara.order = 5
+    mu, sw = UEG_MC.getSigma(zpara; parafile=parafilename)
     δzi, δμ, δz = CounterTerm.sigmaCT(para.order, mu, sw)
     println("Max order: $(para.order)")
     println("δzi:\n", δzi, "\nδμ:\n", δμ, "\nδz:\n", δz, "\n")
@@ -147,11 +157,11 @@ function sw_inv(sigma, order, kgrid, para)
 end
 
 function plotS_k(paralist::Vector{ParaMC}, rSw_ks, iSw_ks, kgrid; Zrenorm=true)
-    max_order = maximum([para.order for para in paralist])
-    @assert length(paralist) == length(rSw_k) == length(iSw_k) == max_order
+    # max_order_plot = maximum([p.order for p in paralist])
+    @assert length(paralist) == length(rSw_ks) == length(iSw_ks) == max_order_plot
 
-    lambdas = [para.mass2 for para in paralist]
-    para = paralist[end]  # All params except mass2 and order are the same
+    para = paralist[end]  # Physical parameters at maximum plot order
+    lambdas = [p.mass2 for p in paralist]
     kF = para.kF
 
     # plot = pyimport("plot")
@@ -178,15 +188,17 @@ function plotS_k(paralist::Vector{ParaMC}, rSw_ks, iSw_ks, kgrid; Zrenorm=true)
     figure(; figsize=(12, 4))
     # figure(; figsize=(8, 4))
 
-    mu2, sw2 = UEG_MC.getSigma(para; parafile=parafilename)
-    δzi, δμ, δz = CounterTerm.sigmaCT(para.order, mu2, sw2)
-
     # Plot ∂_ϵₖ Σ(k, iω0) ≈ (Σ(k, iω0) - Σ(0, iω0)) / ϵ_k,
     # multiplying by (1/z)[ξ] if Zrenorm is true
     subplot(1, 2, 2)
     # subplot(1, 3, 3)
-    for o in 1:(para.order)
-        _kgrid, s_k = sk(rSw_k, o, kgrid, para)
+    for (o, p) in enumerate(paralist)
+        zpara = deepcopy(p)
+        zpara.order = 5
+        mu_data, sw_data = UEG_MC.getSigma(zpara; parafile=parafilename)
+        δzi, δμ, δz = CounterTerm.sigmaCT(p.order, mu_data, sw_data)
+
+        _kgrid, s_k = sk(rSw_ks[o], o, kgrid, p)
         s_k = -s_k  # we measure -Σ
         # z = s_k
         if Zrenorm
@@ -235,9 +247,9 @@ function plotS_k(paralist::Vector{ParaMC}, rSw_ks, iSw_ks, kgrid; Zrenorm=true)
         # ylim([-0.07, 0.25])
         # ylim([nothing, 0.3])
         if Zrenorm
-            ylim([1.0, 1.1])
+            ylim([nothing, 1.15])
         else
-            ylim([1.0, 1.22])
+            ylim([0.98, 1.32])
         end
     end
     xlabel("\$k/k_F\$")
@@ -260,8 +272,13 @@ function plotS_k(paralist::Vector{ParaMC}, rSw_ks, iSw_ks, kgrid; Zrenorm=true)
     subplot(1, 2, 1)
     # subplot(1, 3, 1)
 
-    for o in 1:(para.order)
-        _kgrid, s_w = sw(iSw_k, o, kgrid, para)
+    for (o, p) in enumerate(paralist)
+        zpara = deepcopy(p)
+        zpara.order = 5
+        mu_data, sw_data = UEG_MC.getSigma(zpara; parafile=parafilename)
+        δzi, δμ, δz = CounterTerm.sigmaCT(p.order, mu_data, sw_data)
+
+        _kgrid, s_w = sw(iSw_ks[o], o, kgrid, p)
         if Zrenorm
             z = [e - sum(δzi[i] for i in 1:o) for e in s_w]
         else
@@ -310,7 +327,7 @@ function plotS_k(paralist::Vector{ParaMC}, rSw_ks, iSw_ks, kgrid; Zrenorm=true)
             # ylim([-0.015, 0.09])
             # ylim([-0.015, 0.06])
         else
-            ylim([-0.17, 0.02])
+            ylim([-0.24, 0.02])
             # ylim([-0.17, 0.02])
         end
     end
@@ -332,18 +349,16 @@ function plotS_k(paralist::Vector{ParaMC}, rSw_ks, iSw_ks, kgrid; Zrenorm=true)
     PyPlot.tight_layout()
 
     zrenormstr = Zrenorm ? "_zrenorm" : ""
+    lambdastr = allequal(lambdas) ? "$(lambdas[1])" : "$(lambdas)"
     savefig(
-        "../../results/sigma_k_iw0/sigma_k_iw0_rs=$(para.rs)_lambdas=$(lambdas)_beta=$(para.beta)$(zrenormstr).pdf",
-        # "../../results/sigma_k_iw0/sigma_k_iw0_rs=$(para.rs)_lambda=$(para.mass2)_beta=$(para.beta)$(zrenormstr).pdf",
+        "../../results/sigma_k_iw0/sigma_k_iw0_rs=$(para.rs)_lambdas=$(lambdastr)_beta=$(para.beta)$(zrenormstr).pdf",
     )
     return
 end
 
 function plotS_k(para::ParaMC, rSw_k, iSw_k, kgrid; Zrenorm=true)
-    paralist = repeat([para], para.order)
-    rSw_ks = repeat([rSw_k], para.order)
-    iSw_ks = repeat([iSw_k], para.order)
-    plotS_k(paralist, rSw_ks, iSw_ks, kgrid; Zrenorm=Zrenorm)
+    duplicate(v) = repeat([v], para.order)
+    plotS_k(duplicate(para), duplicate(rSw_k), duplicate(iSw_k), kgrid; Zrenorm=Zrenorm)
     return
 end
 
@@ -409,8 +424,8 @@ function plotS_k0(paralist; Zrenorm=true, ktarget=0.5)
     for (i, p) in enumerate(paralist)
         lambda = p.mass2
         orders = collect(1:(p.order))
-        mu2, sw2 = UEG_MC.getSigma(p; parafile=parafilename)
-        _, _, δz = CounterTerm.sigmaCT(p.order, mu2, sw2)
+        mu_data, sw_data = UEG_MC.getSigma(p; parafile=parafilename)
+        _, _, δz = CounterTerm.sigmaCT(p.order, mu_data, sw_data)
         if Zrenorm
             zF = [1 + sum(δz[i] for i in 1:o) for o in orders]
             z = [(zF[o] - e) for (o, e) in enumerate(s_ks[i])]
@@ -478,8 +493,8 @@ function plotS_k0(paralist; Zrenorm=true, ktarget=0.5)
     for (i, p) in enumerate(paralist)
         lambda = p.mass2
         orders = collect(1:(p.order))
-        mu2, sw2 = UEG_MC.getSigma(p; parafile=parafilename)
-        δzi, _, _ = CounterTerm.sigmaCT(p.order, mu2, sw2)
+        mu_data, sw_data = UEG_MC.getSigma(p; parafile=parafilename)
+        δzi, _, _ = CounterTerm.sigmaCT(p.order, mu_data, sw_data)
         if Zrenorm
             z = [e - sum(δzi[j] for j in 1:o) for (o, e) in enumerate(s_ws[i])]
         else
@@ -565,24 +580,30 @@ end
 
 if abspath(PROGRAM_FILE) == @__FILE__
     @assert haskey(lambda_opt, rs) "Lambda optima for rs = $(rs) not found!"
-    @assert length(lambda_opt[rs]) ≥ max_order "Lambda optimum at N = $max_order not found for rs = $(rs)!"
-    lambdas = lambda_opt[rs][1:max_order]
+    @assert length(lambda_opt[rs]) ≥ max_order_plot "Lambda optimum at N = $max_order_plot not found for rs = $(rs)!"
 
+    # Parameters for each run differ only by order and lambda
+    lambdas = lambda_opt[rs][1:max_order_plot]
+    orders = max_orders[rs][1:max_order_plot]
     paralist = [
         ParaMC(; rs=rs, beta=beta, Fs=Fs, order=order, mass2=lambda, isDynamic=false)
-        for (order, lambda) in enumerate(lambdas)
+        for (order, lambda) in zip(orders, lambdas)
     ]
 
     # Using order-by-order lambda optima
+    local kgrid, ngrid
     rSw_ks, iSw_ks = [], []
     for para in paralist
         rSw_k, iSw_k, kgrid, ngrid = process(para, Zrenorm)
         push!(rSw_ks, rSw_k)
         push!(iSw_ks, iSw_k)
     end
-    rSw_k, iSw_k, kgrid, ngrid = process(paralist, Zrenorm)
-    plotS_k(paralist, rSw_k, iSw_k, kgrid; Zrenorm=Zrenorm)
-
+    plotS_k(paralist, rSw_ks, iSw_ks, kgrid; Zrenorm=Zrenorm)
+    
+    # Using fixed lambda = λ*₅ for all orders
+    para = ParaMC(; rs=4.0, beta=40.0, Fs=-0.0, order=5, mass2=1.125, isDynamic=false)
+    rSw_k, iSw_k, kgrid, ngrid = process(para, Zrenorm)
+    plotS_k(para, rSw_k, iSw_k, kgrid; Zrenorm=Zrenorm)
 
     # # Using single lambda for all orders
     # para = ParaMC(; rs=1.0, beta=40.0, Fs=-0.0, order=5, mass2=2.0, isDynamic=false)
