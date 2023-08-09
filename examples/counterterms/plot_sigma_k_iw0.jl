@@ -17,8 +17,8 @@ const Fs = -0.0
 const beta = 40.0
 const max_order_plot = 5
 
-const Zrenorm = false     # turn off Z renormalization 
-# const Zrenorm = true        # turn on Z renormalization 
+# const Zrenorm = false     # turn off Z renormalization 
+const Zrenorm = true        # turn on Z renormalization 
 
 const filename = "data/data_K.jld2"
 const parafilename = "data/para.csv"
@@ -279,15 +279,28 @@ function plotS_k(paralist::Vector{ParaMC}, rSw_ks, iSw_ks, kgrid; Zrenorm=true)
         δzi, δμ, δz = CounterTerm.sigmaCT(p.order, mu_data, sw_data)
 
         _kgrid, s_w = sw(iSw_ks[o], o, kgrid, p)
-        if Zrenorm
-            z = [e - sum(δzi[i] for i in 1:o) for e in s_w]
-        else
-            z = s_w
-        end
-        y = [-z.val for z in z]
-        e = [z.err for z in z]
-        kidx = searchsortedfirst(_kgrid, kF)
 
+        # a = zF or 1 depending on whether Zrenorm is true
+        local a
+        if Zrenorm
+            a = 1.0 + sum(δz[i] for i in 1:o)
+            @assert a ≤ 1.0
+        else
+            a = 1.0
+        end
+        z = [a + e for e in s_w]
+        y = [z.val for z in z]
+        e = [z.err for z in z]
+
+        # if Zrenorm
+        #     z = [e - sum(δzi[i] for i in 1:o) for e in s_w]
+        # else
+        #     z = s_w
+        # end
+        # y = [-z.val for z in z]
+        # e = [z.err for z in z]
+
+        kidx = searchsortedfirst(_kgrid, kF)
         println("order $o at k=$(_kgrid[1]/kF): $(z[1])")
         println("order $o at k=$(_kgrid[kidx]/kF): $(z[kidx])")
 
@@ -310,34 +323,58 @@ function plotS_k(paralist::Vector{ParaMC}, rSw_ks, iSw_ks, kgrid; Zrenorm=true)
     xlim([kgrid[1] / kF, 2.0])
     if para.rs == 1.0
         if Zrenorm
-            ylim([-0.01, 0.09])
+            ylim([0.9175, 1.1])
         else
-            ylim([-0.17, 0.02])
+            ylim([0.99, 1.21])
+            # ylim([0.79, 1.01])
         end
     elseif para.rs == 2.0
         if Zrenorm
-            ylim([-0.015, 0.09])
-            # ylim([-0.015, 0.06])
+            ylim([0.9175, 1.1])
         else
-            ylim([-0.22, 0.02])
-            # ylim([-0.17, 0.02])
+            ylim([0.99, 1.21])
+            # ylim([0.79, 1.01])
         end
     elseif para.rs == 4.0
         if Zrenorm
-            # ylim([-0.015, 0.09])
-            # ylim([-0.015, 0.06])
+            ylim([0.9175, 1.1])
         else
-            ylim([-0.24, 0.02])
-            # ylim([-0.17, 0.02])
+            ylim([0.99, 1.21])
+            # ylim([0.79, 1.01])
         end
     end
+    # if para.rs == 1.0
+    #     if Zrenorm
+    #         ylim([-0.01, 0.09])
+    #     else
+    #         ylim([-0.17, 0.02])
+    #     end
+    # elseif para.rs == 2.0
+    #     if Zrenorm
+    #         ylim([-0.015, 0.09])
+    #         # ylim([-0.015, 0.06])
+    #     else
+    #         ylim([-0.22, 0.02])
+    #         # ylim([-0.17, 0.02])
+    #     end
+    # elseif para.rs == 4.0
+    #     if Zrenorm
+    #         # ylim([-0.015, 0.09])
+    #         # ylim([-0.015, 0.06])
+    #     else
+    #         ylim([-0.24, 0.02])
+    #         # ylim([-0.17, 0.02])
+    #     end
+    # end
     if Zrenorm
         ylabel(
-            "\$(z - 1) \\cdot \\partial_{i\\omega}\\operatorname{Im}\\Sigma(k, i\\omega)\\big|_{\\omega = 0}\$",
+            "\$z \\cdot Z^{-1}(k)\$",
+            # "\$(z - 1) \\cdot \\partial_{i\\omega}\\operatorname{Im}\\Sigma(k, i\\omega)\\big|_{\\omega = 0}\$",
         )
     else
         ylabel(
-            "\$\\partial_{i\\omega}\\operatorname{Im}\\Sigma(k, i\\omega)\\big|_{\\omega = 0}\$",
+            "\$Z^{-1}(k)\$",
+            # "\$\\partial_{i\\omega}\\operatorname{Im}\\Sigma(k, i\\omega)\\big|_{\\omega = 0}\$",
         )
     end
     xlabel("\$k/k_F\$")
@@ -590,7 +627,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         for (order, lambda) in zip(orders, lambdas)
     ]
 
-    # Using order-by-order lambda optima
+    ### Using order-by-order lambda optima ###
     local kgrid, ngrid
     rSw_ks, iSw_ks = [], []
     for para in paralist
@@ -600,7 +637,16 @@ if abspath(PROGRAM_FILE) == @__FILE__
     end
     plotS_k(paralist, rSw_ks, iSw_ks, kgrid; Zrenorm=Zrenorm)
     
-    # Using fixed lambda = λ*₅ for all orders
+    ### Using fixed lambda = λ*₅ for all orders ###
+    # rs = 1
+    para = ParaMC(; rs=1.0, beta=40.0, Fs=-0.0, order=5, mass2=2.0, isDynamic=false)
+    rSw_k, iSw_k, kgrid, ngrid = process(para, Zrenorm)
+    plotS_k(para, rSw_k, iSw_k, kgrid; Zrenorm=Zrenorm)
+    # rs = 2
+    para = ParaMC(; rs=2.0, beta=40.0, Fs=-0.0, order=5, mass2=1.75, isDynamic=false)
+    rSw_k, iSw_k, kgrid, ngrid = process(para, Zrenorm)
+    plotS_k(para, rSw_k, iSw_k, kgrid; Zrenorm=Zrenorm)
+    # rs = 4
     para = ParaMC(; rs=4.0, beta=40.0, Fs=-0.0, order=5, mass2=1.125, isDynamic=false)
     rSw_k, iSw_k, kgrid, ngrid = process(para, Zrenorm)
     plotS_k(para, rSw_k, iSw_k, kgrid; Zrenorm=Zrenorm)

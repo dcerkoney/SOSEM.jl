@@ -394,8 +394,8 @@ function main()
     c1_rpa_fls_over_EF2 = []
     zfactors_rpa = []
     zfactors_rpa_fl = []
-    sigma_rpa_peaks = []
-    sigma_rpa_fl_peaks = []
+    sigma_rpa_peaks_over_EF = []
+    sigma_rpa_fl_peaks_over_EF = []
     sigma_rpa_peak_wns_over_EF = []
     sigma_rpa_fl_peak_wns_over_EF = []
     fig, ax = plt.subplots()
@@ -565,22 +565,88 @@ function main()
         push!(sigma_rpa_peak_wns_over_EF, wns[argmax(-imag(sigma_rpa_wn_dyn))] / EF)
         push!(sigma_rpa_fl_peak_wns_over_EF, wns[argmax(-imag(sigma_rpa_fl_wn_dyn))] / EF)
         # Peak values
-        push!(sigma_rpa_peaks, maximum(-imag(sigma_rpa_dyn_plot)))
-        push!(sigma_rpa_fl_peaks, maximum(-imag(sigma_rpa_fl_dyn_plot)))
+        push!(sigma_rpa_peaks_over_EF, maximum(-imag(sigma_rpa_wn_dyn) / EF))
+        push!(sigma_rpa_fl_peaks_over_EF, maximum(-imag(sigma_rpa_fl_wn_dyn) / EF))
         # Z-factors
         push!(zfactors_rpa, zfactor_rpa)
         push!(zfactors_rpa_fl, zfactor_rpa_fl)
 
-        # Low-high interpolation: f(ω) = B / (iω + Ωₜ)
-        function lo_hi_fit_rpa(omega_over_EF)
-            return (rpa_c1 / EF^2) / (im * omega_over_EF + w0_rpa / EF)
+        # Low-high interpolation: s₂(w) = B / (iw + wₜ), w = ω / ϵ_F
+        function lo_hi_fit_rpa(w)
+            return (rpa_c1 / EF^2) / (im * w + w0_rpa / EF)
         end
-        function lo_hi_fit_rpa_fl(omega_over_EF)
-            return (rpa_fl_c1 / EF^2) / (im * omega_over_EF + w0_rpa_fl / EF)
+        function lo_hi_fit_rpa_fl(w)
+            return (rpa_fl_c1 / EF^2) / (im * w + w0_rpa_fl / EF)
+        end
+
+        function lo_hi_fit_rpa_simple(w)
+            return 0.48w * rs^2 / (w^2 + 3.03rs)
+        end
+
+        # Low-middle-high interpolation: s₃(w) = B / (iw + a / (iw + b)), w = ω / ϵ_F
+        function lo_med_hi_fit_rpa(w; sa=+1, sb=+1)
+            # signs of c₁ and c₂
+            @assert sa ∈ [-1, +1] && sb ∈ [-1, +1]
+
+            # Dimensionless coefficients
+            B = rpa_c1 / EF^2
+            wt = w0_rpa / EF
+            wm = wns[argmax(-imag(sigma_rpa_wn_dyn))] / EF
+            fm = maximum(-imag(sigma_rpa_wn_dyn) / EF)
+
+            # Intermediate variables
+            c = wm * (B / fm - wm)
+            d = wm^2 / c
+            g = (1 / c - 1 / wt^2)
+
+            # Coefficients a and b
+            # Solved by enforcing the following constraints:
+            #  • C1: -Im(s₃(iw → 0)) ~ A w  , to leading order in w
+            #  • C2: -Im(s₃(iw → ∞)) ~ B / w, to leading order in (1 / w)
+            #  • C3: -Im(s₃(wₘ))     ≡ -Im(Σ(wₘ)) ≡ fₘ
+            a = (d - sa * sqrt(Complex(d^2 + 4g * wt^2))) / 2g
+            b = sb * sqrt(Complex(a + (a / wt)^2))
+            println("Real solution for a coeff? ", isreal(d^2 + 4g * wt^2), isreal(a))
+            println("Real solution for b coeff? ", isreal(a + (a / wt)^2), isreal(b))
+            println("Imaginary part of a: ", imag(a))
+            println("Imaginary part of b: ", imag(b))
+
+            # s₃(w) = B / (iw + c2 / (iw + c3))), w = ω / ϵ_F
+            return B / (im * w + a / (im * w + b))
         end
 
         # Plot -ImΣ, low and high frequency tails together at each rs
         if rs in rslist_small
+            # # Get low-middle-high interpolation
+            # B = (rpa_c1 / EF^2)
+            # p = maximum(-imag(sigma_rpa_wn_dyn) / EF)
+            # wm = wns[argmax(-imag(sigma_rpa_wn_dyn))] / EF
+            # d = @. p * wm / B
+            # e = @. d / wm^2 - 2d
+            # function model_lo_med_hi(w, param)
+            #     c2 = param[1]
+            #     # This choice of c3 enforces the constraint: -Im(s₃(wₘₐₓ)) ≡ p(rₛ)
+            #     c3 = sqrt(Complex(c2 * (1 + c2 * e) / (1 - d) - wm^2))
+            #     # s₃(w) = B / (iw + c2 / (iw + c3))), w = ω / ϵ_F
+            #     return @. -imag(B / (im * w + c2 / (im * w + c3)))
+            # end
+            # # Get best LSQ fit of c2 to data at this rs for -Im(s₃(c2, c3(c2))) / ϵ_F
+            # fit_lmh = curve_fit(
+            #     model_lo_med_hi,
+            #     wns_over_EF,
+            #     -imag.(sigma_rpa_wn_dyn) / EF,
+            #     [1.0],
+            # )
+            # model_lmh(w) = model_lo_med_hi(w, fit_lmh.param)
+            # # Coefficients of determination (r²)
+            # r2_rpa = rsquared(
+            #     wns_over_EF,
+            #     -imag.(sigma_rpa_wn_dyn) / EF,
+            #     model_lmh.(wns_over_EF),
+            # )
+            # println("L-M-H RPA fit: ", fit_lmh.param, ", r² = $r2_rpa")
+            # # a_rpa = fit_lmh.param[1]
+
             fig6, ax6 = plt.subplots()
             ax6.axvline(
                 w0_rpa / EF;
@@ -588,17 +654,18 @@ function main()
                 linestyle="-",
                 label="\$\\Omega_t\$ (\$RPA\$)",
             )
-            ax6.axvline(
-                w0_rpa_fl / EF;
-                color="k",
-                linestyle="-",
-                label="\$\\Omega_t\$ (\$RPA+FL\$)",
-            )
+            # ax6.axvline(
+            #     w0_rpa_fl / EF;
+            #     color="k",
+            #     linestyle="-",
+            #     label="\$\\Omega_t\$ (\$RPA+FL\$)",
+            # )
             # Set the upper ylim as 10% larger than the tail intersection
-            max_tail_intersection = max(
-                coeff_low_freq_rpa * w0_rpa / EF,
-                coeff_low_freq_rpa_fl * w0_rpa_fl / EF,
-            )
+            max_tail_intersection = coeff_low_freq_rpa * w0_rpa / EF
+            # max_tail_intersection = max(
+            #     coeff_low_freq_rpa * w0_rpa / EF,
+            #     coeff_low_freq_rpa_fl * w0_rpa_fl / EF,
+            # )
             # High-frequency behavior of -ImΣ
             ax6.plot(
                 wns_over_EF,
@@ -606,12 +673,12 @@ function main()
                 color="C$(idx-1)",
                 linestyle="--",
             )
-            ax6.plot(
-                wns_over_EF,
-                coeff_high_freq_rpa_fl ./ wns ./ EF;
-                color="$(darkcolors[idx])",
-                linestyle="--",
-            )
+            # ax6.plot(
+            #     wns_over_EF,
+            #     coeff_high_freq_rpa_fl ./ wns ./ EF;
+            #     color="$(darkcolors[idx])",
+            #     linestyle="--",
+            # )
             # Low-frequency behavior of -ImΣ
             ax6.plot(
                 wns_over_EF,
@@ -619,51 +686,84 @@ function main()
                 color="C$(idx-1)",
                 linestyle="--",
             )
-            ax6.plot(
-                wns_over_EF,
-                coeff_low_freq_rpa_fl .* wns_over_EF;
-                color="$(darkcolors[idx])",
-                linestyle="--",
-            )
-            # Low-high interpolation -ImΣ ≈ -Im{f(ω)}
+            # ax6.plot(
+            #     wns_over_EF,
+            #     coeff_low_freq_rpa_fl .* wns_over_EF;
+            #     color="$(darkcolors[idx])",
+            #     linestyle="--",
+            # )
+            # Low-high interpolation -ImΣ ≈ -Im{f₂(ω)}
             ax6.plot(
                 wns_over_EF,
                 -imag.(lo_hi_fit_rpa.(wns_over_EF));
-                color="C$(idx)",
+                color="C$(idx-1)",
+                # color="$(darkcolors[idx])",
+                # color="C$(idx)",
                 linestyle="-",
-                label="\$\\mathrm{Im}\\left\\lbrace\\frac{B}{i\\omega_n + \\Omega_t}\\right\\rbrace\$ (\$RPA\$)",
+                label="\$f_2(\\omega_n)\$ (\$RPA\$)",
+                # label="\$-\\mathrm{Im}\\left\\lbrace\\frac{B}{i\\omega_n + \\Omega_t}\\right\\rbrace\$ (\$RPA\$)",
             )
+            # Simple low-high interpolation
             ax6.plot(
                 wns_over_EF,
-                -imag.(lo_hi_fit_rpa_fl.(wns_over_EF));
-                color="$(darkcolors[idx+1])",
+                lo_hi_fit_rpa_simple.(wns_over_EF);
+                # color="C$(idx-1)",
+                color="$(darkcolors[idx])",
+                # color="C$(idx)",
                 linestyle="-",
-                label="\$\\mathrm{Im}\\left\\lbrace\\frac{B}{i\\omega_n + \\Omega_t}\\right\\rbrace\$ (\$RPA+FL\$)",
+                label="\$\\frac{r^2_s \\omega_n}{2 \\omega^2_n + 6 r_s}\$ (\$RPA\$)",
+                # label="\$-\\mathrm{Im}\\left\\lbrace\\frac{B}{i\\omega_n + \\Omega_t}\\right\\rbrace\$ (\$RPA\$)",
             )
+            # ax6.plot(
+            #     wns_over_EF,
+            #     -imag.(lo_hi_fit_rpa_fl.(wns_over_EF));
+            #     color="$(darkcolors[idx+1])",
+            #     linestyle="-",
+            #     label="\$f_2(\\omega_n)\$ (\$RPA+FL\$)",
+            #     # label="\$-\\mathrm{Im}\\left\\lbrace\\frac{B}{i\\omega_n + \\Omega_t}\\right\\rbrace\$ (\$RPA+FL\$)",
+            # )
+            # Low-med-high interpolation -ImΣ ≈ -Im{f₃(ω)}
+            # ax6.plot(
+            #     wns_over_EF,
+            #     -imag.(lo_med_hi_fit_rpa.(wns_over_EF; sa=-1, sb=-1));
+            #     color="$(darkcolors[idx])",
+            #     linestyle="-",
+            #     label="\$f_3(\\omega_n)\$ (\$RPA\$)",
+            #     # label="\$-\\mathrm{Im}\\left\\lbrace\\frac{B}{i\\omega_n + a / (i\\omega_n + b)}\\right\\rbrace\$ (\$RPA\$)",
+            # )
+            # ax6.plot(
+            #     wns_over_EF,
+            #     model_lmh.(wns_over_EF);
+            #     color="$(darkcolors[idx])",
+            #     linestyle="-",
+            #     label="\$f_3(\\omega_n)\$ (\$RPA\$)",
+            # )
             # -ImΣ
             ax6.plot(
                 wns_over_EF,
                 -imag(sigma_rpa_wn_dyn) / EF;
-                color="C$(idx-1)",
+                color="k",
+                # color="C$(idx-1)",
                 label="\$RPA\$ (\$r_s=$(rs)\$)",
             )
-            ax6.plot(
-                wns_over_EF,
-                -imag(sigma_rpa_fl_wn_dyn) / EF;
-                color="$(darkcolors[idx])",
-                label="\$RPA+FL\$ (\$r_s=$(rs)\$)",
-            )
+            # ax6.plot(
+            #     wns_over_EF,
+            #     -imag(sigma_rpa_fl_wn_dyn) / EF;
+            #     color="$(darkcolors[idx])",
+            #     label="\$RPA+FL\$ (\$r_s=$(rs)\$)",
+            # )
             ax6.set_xlim(0, 20)
             # ax6.set_xlim(0, 50)
             ax6.set_ylim(0, 1.1 * max_tail_intersection)
-            ax6.set_xlabel("\$\\omega_n / \\epsilon_F\$")
+            ax6.set_xlabel("\$\\omega_n\$")
             ax6.set_ylabel(
-                "\$-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n) / \\epsilon_F\$",
+                "\$-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n)\$",
             )
             ax6.legend(; loc="best")
             plt.tight_layout()
             fig6.savefig(
-                "results/self_energy_fits/$(int_type)/im_sigma_and_tails_" *
+                # "results/self_energy_fits/$(int_type)/im_sigma_and_tails_" *
+                "results/self_energy_fits/$(int_type)/im_sigma_and_tails_rpa_" *
                 "rs=$(rs)_beta_ef=$(beta)_k=$(ktarget)_EF_$(int_type).pdf",
             )
 
@@ -706,9 +806,9 @@ function main()
             ax8.set_xlim(0, wns_over_EF[end])
             ax8.set_ylim(; bottom=0, top=1.1 * peak_this_sigma)
             ax8.legend(; loc="best")
-            ax8.set_xlabel("\$\\omega_n / \\epsilon_F\$")
+            ax8.set_xlabel("\$\\omega_n\$")
             ax8.set_ylabel(
-                "\$-\\omega_n \\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n) / \\epsilon^2_F\$",
+                "\$-\\omega_n \\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n)\$",
                 # "\$-\\widetilde{omega}_n \\mathrm{Im}\\Sigma(k = $ktarget, i\\widetilde{omega}_n)\$",
             )
             plt.tight_layout()
@@ -756,9 +856,9 @@ function main()
             ax8.set_xlim(0, wns_over_EF[end])
             ax8.set_ylim(; bottom=0, top=1.1 * peak_this_sigma)
             ax8.legend(; loc="best")
-            ax8.set_xlabel("\$\\omega_n / \\epsilon_F\$")
+            ax8.set_xlabel("\$\\omega_n\$")
             ax8.set_ylabel(
-                "\$-\\omega_n \\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n) / \\epsilon^2_F\$",
+                "\$-\\omega_n \\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n)\$",
                 # "\$-\\widetilde{omega}_n \\mathrm{Im}\\Sigma(k = $ktarget, i\\widetilde{omega}_n)\$",
             )
             plt.tight_layout()
@@ -873,11 +973,11 @@ function main()
     # ax.set_xlim(0, 50)
     # ax.set_ylim(; bottom=0, top=1.1 * max_sigma)
     # ax.legend(; loc="best")
-    # ax.set_xlabel("\$\\omega_n / \\epsilon_F\$")
+    # ax.set_xlabel("\$\\omega_n\$")
     # if units == :Rydberg
     #     ax.set_ylabel("\$-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n)\$")
     # elseif units == :EF
-    #     ax.set_ylabel("\$-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n) / \\epsilon_F\$")
+    #     ax.set_ylabel("\$-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n)\$")
     # else  # units == :eTF
     #     ax.set_ylabel(
     #         "\$-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n) / \\epsilon_{\\mathrm{TF}}\$",
@@ -952,8 +1052,8 @@ function main()
         # label="\$\\sqrt{r_s}\\left($(round(a_rpa_fl; sigdigits=3)) $(sgn_b_rpa_fl) $(round(abs(b_rpa_fl); sigdigits=3)) \\log r_s\\right)\$",
     )
     ax7.set_xlabel("\$r_s\$")
-    ax7.set_ylabel("\$\\Omega_t(r_s) / \\epsilon_F\\sqrt{r_s}\$")
-    # ax7.set_ylabel("\$\\Omega_t(r_s) / \\epsilon_F\\sqrt{r_s} = \\sqrt{B(r_s) / A(r_s)}\$")
+    ax7.set_ylabel("\$\\Omega_t(r_s) / \\sqrt{r_s}\$")
+    # ax7.set_ylabel("\$\\Omega_t(r_s) / \\sqrt{r_s} = \\sqrt{B(r_s) / A(r_s)}\$")
     ax7.legend(; loc="best")
     plt.tight_layout()
     fig7.savefig(
@@ -961,40 +1061,56 @@ function main()
         "rs=$(round.(rslist; sigdigits=3))_beta_ef=$(beta)_k=$(ktarget)_EF_$(int_type).pdf",
     )
 
-    # # Plot peak positions vs rs
-    # println("sigma_rpa_peak_wns_over_EF = ", sigma_rpa_peak_wns_over_EF)
-    # println("sigma_rpa_fl_peak_wns_over_EF = ", sigma_rpa_fl_peak_wns_over_EF)
-    # fig2, ax2 = plt.subplots()
-    # ax2.plot(rslist, sigma_rpa_peak_wns_over_EF, "o-"; color="C0", label="\$RPA\$")
-    # ax2.plot(rslist, sigma_rpa_fl_peak_wns_over_EF, "o-"; color="C1", label="\$RPA+FL\$")
-    # ax2.set_xlabel("\$r_s\$")
-    # ax2.set_ylabel(
-    #     "\${\\mathrm{argmax}}_{\\omega_n}\\left\\lbrace-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n)\\right\\rbrace / \\epsilon_F\$",
-    # )
-    # ax2.legend(; loc="best")
-    # plt.tight_layout()
-    # fig2.savefig(
-    #     "results/self_energy_fits/$(int_type)/peak_positions_" *
-    #     "rs=$(round.(rslist; sigdigits=3))_beta_ef=$(beta)_k=$(ktarget)_EF_$(int_type).pdf",
-    # )
+    # Plot peak positions vs rs
+    println("sigma_rpa_peak_wns_over_EF = ", sigma_rpa_peak_wns_over_EF)
+    println("sigma_rpa_fl_peak_wns_over_EF = ", sigma_rpa_fl_peak_wns_over_EF)
+    fig2, ax2 = plt.subplots()
+    ax2.plot(rslist, sigma_rpa_peak_wns_over_EF, "o-"; color="C0", label="\$RPA\$")
+    ax2.plot(rslist, sigma_rpa_fl_peak_wns_over_EF, "o-"; color="C1", label="\$RPA+FL\$")
+    ax2.set_xlabel("\$r_s\$")
+    ax2.set_ylabel(
+        "\${\\mathrm{argmax}}_{\\omega_n}\\left\\lbrace-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n)\\right\\rbrace\$",
+    )
+    ax2.legend(; loc="best")
+    plt.tight_layout()
+    fig2.savefig(
+        "results/self_energy_fits/$(int_type)/peak_positions_" *
+        "rs=$(round.(rslist; sigdigits=3))_beta_ef=$(beta)_k=$(ktarget)_EF_$(int_type).pdf",
+    )
 
     # Plot peak values vs rs
-    println("sigma_rpa_peaks = ", sigma_rpa_peaks)
-    println("sigma_rpa_fl_peaks = ", sigma_rpa_fl_peaks)
+    println("sigma_rpa_peaks_over_EF = ", sigma_rpa_peaks_over_EF)
+    println("sigma_rpa_fl_peaks_over_EF = ", sigma_rpa_fl_peaks_over_EF)
     # Least-squares fit to peak values
     # @. model3(rs, p) = rs^2 * (p[1] + p[2] * log(rs))
-    @. model3(rs, p) = rs^2 * (p[1] + p[2] * log(rs) + p[3] * rs)
-    # fit_rpa = curve_fit(model3, rslist, sigma_rpa_peaks, [1.0, 1.0])
-    # fit_rpa_fl = curve_fit(model3, rslist, sigma_rpa_fl_peaks, [1.0, 1.0])
-    fit_rpa = curve_fit(model3, rslist, sigma_rpa_peaks, [1.0, 1.0, 1.0])
-    fit_rpa_fl = curve_fit(model3, rslist, sigma_rpa_fl_peaks, [1.0, 1.0, 1.0])
+
+    # # Old fit: ~ (r_s)^2
+    # @. model3(rs, p) = rs^2 * (p[1] + p[2] * log(rs) + p[3] * rs)
+
+    # New fit: ~ (r_s)^(3/2)
+    # @. model3(rs, p) = rs^(p[1]) * (p[2] + p[3] * log(rs))
+    # @. model3(rs, p) = rs^(3 / 2) * (p[1] + p[2] * log(rs))
+    # @. model3(rs, p) = rs * (p[1] + p[2] * sqrt(rs) + p[3] * rs)
+
+    # @. model3(rs, p) = rs^(3 / 2) * (p[1] + p[2] * log(rs) + p[3] * rs)
+    # @. model3(rs, p) = rs^(3 / 2) * (p[1] + p[2] * sqrt(rs) + p[3] * rs)
+    @. model3(rs, p) = rs^(3 / 2) * (p[1] + p[2] * log(rs) + p[3] * sqrt(rs))
+
+    # fit_rpa = curve_fit(model3, rslist, sigma_rpa_peaks_over_EF, [1.5])
+    # fit_rpa_fl = curve_fit(model3, rslist, sigma_rpa_fl_peaks_over_EF, [1.5])
+    # fit_rpa = curve_fit(model3, rslist, sigma_rpa_peaks_over_EF, [1.0, 1.0])
+    # fit_rpa_fl = curve_fit(model3, rslist, sigma_rpa_fl_peaks_over_EF, [1.0, 1.0])
+    fit_rpa = curve_fit(model3, rslist, sigma_rpa_peaks_over_EF, [0.1, 0.02, -0.02])
+    fit_rpa_fl = curve_fit(model3, rslist, sigma_rpa_fl_peaks_over_EF, [0.1, 0.02, -0.02])
     model_rpa3(rs) = model3(rs, fit_rpa.param)
     model_rpa_fl3(rs) = model3(rs, fit_rpa_fl.param)
     # Coefficients of determination (r²)
-    r2_rpa = rsquared(rslist, sigma_rpa_peaks, model_rpa3.(rslist))
-    r2_rpa_fl = rsquared(rslist, sigma_rpa_fl_peaks, model_rpa_fl3.(rslist))
-    println("RPA fit: ", fit_rpa.param, ", r² = $r2_rpa")
-    println("RPA+FL fit: ", fit_rpa_fl.param, ", r² = $r2_rpa_fl")
+    r2_rpa = rsquared(rslist, sigma_rpa_peaks_over_EF, model_rpa3.(rslist))
+    r2_rpa_fl = rsquared(rslist, sigma_rpa_fl_peaks_over_EF, model_rpa_fl3.(rslist))
+    println("Peak value RPA fit: ", fit_rpa.param, ", r² = $r2_rpa")
+    println("Peak value RPA+FL fit: ", fit_rpa_fl.param, ", r² = $r2_rpa_fl")
+    # a_rpa = fit_rpa.param[1]
+    # a_rpa_fl = fit_rpa_fl.param[1]
     # a_rpa, b_rpa = fit_rpa.param
     # a_rpa_fl, b_rpa_fl = fit_rpa_fl.param
     a_rpa, b_rpa, c_rpa = fit_rpa.param
@@ -1004,54 +1120,300 @@ function main()
     sgn_c_rpa = c_rpa ≥ 0 ? "+" : "-"
     sgn_c_rpa_fl = c_rpa_fl ≥ 0 ? "+" : "-"
     fig3, ax3 = plt.subplots()
-    ax3.plot(rslist, sigma_rpa_peaks ./ rslist .^ 2, "o-"; color="C0", label="\$RPA\$")
+    # ax3.plot(rslist, sigma_rpa_peaks_over_EF ./ rslist .^ 2, "o-"; color="C0", label="\$RPA\$")
+    ax3.plot(
+        rslist,
+        sigma_rpa_peaks_over_EF,
+        # sigma_rpa_peaks_over_EF ./ rslist,
+        # sigma_rpa_peaks_over_EF ./ (rslist .^ (3 / 2)),
+        # sigma_rpa_peaks_over_EF ./ (rslist .^ a_rpa),
+        "o-";
+        color="C0",
+        label="\$RPA\$",
+    )
+    # ax3.plot(rslist, sigma_rpa_peaks_over_EF, "o-"; color="C0", label="\$RPA\$")
     ax3.plot(
         rslist_big,
-        model_rpa3.(rslist_big) ./ rslist_big .^ 2,
+        model_rpa3.(rslist_big),
+        # model_rpa3.(rslist_big) ./ (rslist_big .^ (3 / 2)),
+        # model_rpa3.(rslist_big) ./ (rslist_big .^ a_rpa),
         "--";
         color="C0",
+        # label="\$r^{$(round(a_rpa; sigdigits=3))}_s\$",
+        # label="\$r^{3/2}_s\\left($(round(a_rpa; sigdigits=3)) $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) \\log r_s\\right)\$",
+        # label="\$$(round(a_rpa; sigdigits=3)) $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) \\log r_s $(sgn_c_rpa) $(round(abs(c_rpa); sigdigits=3)) \\sqrt{r_s}\$",
+        # label="\$$(round(a_rpa; sigdigits=3)) $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) \\log r_s $(sgn_c_rpa) $(round(abs(c_rpa); sigdigits=3)) r_s\$",
+        label="\$r^{3/2}_s\\left($(round(a_rpa; sigdigits=3)) $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) \\log r_s $(sgn_c_rpa) $(round(abs(c_rpa); sigdigits=3)) \\sqrt{r_s}\\right)\$",
         # label="\$r^2_s\\left($(round(a_rpa; sigdigits=3)) $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) \\log r_s $(sgn_c_rpa) $(round(abs(c_rpa); sigdigits=3)) r_s\\right)\$",
-        label="\$\\left($(round(a_rpa; sigdigits=3)) $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) \\log r_s $(sgn_c_rpa) $(round(abs(c_rpa); sigdigits=3)) r_s\\right)\$",
+        # label="\$\\left($(round(a_rpa; sigdigits=3)) $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) \\log r_s $(sgn_c_rpa) $(round(abs(c_rpa); sigdigits=3)) r_s\\right)\$",
+        #
         # label="\$r^2_s\\left($(round(a_rpa; sigdigits=3)) $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) \\log r_s\\right)\$",
         # label="\$$(round(a_rpa; sigdigits=3)) r_s $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) r^2_s $(sgn_c_rpa) $(round(abs(c_rpa); sigdigits=3)) r^3_s\$",
         # label="\$$(round(a_rpa; sigdigits=3)) $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) r_s $(sgn_c_rpa) $(round(abs(c_rpa); sigdigits=3)) r_s^2\$",
     )
     ax3.plot(
         rslist,
-        sigma_rpa_fl_peaks ./ rslist .^ 2,
+        sigma_rpa_fl_peaks_over_EF,
+        # sigma_rpa_fl_peaks_over_EF ./ rslist,
+        # sigma_rpa_fl_peaks_over_EF ./ (rslist .^ (3 / 2)),
+        # sigma_rpa_fl_peaks_over_EF ./ (rslist .^ a_rpa_fl),
         "o-";
         color="C1",
         label="\$RPA+FL\$",
     )
     ax3.plot(
         rslist_big,
-        model_rpa_fl3.(rslist_big) ./ rslist_big .^ 2,
+        model_rpa_fl3.(rslist_big),
+        # model_rpa_fl3.(rslist_big) ./ rslist_big,
+        # model_rpa_fl3.(rslist_big) ./ (rslist_big .^ (3 / 2)),
+        # model_rpa_fl3.(rslist_big) ./ (rslist_big .^ a_rpa_fl),
         "--";
         color="C1",
+        # label="\$r^{$(round(a_rpa_fl; sigdigits=3))}_s\$",
+        # label="\$r^{3/2}_s\\left($(round(a_rpa_fl; sigdigits=3)) $(sgn_b_rpa_fl) $(round(abs(b_rpa_fl); sigdigits=3)) \\log r_s\\right)\$",
+        # label="\$$(round(a_rpa_fl; sigdigits=3)) $(sgn_b_rpa_fl) $(round(abs(b_rpa_fl); sigdigits=3)) \\log r_s $(sgn_c_rpa_fl) $(round(abs(c_rpa_fl); sigdigits=3)) \\sqrt{r_s}\$",
+        # label="\$$(round(a_rpa_fl; sigdigits=3)) $(sgn_b_rpa_fl) $(round(abs(b_rpa_fl); sigdigits=3)) \\log r_s $(sgn_c_rpa_fl) $(round(abs(c_rpa_fl); sigdigits=3)) r_s\$",
+        label="\$r^{3/2}_s\\left($(round(a_rpa_fl; sigdigits=3)) $(sgn_b_rpa_fl) $(round(abs(b_rpa_fl); sigdigits=3)) \\log r_s $(sgn_c_rpa_fl) $(round(abs(c_rpa_fl); sigdigits=3)) \\sqrt{r_s}\\right)\$",
         # label="\$r^2_s\\left($(round(a_rpa_fl; sigdigits=3)) $(sgn_b_rpa_fl) $(round(abs(b_rpa_fl); sigdigits=3)) \\log r_s $(sgn_c_rpa_fl) $(round(abs(c_rpa_fl); sigdigits=3)) r_s\\right)\$",
-        label="\$\\left($(round(a_rpa_fl; sigdigits=3)) $(sgn_b_rpa_fl) $(round(abs(b_rpa_fl); sigdigits=3)) \\log r_s $(sgn_c_rpa_fl) $(round(abs(c_rpa_fl); sigdigits=3)) r_s\\right)\$",
+        # label="\$\\left($(round(a_rpa_fl; sigdigits=3)) $(sgn_b_rpa_fl) $(round(abs(b_rpa_fl); sigdigits=3)) \\log r_s $(sgn_c_rpa_fl) $(round(abs(c_rpa_fl); sigdigits=3)) r_s\\right)\$",
         # label="\$$(round(a_rpa_fl; sigdigits=3)) r_s $(sgn_b_rpa_fl) $(round(abs(b_rpa_fl); sigdigits=3)) r^2_s $(sgn_c_rpa_fl) $(round(abs(c_rpa_fl); sigdigits=3)) r^3_s\$",
         # label="\$$(round(a_rpa_fl; sigdigits=3)) $(sgn_b_rpa_fl) $(round(abs(b_rpa_fl); sigdigits=3)) r_s $(sgn_c_rpa_fl) $(round(abs(c_rpa_fl); sigdigits=3)) r_s^2\$",
     )
     ax3.set_xlabel("\$r_s\$")
     if units == :Rydberg
         ax3.set_ylabel(
-            "\${\\mathrm{max}}_{\\omega_n}\\left\\lbrace-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n)\\right\\rbrace / r^2_s\$",
+            # "\${\\mathrm{max}}_{\\omega_n}\\left\\lbrace-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n)\\right\\rbrace / r^2_s\$",
+            # "\${\\mathrm{max}}_{\\omega_n}\\left\\lbrace-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n)\\right\\rbrace / r^{3/2}_s\$",
+            "\${\\mathrm{max}}_{\\omega_n}\\left\\lbrace-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n)\\right\\rbrace\$",
         )
     elseif units == :EF
         ax3.set_ylabel(
-            "\${\\mathrm{max}}_{\\omega_n}\\left\\lbrace-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n) \\right\\rbrace / \\epsilon_F r^2_s\$",
+            # "\${\\mathrm{max}}_{\\omega_n}\\left\\lbrace-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n) \\right\\rbrace / r^2_s\$",
+            # "\${\\mathrm{max}}_{\\omega_n}\\left\\lbrace-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n) \\right\\rbrace / r^{3/2}_s\$",
+            "\${\\mathrm{max}}_{\\omega_n}\\left\\lbrace-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n) \\right\\rbrace\$",
         )
     else  # units == :eTF
         ax3.set_ylabel(
-            "\${\\mathrm{max}}_{\\omega_n}\\left\\lbrace-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n) \\right\\rbrace / \\epsilon_{\\mathrm{TF}} r^2_s\$",
+            # "\${\\mathrm{max}}_{\\omega_n}\\left\\lbrace-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n) \\right\\rbrace / \\epsilon_{\\mathrm{TF}} r^2_s\$",
+            # "\${\\mathrm{max}}_{\\omega_n}\\left\\lbrace-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n) \\right\\rbrace / \\epsilon_{\\mathrm{TF}} r^{3/2}_s\$",
+            "\${\\mathrm{max}}_{\\omega_n}\\left\\lbrace-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n) \\right\\rbrace / \\epsilon_{\\mathrm{TF}}\$",
         )
     end
     ax3.legend(; loc="best")
     plt.tight_layout()
     fig3.savefig(
-        "results/self_energy_fits/$(int_type)/peak_values_over_rs2_" *
+        # "results/self_energy_fits/$(int_type)/peak_values_over_rs$(round(a_rpa_fl; sigdigits=3))_" *
+        # "results/self_energy_fits/$(int_type)/peak_values_over_rs2_" *
+        # "results/self_energy_fits/$(int_type)/peak_values_over_rs32_" *
+        "results/self_energy_fits/$(int_type)/peak_values_" *
         "rs=$(round.(rslist; sigdigits=3))_beta_ef=$(beta)_k=$(ktarget)_$(units)_$(int_type).pdf",
+        # "rs=$(round.(rslist; sigdigits=3))_beta_ef=$(beta)_k=$(ktarget)_$(units)_$(int_type)_v3.pdf",
+    )
+
+    # Same as above, but divided by the leading dependence rs^(3/2)
+    sigma_rpa_peaks_over_EF_over_rs32 = sigma_rpa_peaks_over_EF ./ (rslist .^ 1.5)
+    sigma_rpa_fl_peaks_over_EF_over_rs32 = sigma_rpa_fl_peaks_over_EF ./ (rslist .^ 1.5)
+    # Least-squares fit to peak values
+    @. model3_over_rs32(rs, p) = p[1] + p[2] * log(rs) + p[3] * sqrt(rs)
+    # @. model4_over_rs32(rs, p) = sqrt(rs) * (p[1] + p[2] * log(rs) + p[3] * rs)
+    fit_rpa = curve_fit(
+        model3_over_rs32,
+        rslist,
+        sigma_rpa_peaks_over_EF_over_rs32,
+        [1.0, 0.1, 0.1],
+    )
+    fit_rpa_fl = curve_fit(
+        model3_over_rs32,
+        rslist,
+        sigma_rpa_fl_peaks_over_EF_over_rs32,
+        [1.0, 0.1, 0.1],
+    )
+    # fit_rpa_v2 = curve_fit(
+    #     model4_over_rs32,
+    #     rslist,
+    #     sigma_rpa_peaks_over_EF_over_rs32,
+    #     [1.0, 0.1, 0.1],
+    # )
+    # fit_rpa_fl_v2 = curve_fit(
+    #     model4_over_rs32,
+    #     rslist,
+    #     sigma_rpa_fl_peaks_over_EF_over_rs32,
+    #     [1.0, 0.1, 0.1],
+    # )
+    model_rpa3_over_rs32(rs) = model3_over_rs32(rs, fit_rpa.param)
+    model_rpa_fl3_over_rs32(rs) = model3_over_rs32(rs, fit_rpa_fl.param)
+    # model_rpa4_over_rs32(rs) = model4_over_rs32(rs, fit_rpa_v2.param)
+    # model_rpa_fl4_over_rs32(rs) = model4_over_rs32(rs, fit_rpa_fl_v2.param)
+    # Coefficients of determination (r²)
+    r2_rpa =
+        rsquared(rslist, sigma_rpa_peaks_over_EF_over_rs32, model_rpa3_over_rs32.(rslist))
+    r2_rpa_fl = rsquared(
+        rslist,
+        sigma_rpa_fl_peaks_over_EF_over_rs32,
+        model_rpa_fl3_over_rs32.(rslist),
+    )
+    println("(v1) Peak value RPA fit: ", fit_rpa.param, ", r² = $r2_rpa")
+    println("(v1) Peak value RPA+FL fit: ", fit_rpa_fl.param, ", r² = $r2_rpa_fl")
+    a_rpa, b_rpa, c_rpa = fit_rpa.param
+    a_rpa_fl, b_rpa_fl, c_rpa_fl = fit_rpa_fl.param
+    sgn_b_rpa = b_rpa ≥ 0 ? "+" : "-"
+    sgn_b_rpa_fl = b_rpa_fl ≥ 0 ? "+" : "-"
+    sgn_c_rpa = c_rpa ≥ 0 ? "+" : "-"
+    sgn_c_rpa_fl = c_rpa_fl ≥ 0 ? "+" : "-"
+    # r2_rpa_v2 =
+    #     rsquared(rslist, sigma_rpa_peaks_over_EF_over_rs32, model_rpa4_over_rs32.(rslist))
+    # r2_rpa_fl_v2 = rsquared(
+    #     rslist,
+    #     sigma_rpa_fl_peaks_over_EF_over_rs32,
+    #     model_rpa_fl4_over_rs32.(rslist),
+    # )
+    # println("(v2) Peak value RPA fit: ", fit_rpa.param, ", r² = $r2_rpa_v2")
+    # println("(v2) Peak value RPA+FL fit: ", fit_rpa_fl.param, ", r² = $r2_rpa_fl_v2")
+    # a_rpa_v2, b_rpa_v2, c_rpa_v2 = fit_rpa_v2.param
+    # a_rpa_fl_v2, b_rpa_fl_v2, c_rpa_fl_v2 = fit_rpa_fl_v2.param
+    # sgn_b_rpa_v2 = b_rpa_v2 ≥ 0 ? "+" : "-"
+    # sgn_b_rpa_fl_v2 = b_rpa_fl_v2 ≥ 0 ? "+" : "-"
+    # sgn_c_rpa_v2 = c_rpa_v2 ≥ 0 ? "+" : "-"
+    # sgn_c_rpa_fl_v2 = c_rpa_fl_v2 ≥ 0 ? "+" : "-"
+    fig3, ax3 = plt.subplots()
+    ax3.plot(rslist, sigma_rpa_peaks_over_EF_over_rs32, "o-"; color="C0", label="\$RPA\$")
+    # v1
+    ax3.plot(
+        rslist_big,
+        model_rpa3_over_rs32.(rslist_big),
+        "--";
+        color="C0",
+        label="\$$(round(a_rpa; sigdigits=3)) $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) \\log r_s $(sgn_c_rpa) $(round(abs(c_rpa); sigdigits=3)) \\sqrt{r_s}\$",
+    )
+    # # v2
+    # ax3.plot(
+    #     rslist_big,
+    #     model_rpa4_over_rs32.(rslist_big),
+    #     "-.";
+    #     color="C0",
+    #     label="\$\\sqrt{r_s} \\left($(round(a_rpa_v2; sigdigits=3)) $(sgn_b_rpa_v2) $(round(abs(b_rpa_v2); sigdigits=3)) \\log r_s $(sgn_c_rpa_v2) $(round(abs(c_rpa_v2); sigdigits=3)) r_s\\right)\$",
+    # )
+    ax3.plot(
+        rslist,
+        sigma_rpa_fl_peaks_over_EF_over_rs32,
+        "o-";
+        color="C1",
+        label="\$RPA+FL\$",
+    )
+    # v1
+    ax3.plot(
+        rslist_big,
+        model_rpa_fl3_over_rs32.(rslist_big),
+        "--";
+        color="C1",
+        label="\$$(round(a_rpa_fl; sigdigits=3)) $(sgn_b_rpa_fl) $(round(abs(b_rpa_fl); sigdigits=3)) \\log r_s $(sgn_c_rpa_fl) $(round(abs(c_rpa_fl); sigdigits=3)) \\sqrt{r_s}\$",
+    )
+    # # v2
+    # ax3.plot(
+    #     rslist_big,
+    #     model_rpa_fl4_over_rs32.(rslist_big),
+    #     "-.";
+    #     color="C1",
+    #     label="\$\\sqrt{r_s} \\left($(round(a_rpa_fl_v2; sigdigits=3)) $(sgn_b_rpa_fl_v2) $(round(abs(b_rpa_fl_v2); sigdigits=3)) \\log r_s $(sgn_c_rpa_fl_v2) $(round(abs(c_rpa_fl_v2); sigdigits=3)) r_s\\right)\$",
+    # )
+    ax3.set_xlabel("\$r_s\$")
+    if units == :Rydberg
+        ax3.set_ylabel(
+            "\${\\mathrm{max}}_{\\omega_n}\\left\\lbrace-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n)\\right\\rbrace / r^{3/2}_s\$",
+        )
+    elseif units == :EF
+        ax3.set_ylabel(
+            "\${\\mathrm{max}}_{\\omega_n}\\left\\lbrace-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n) \\right\\rbrace / r^{3/2}_s\$",
+        )
+    else  # units == :eTF
+        ax3.set_ylabel(
+            "\${\\mathrm{max}}_{\\omega_n}\\left\\lbrace-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n) \\right\\rbrace / \\epsilon_{\\mathrm{TF}} r^{3/2}_s\$",
+        )
+    end
+    ax3.legend(; loc="best")
+    plt.tight_layout()
+    fig3.savefig(
+        "results/self_energy_fits/$(int_type)/peak_values_over_rs32_" *
+        "rs=$(round.(rslist; sigdigits=3))_beta_ef=$(beta)_k=$(ktarget)_$(units)_$(int_type).pdf",
+    )
+    fig3, ax3 = plt.subplots()
+    ax3.plot(rslist, sigma_rpa_peaks_over_EF_over_rs32, "o-"; color="C0", label="\$RPA\$")
+    # v1
+    ax3.plot(
+        rslist_big,
+        model_rpa3_over_rs32.(rslist_big),
+        "--";
+        color="C0",
+        label="\$$(round(a_rpa; sigdigits=3)) $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) \\log r_s $(sgn_c_rpa) $(round(abs(c_rpa); sigdigits=3)) \\sqrt{r_s}\$",
+    )
+    # # v2
+    # ax3.plot(
+    #     rslist_big,
+    #     model_rpa4_over_rs32.(rslist_big),
+    #     "-.";
+    #     color="C0",
+    #     label="\$\\sqrt{r_s} \\left($(round(a_rpa_v2; sigdigits=3)) $(sgn_b_rpa_v2) $(round(abs(b_rpa_v2); sigdigits=3)) \\log r_s $(sgn_c_rpa_v2) $(round(abs(c_rpa_v2); sigdigits=3)) r_s\\right)\$",
+    # )
+    ax3.plot(
+        rslist,
+        sigma_rpa_fl_peaks_over_EF_over_rs32,
+        "o-";
+        color="C1",
+        label="\$RPA+FL\$",
+    )
+    # v1
+    ax3.plot(
+        rslist_big,
+        model_rpa_fl3_over_rs32.(rslist_big),
+        "--";
+        color="C1",
+        label="\$$(round(a_rpa_fl; sigdigits=3)) $(sgn_b_rpa_fl) $(round(abs(b_rpa_fl); sigdigits=3)) \\log r_s $(sgn_c_rpa_fl) $(round(abs(c_rpa_fl); sigdigits=3)) \\sqrt{r_s}\$",
+    )
+    # # v2
+    # ax3.plot(
+    #     rslist_big,
+    #     model_rpa_fl4_over_rs32.(rslist_big),
+    #     "-.";
+    #     color="C1",
+    #     label="\$\\sqrt{r_s} \\left($(round(a_rpa_fl_v2; sigdigits=3)) $(sgn_b_rpa_fl_v2) $(round(abs(b_rpa_fl_v2); sigdigits=3)) \\log r_s $(sgn_c_rpa_fl_v2) $(round(abs(c_rpa_fl_v2); sigdigits=3)) r_s\\right)\$",
+    # )
+    ax3.set_xlabel("\$r_s\$")
+    ax3.set_ylabel(
+        "\${\\mathrm{max}}_{\\omega_n}\\left\\lbrace-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n) \\right\\rbrace / r^{3/2}_s\$",
+    )
+    ax3.legend(; loc="best")
+    plt.tight_layout()
+    fig3.savefig(
+        "results/self_energy_fits/$(int_type)/peak_values_over_rs32_" *
+        "rs=$(round.(rslist; sigdigits=3))_beta_ef=$(beta)_k=$(ktarget)_$(units)_$(int_type).pdf",
+    )
+    # Multiply back the leading rs^(3/2) coefficient to fit the peak values
+    fig3p, ax3p = plt.subplots()
+    ax3p.plot(rslist, sigma_rpa_peaks_over_EF, "o-"; color="C0", label="\$RPA\$")
+    ax3p.plot(
+        rslist_big,
+        model_rpa3_over_rs32.(rslist_big) .* (rslist_big .^ (3 / 2)),
+        "--";
+        color="C0",
+        label="\$r^{3/2}_s \\left($(round(a_rpa; sigdigits=3)) $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) \\log r_s $(sgn_c_rpa) $(round(abs(c_rpa); sigdigits=3)) \\sqrt{r_s}\\right)\$",
+    )
+    ax3p.plot(rslist, sigma_rpa_fl_peaks_over_EF, "o-"; color="C1", label="\$RPA+FL\$")
+    ax3p.plot(
+        rslist_big,
+        model_rpa_fl3_over_rs32.(rslist_big) .* (rslist_big .^ (3 / 2)),
+        "--";
+        color="C1",
+        label="\$r^{3/2}_s \\left($(round(a_rpa_fl; sigdigits=3)) $(sgn_b_rpa_fl) $(round(abs(b_rpa_fl); sigdigits=3)) \\log r_s $(sgn_c_rpa_fl) $(round(abs(c_rpa_fl); sigdigits=3)) \\sqrt{r_s}\\right)\$",
+    )
+    ax3p.set_xlabel("\$r_s\$")
+    ax3p.set_ylabel(
+        "\${\\mathrm{max}}_{\\omega_n}\\left\\lbrace-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n) \\right\\rbrace\$",
+    )
+    ax3p.legend(; loc="best")
+    plt.tight_layout()
+    fig3p.savefig(
+        "results/self_energy_fits/$(int_type)/peak_values_" *
+        "rs=$(round.(rslist; sigdigits=3))_beta_ef=$(beta)_k=$(ktarget)_$(units)_$(int_type)_new.pdf",
     )
 
     # Plot Z-factors vs rs for RPA(+FL)
@@ -1267,8 +1629,8 @@ function main()
     # Low-frequency behavior of -ImΣ
     ax5.set_xlim(0, 10)
     ax5.set_ylim(0, 1.5 * max_sigma)
-    ax5.set_xlabel("\$\\omega_n / \\epsilon_F\$")
-    ax5.set_ylabel("\$-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n) / \\epsilon_F\$")
+    ax5.set_xlabel("\$\\omega_n\$")
+    ax5.set_ylabel("\$-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n)\$")
     ax5.legend(; loc="best")
     plt.tight_layout()
     # fig5.savefig(
