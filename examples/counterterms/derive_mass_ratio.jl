@@ -16,9 +16,9 @@ order = [5]
 beta = [40.0]
 
 ### rs = 1 ###
-# rs = [1.0]
+rs = [1.0]
+mass2 = [2.0]
 # mass2 = [3.5]
-# mass2 = [2.0]
 # mass2 = [2.5, 3.0, 3.5, 4.0]
 # mass2 = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
 
@@ -40,8 +40,8 @@ beta = [40.0]
 # mass2 = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 3.5, 4.0, 5.0, 6.0]
 
 ### rs = 4 ###
-rs = [4.0]
-mass2 = [0.875, 1.125, 1.25, 1.5]
+# rs = [4.0]
+# mass2 = [0.875, 1.125, 1.25, 1.5]
 # mass2 = [1.0]
 # mass2 = [0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25, 1.5, 2.0]
 # mass2 = [0.25, 0.5, 0.75, 1.0, 1.25]
@@ -98,7 +98,7 @@ function process_mass_ratio(
     isSave,
     has_taylor_factors;
     idk=1,
-    method=:central,
+    method=:central
 )
     println("\nProcessing mass ratio (idk=$idk)...")
     @assert method in [:forward, :central]
@@ -130,7 +130,7 @@ function process_mass_ratio(
     #     error("kgrid spacing $(kspacings) not supported!")
     # end
 
-    idks = collect(eachindex(kspacings[kspacings .>= 0])) .- 1
+    idks = collect(eachindex(kspacings[kspacings.>=0])) .- 1
     @assert idk ∈ idks
     @assert dks == δK * collect(kspacings)
 
@@ -180,19 +180,19 @@ function process_mass_ratio(
         # ∂ₖReΣ(k, ikₙ = 0) at the Fermi surface k = kF
         @assert idk ∈ idks
         @assert kgrid[ikF] ≈ para.kF
-        @assert kgrid[ikF + idk] - kgrid[ikF] ≈ para.kF * dks[ikF + idk]
+        @assert kgrid[ikF+idk] - kgrid[ikF] ≈ para.kF * dks[ikF+idk]
 
         # Forward difference method
         if method == :forward
             ds_dk =
-                (real(Σ_n[1, ikF + idk]) - real(Σ_n[1, ikF])) /
-                (kgrid[ikF + idk] - kgrid[ikF])
+                (real(Σ_n[1, ikF+idk]) - real(Σ_n[1, ikF])) /
+                (kgrid[ikF+idk] - kgrid[ikF])
         else # central difference method
-            @assert kgrid[ikF] - kgrid[ikF - idk] ≈ para.kF * dks[ikF + idk]
-            @assert kgrid[ikF + idk] - kgrid[ikF - idk] ≈ 2 * para.kF * dks[ikF + idk]
+            @assert kgrid[ikF] - kgrid[ikF-idk] ≈ para.kF * dks[ikF+idk]
+            @assert kgrid[ikF+idk] - kgrid[ikF-idk] ≈ 2 * para.kF * dks[ikF+idk]
             ds_dk =
-                (real(Σ_n[1, ikF + idk]) - real(Σ_n[1, ikF - idk])) /
-                (kgrid[ikF + idk] - kgrid[ikF - idk])
+                (real(Σ_n[1, ikF+idk]) - real(Σ_n[1, ikF-idk])) /
+                (kgrid[ikF+idk] - kgrid[ikF-idk])
         end
         # Store δm and δs counterterms
         # NOTE: Extra minus sign on definition of Σ
@@ -236,7 +236,7 @@ function process_mass_ratio(
         push!(δr, δM[3] - δM[2] * δs[1] - δM[1] * δs[2] - δs[3])
     end
     if max_order ≥ 4
-        push!(δM, δm[1]^4 - 3 * δm[1]^2 * δm[2] + 2 * δm[1] * δm[3] - δm[4])
+        push!(δM, δm[1]^4 - 3 * δm[1]^2 * δm[2] + δm[2]^2 + 2 * δm[1] * δm[3] - δm[4])
         push!(δr, δM[4] - δM[3] * δs[1] - δM[2] * δs[2] - δM[1] * δs[3] - δs[4])
     end
     if max_order ≥ 5
@@ -324,7 +324,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
             order=_order,
             mass2=_mass2,
             isDynamic=false,
-            isFock=isFock,
+            isFock=isFock
         )
         mass_ratios = []
         if haskey(f, "has_taylor_factors") == false
@@ -343,7 +343,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 # (f[key] = ngrid, kgrid, sigma)
                 kgrid = f[key][2]
                 ikF = searchsortedfirst(kgrid, para.kF)
-                idks = collect(eachindex(kgrid[(ikF + 1):end]))
+                idks = collect(eachindex(kgrid[(ikF+1):end]))
                 @assert all(ikF + idk ∈ eachindex(kgrid) for idk in idks)
                 @assert all(ikF - idk ∈ eachindex(kgrid) for idk in idks)
                 for idk in idks
@@ -353,7 +353,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
                         isSave,
                         has_taylor_factors;
                         idk=idk,
-                        method=method,
+                        method=method
                     )
                     push!(mass_ratios, mass_ratio)
                 end

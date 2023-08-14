@@ -16,7 +16,8 @@ order = [5]
 beta = [40.0]
 
 ### rs = 1 ###
-# rs = [1.0]
+rs = [1.0]
+mass2 = [2.0]
 # mass2 = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 3.5, 4.0]
 # mass2 = [3.5]
 # mass2 = [2.5, 3.0, 3.5, 4.0]
@@ -40,8 +41,8 @@ beta = [40.0]
 # mass2 = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 3.5, 4.0, 5.0, 6.0]
 
 ### rs = 4 ###
-rs = [4.0]
-mass2 = [0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25, 1.5, 2.0]
+# rs = [4.0]
+# mass2 = [0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25, 1.5, 2.0]
 # mass2 = [0.25, 0.5, 0.75, 1.0, 1.25]
 # mass2 = [0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 2.25, 2.5, 2.75, 3.0, 3.5, 4.0, 4.5, 5.0, 6.0, 7.0]
 
@@ -90,7 +91,13 @@ function zfactor_0(data, β; idx_n0)
     return @. imag(data[idx_n0, 1]) / (π / β)
 end
 
-function mu(data)
+function mu_m10(data)
+    # NOTE: For ngrid = [-1, 0] or [-1, 0, 1], we have idx(iw0) = 2
+    return real(data[2, 1])
+end
+
+function mu_0p1(data)
+    # NOTE: For ngrid = [0, 1], we have idx(iw0) = 1
     return real(data[1, 1])
 end
 
@@ -115,13 +122,16 @@ function process(datatuple, para, isSave, has_taylor_factors)
     end
     if ngrid == [0, 1]
         @warn "ngrid = $ngrid is deprecated, use [-1, 0] instead!"
+        # zfactor = (data, β) -> zfactor_m10(data, β)        # use [0, 1] as in old data
         zfactor = (data, β) -> zfactor_0(data, β; idx_n0=1)  # use [0] only
-    # zfactor = (data, β) -> zfactor_m10(data, β)        # use [0, 1] as in old data
+        mu = data -> mu_0p1(data)
     elseif ngrid == [-1, 0, 1]
         @warn "Using [-1, 0] data for Z-factor calculation, ignoring last grid point!"
         zfactor = (data, β) -> zfactor_m10(data, β)
+        mu = data -> mu_m10(data)
     else # ngrid == [-1, 0]
         zfactor = (data, β) -> zfactor_m10(data, β)
+        mu = data -> mu_m10(data)
     end
 
     _mu = Dict()
