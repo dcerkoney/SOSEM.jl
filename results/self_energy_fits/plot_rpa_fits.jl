@@ -162,14 +162,16 @@ function get_Fs_PW(rs)
     return kappa0_over_kappa - 1.0
 end
 
+# RPA analytic tail behavior C / ωₙ^{3/2} and coefficient C from VZN paper
+@inline function C_coefficient(rs)
+    # return 16 * sqrt(2) * (α * rs)^2 / 3π
+    return 16 * (α * rs)^2 / 3π
+end
 function get_rpa_analytic_tail(wns, para::Parameter.Para)
-    rs = round(para.rs; sigdigits=13)
-    # VZN prefactor C
-    # prefactor = -16 * sqrt(2) * (α * rs)^2 / 3π
     # -Im(1 / i^(3/2)) = 1/sqrt(2)
-    prefactor = 16 * sqrt(2) * (α * rs)^2 / 3π
     # prefactor = 16 * (α * rs)^2 / 3π
-    return @. prefactor / wns^(3 / 2)
+    rs = round(para.rs; sigdigits=13)
+    return @. C_coefficient(rs) / wns^(3 / 2)
 end
 
 function get_sigma_rpa_wn(para::Parameter.Para; ktarget=0.0, atol=1e-3)
@@ -184,19 +186,21 @@ function get_sigma_rpa_wn(para::Parameter.Para; ktarget=0.0, atol=1e-3)
     # Small params
     Euv, rtol = 1000 * para.EF, 1e-11
     maxK, minK = 30 * para.kF, 1e-8 * para.kF
-    Nk, order = 20, 12
+    # Nk, order = 20, 12
+    Nk, order = 11, 8
 
     # Get RPA+FL self-energy
-    sigma_tau_dynamic, sigma_tau_instant = SelfEnergy.G0W0(
-        para;
-        Euv=Euv,
-        rtol=rtol,
-        Nk=Nk,
-        minK=minK,
-        maxK=maxK,
-        order=order,
-        int_type=:rpa,
-    )
+    sigma_tau_dynamic, sigma_tau_instant = SelfEnergy.G0W0(para; int_type=:rpa)
+    # sigma_tau_dynamic, sigma_tau_instant = SelfEnergy.G0W0(
+    #     para;
+    #     Euv=Euv,
+    #     rtol=rtol,
+    #     Nk=Nk,
+    #     minK=minK,
+    #     maxK=maxK,
+    #     order=order,
+    #     int_type=:rpa,
+    # )
 
     # Get sigma in DLR basis
     sigma_dlr_dynamic = to_dlr(sigma_tau_dynamic)
@@ -225,13 +229,15 @@ function get_sigma_rpa_wn(para::Parameter.Para; ktarget=0.0, atol=1e-3)
     sigma_wn_dynamic_kval = sigma_wn_dynamic[:, ikval][dlr.ωn .≥ 0]
 
     # Z-factor for low-frequency parameterization
-    zfactor = SelfEnergy.zfactor(para, sigma_wn_dynamic; ngrid=[-1, 0])[1]
+    zfactor = SelfEnergy.zfactor(para, sigma_wn_dynamic; kamp=ktarget, ngrid=[-1, 0])[1]
+    # zfactor = SelfEnergy.zfactor(para, sigma_wn_dynamic; ngrid=[-1, 0])[1]
     # zfactor_0p1 = SelfEnergy.zfactor(para, sigma_wn_dynamic; ngrid=[0, 1])[1]
     # zfactor = SelfEnergy.zfactor(para, sigma_wn_dynamic)[1]
 
     # println("Z_RPA (benchmark): ", zfactor_benchmarks[round(para.rs; sigdigits=13)])
-    # println("Z_RPA (ngrid = [-1, 0]): ", zfactor_m10)
+    println("Z_RPA (ngrid = [-1, 0]): ", zfactor)
     # println("Z_RPA (ngrid = [0, 1]): ", zfactor_0p1)
+    # println(zfactor_benchmarks[rs])
     # zfactor = zfactor_m10
     # zfactor = zfactor_0p1
 
@@ -249,7 +255,7 @@ function get_sigma_rpa_wn(para::Parameter.Para; ktarget=0.0, atol=1e-3)
         println("No zero-temperature benchmark available for rs = $(rs)!")
     end
 
-    return kval, wns, sigma_wn_static_kval, sigma_wn_dynamic_kval, zfactor
+    return dlr, kval, wns, sigma_wn_static_kval, sigma_wn_dynamic_kval, zfactor
 end
 
 function main()
@@ -275,6 +281,7 @@ function main()
     para = Parameter.rydbergUnit(1 / beta, rs, 3)
     @assert para.Λs == para.Λa == 0.0
     EF = para.EF
+    # EF = 1
 
     # Setup plot styles
     style = PyPlot.matplotlib."style"
@@ -296,10 +303,17 @@ function main()
     # rcParams["font.family"] = "Times New Roman"
 
     # Get the RPA self-energy and corresponding DLR grid from the ElectronGas package
-    kval, omega_ns, sigma_stat, sigma_dyn, zfactor = get_sigma_rpa_wn(para; ktarget=ktarget)
+    dlr, kval, omega_ns, sigma_stat, sigma_dyn, zfactor =
+        get_sigma_rpa_wn(para; ktarget=ktarget)
+
+    println((imag(sigma_dyn)[2] - imag(sigma_dyn)[1]) / (2π / para.β))
+
+    # Dimensionless UV cutoff used for the DLR grid
+    Euv = dlr.Euv / EF
 
     # wₙ = ωₙ / EF
     wns = omega_ns / EF
+    println(maximum(wns))
 
     # The static part should not contribute to ImΣ
     println(imag(sigma_stat))
@@ -308,20 +322,38 @@ function main()
 
     # Parameters A(rₛ), B(rₛ), and Ωₜ(rₛ) for the RPA self-energy
     A = (1 / zfactor - 1)                # A = (z⁻¹ - 1)
+    # A = (1 - zfactor)                # A = (z⁻¹ - 1)
     B = second_order_moments[rs] / EF^2  # B = C⁽¹⁾ / EF²
     # B = second_order_moments_converged[rs] / EF^2  # B = C⁽¹⁾ / EF²
+    C = -C_coefficient(rs)                # C = (16√2 / 3π) (αrₛ)²
     Omega_t = sqrt(B / A)                # Ωₜ = √(B / A)
-
+    # Measured B coefficient
     iwmed = searchsortedfirst(wns, 15)
-    B_meas = -wns[end] * (im_sigma_over_EF[end])
+    B_meas = @. -wns * im_sigma_over_EF
     B_meas_med = -wns[iwmed] * (im_sigma_over_EF[iwmed])
-    B_rel_err = 100 * abs((B - B_meas) / B)
+    B_rel_err = 100 * abs((B - B_meas[end]) / B)
     B_rel_err_med = 100 * abs((B - B_meas_med) / B)
     println("B = $B")
-    println("B_meas = $B_meas")
-    println("Relative error between the exact/measured SOSEM (w = $(wns[end])): $B_rel_err")
+    println("B_meas = $(B_meas[end])")
     println(
-        "Relative error between the exact/measured SOSEM (w = $(wns[iwmed])): $B_rel_err_med",
+        "Relative error between the exact/measured SOSEM (wmax = $(round(wns[end])); sigdigits=5): $B_rel_err",
+    )
+    println(
+        "Relative error between the exact/measured SOSEM (wmax = $(round(wns[iwmed]; sigdigits=5))): $B_rel_err_med",
+    )
+    # Measured C coefficient
+    _wns = wns[2:(end - 1)]
+    # _wns = wns[1:(end - 1)]
+    C_meas = @. (
+        (sqrt(_wns * wns[end]) / (sqrt(wns[end]) - sqrt(_wns))) *
+        (-_wns * im_sigma_over_EF[2:(end - 1)] - B_meas[end])
+        # (-_wns * im_sigma_over_EF[1:(end - 1)] - B_meas[end])
+    )
+    C_rel_err = @. 100 * abs((C - C_meas[end]) / C)
+    println("C = $C")
+    println("C_meas = $(C_meas[end])")
+    println(
+        "Relative error between the exact/measured C coefficient (wmax = $(round(_wns[end])); sigdigits=5): $C_rel_err",
     )
 
     # Simple interpolation: f₂(w) = -Im{B / (iw + Ωₜ)} = B w / (w² + Ωₜ²), 
@@ -421,10 +453,10 @@ function main()
     # fit_h3p(w) = h3p(w, model_h3p.param)
     # fit_h3m(w) = h3m(w, model_h3m.param)
 
-    println("\nf3p parameters: ", round.(model_f3p.param; sigdigits=5))
-    println("f3m parameters: ", round.(model_f3m.param; sigdigits=5))
-    println("\ng3p parameters: ", round.(model_g3p.param; sigdigits=5))
-    println("g3m parameters: ", round.(model_g3m.param; sigdigits=5))
+    println("\nf3p parameters: ", round.(get_f3_params(model_f3p.param..., 1); sigdigits=5))
+    println("f3m parameters: ", round.(get_f3_params(model_f3m.param..., -1); sigdigits=5))
+    println("\ng3p parameters: ", round.(get_g3_params(model_g3p.param..., 1); sigdigits=5))
+    println("g3m parameters: ", round.(get_g3_params(model_g3m.param..., -1); sigdigits=5))
     # println("\nh3p parameters: ", round.(model_h3p.param; sigdigits=5))
     # println("h3m parameters: ", round.(model_h3m.param; sigdigits=5))
 
@@ -465,26 +497,28 @@ function main()
         fit_f3p.(wns_fine);
         color=color[1],
         linestyle="--",
-        label="\$a^\\star_2 = $(round(model_f3p.param[1] / Omega_t^2; sigdigits=3))\\Omega^2_t\$",
+        label="\$b^\\star_2 = $(round(model_f3p.param[1] / Omega_t^2; sigdigits=3))\\Omega^2_t\$",
         zorder=101,
     )
     println("Omega_t = $Omega_t")
-    a2s = [-2, -5, -10, -50, Inf, 50, 10, 5, 2]
+    a2s = [2, 5, 10, 50, Inf, -50, -10, -5, -2]
     for (i, a2_plot) in enumerate(a2s)
         if isinf(a2_plot)
             plot(
                 wns_fine,
                 f2.(wns_fine);
                 color=reverse(collect(values(cdict2)))[i + 1],
-                label="\$a_2 = \\mp \\infty\$ \$(f_2(i\\omega_n))\$",
+                label="\$b_2 = \\mp \\infty\$ \$(f_2(i\\omega_n))\$",
                 zorder=100,
             )
         else
             plot(
                 wns_fine,
-                [f3p.(w, [a2_plot * Omega_t^2]) for w in wns_fine];
+                # [f3p.(w, [a2_plot * Omega_t^2]) for w in wns_fine];
+                [f3p.(w, [-a2_plot * Omega_t^2]) for w in wns_fine];
                 color=reverse(collect(values(cdict2)))[i + 1],
-                label="\$a_2 = $(Int(a2_plot))\\Omega^2_t\$",
+                # label="\$b_2 = $(Int(a2_plot))\\Omega^2_t\$",
+                label="\$b_2 = $(Int(-a2_plot))\\Omega^2_t\$",
                 zorder=3,
             )
         end
@@ -492,7 +526,7 @@ function main()
     xlim(0, wmax_plot)
     ylim(-0.02, 0.42)
     xlabel("\$\\omega_n\$")
-    ylabel("\$f_3(a_2, i\\omega_n)\$")
+    ylabel("\$f_3(b_2, i\\omega_n)\$")
     legend(; loc="upper right", ncol=1, fontsize=10)
     plt.tight_layout()
     savefig("results/self_energy_fits/f2_and_f3_fit_comparisons.pdf")
@@ -504,14 +538,16 @@ function main()
     plot(wns_fine, B ./ wns_fine; color=color[1], linestyle="--")
     wns_spl, minus_im_sigma_over_EF_spl =
         spline(wns, -im_sigma_over_EF; xmax=wns[searchsortedfirst(wns, wmax_plot)])
-    plot(wns_spl, minus_im_sigma_over_EF_spl; color=color[1], label="Exact")
     plot(
         wns_fine,
         get_rpa_analytic_tail(wns_fine, para);
         color="gray",
         linestyle="-",
-        label="\$\\frac{16 \\sqrt{2}}{3\\pi}\\frac{(\\alpha r_s)^2}{\\omega^{3/2}_n}\$",
+        label="\$\\frac{16}{3\\pi}\\frac{(\\alpha r_s)^2}{\\omega^{3/2}_n}\$",
+        # label="\$\\frac{16 \\sqrt{2}}{3\\pi}\\frac{(\\alpha r_s)^2}{\\omega^{3/2}_n}\$",
     )
+    plot(wns_spl, minus_im_sigma_over_EF_spl; color=color[1], label="RPA")
+    axvline(Omega_t; color=cdict["red"], linestyle="--", label="\$\\Omega_t\$", zorder=-1)
     # plot(
     #     wns_fine,
     #     f2_leading_order.(wns_fine);
@@ -526,8 +562,8 @@ function main()
         linestyle="-",
         label="\$f_2(i\\omega_n)\$",
     )
-    plot(wns_fine, fit_f3p.(wns_fine); color=color[2], label="\$f_3(i\\omega_n)\$")
-    plot(wns_fine, fit_g3p.(wns_fine); color=color[3], label="\$g_3(i\\omega_n)\$")
+    plot(wns_fine, fit_f3p.(wns_fine); color=color[2], label="\$f^\\star_3(i\\omega_n)\$")
+    plot(wns_fine, fit_g3p.(wns_fine); color=color[3], label="\$g^\\star_3(i\\omega_n)\$")
     # plot(wns_fine, fit_f3m.(wns_fine); color=color[4], label="\$f^-_3(i\\omega_n)\$")
     # plot(wns_fine, fit_g3m.(wns_fine); color=color[6], label="\$g^-_3(i\\omega_n)\$")
     # plot(wns_fine, fit_h3p.(wns_fine); color=color[7], label="\$h^+_3(i\\omega_n)\$")
@@ -536,7 +572,7 @@ function main()
     ylim(0, 0.32)
     # ylim(0, 2.2 * max(maximum(-im_sigma_over_EF), maximum(f2.(wns_fine))))
     xlabel("\$\\omega_n\$")
-    ylabel("\$-\\mathrm{Im}\\,\\Sigma_\\mathrm{RPA}(k = 0, i\\omega_n)\$")
+    ylabel("\$-\\mathrm{Im}\\,\\Sigma(k = 0, i\\omega_n)\$")
     legend(; loc="upper right")
     plt.tight_layout()
     savefig("results/self_energy_fits/im_sigma_rpa_fits.pdf")
@@ -544,26 +580,40 @@ function main()
 
     # Plot ωₙ|ImΣ|
     fig = figure(; figsize=(6, 4))
-    # wmax_big = 15
-    wmax_big = maximum(wns)
+    wmax_big = 15
+    # wmax_big = maximum(wns)
     wns_big = collect(LinRange(0, wmax_big, 1000))
-    wns_big_spl, minus_im_sigma_over_EF_big_spl =
-        spline(wns, -im_sigma_over_EF; xmax=wns[searchsortedfirst(wns, wmax_big)])
-    plot(
-        wns_big_spl,
-        wns_big_spl .* minus_im_sigma_over_EF_big_spl;
-        color=color[1],
-        label="Exact",
-        zorder=1000,
-    )
+    wns_big_spl, B_meas_big_spl =
+        spline(wns, B_meas; xmax=wns[searchsortedfirst(wns, wmax_big)])
+    # wns_big_spl, minus_im_sigma_over_EF_big_spl =
+    #     spline(wns, -im_sigma_over_EF; xmax=wns[searchsortedfirst(wns, wmax_big)])
     plot(
         wns_big,
         B * one.(wns_big);
         color=color[1],
         linestyle="--",
-        label="\$B(r_s)\$",
+        # label="\$B(r_s)\$",
+        label="RPA (exact)",
         zorder=100,
     )
+    plot(
+        # wns,
+        # B_meas;
+        wns_big_spl,
+        B_meas_big_spl;
+        color=color[1],
+        label="RPA (meas)",
+        zorder=1000,
+    )
+    if wmax_big > Euv
+        axvline(
+            Euv;
+            color=cdict["red"],
+            linestyle="-",
+            label="\$\\Lambda_{\\text{DLR}} = $(Int(Euv))\$",
+            zorder=-1,
+        )
+    end
     # plot(
     #     wns_big,
     #     wns_big .* get_rpa_analytic_tail(wns_big, para);
@@ -575,37 +625,100 @@ function main()
         wns_big,
         wns_big .* f2.(wns_big);
         color=color[5],
-        label="\$f_2(i\\omega_n)\$",
+        label="\$\\omega_n f_2(i\\omega_n)\$",
         # zorder=6,
     )
     plot(
         wns_big,
         wns_big .* fit_f3p.(wns_big);
         color=color[2],
-        label="\$f_3(i\\omega_n)\$",
+        label="\$\\omega_n f^\\star_3(i\\omega_n)\$",
         # zorder=5,
     )
     plot(
         wns_big,
         wns_big .* fit_g3p.(wns_big);
         color=color[3],
-        label="\$g_3(i\\omega_n)\$",
+        label="\$\\omega_n g^\\star_3(i\\omega_n)\$",
         # zorder=4,
     )
     # xlim(0, wmax_big)
     xlim(0, maximum(wns_big))
-    ylim(0.38, nothing)
-    # ylim(-0.04, nothing)
+    # ylim(0.38, nothing)
+    ylim(-0.04, nothing)
     # ylim(0, 1.5 * maximum([ds_dw; df2_dw; df3_dw; dg3_dw]))
     xlabel("\$\\omega_n\$")
+    ylabel("\$B(r_s, i\\omega_n)\$")
+    # ylabel(
+    #     "\$-\\omega_n\\partial_{\\omega_n}\\mathrm{Im}\\,\\Sigma_\\mathrm{RPA}(k = 0, i\\omega_n)\$",
+    # )
+    legend(; loc="best")
+    plt.tight_layout()
+    # savefig("results/self_energy_fits/wn_times_im_sigma_rpa_large.pdf")
+    savefig("results/self_energy_fits/wn_times_im_sigma_rpa.pdf")
+    # savefig("results/self_energy_fits/wn_times_im_sigma_rpa_converged.pdf")
+
+    # Compare C_meas ≈ (sqrt(ωₙ ωₘₐₓ) / (sqrt(ωₘₐₓ) - sqrt(ωₙ))) * (ωₙ|ImΣ(iωₙ)| - B_meas)
+    # to analytic coefficient D from VZN
+    fig = figure(; figsize=(6, 4))
+    wmax = 15
+    # wmax = maximum(_wns)
+    wns_big = collect(LinRange(0, wmax, 1000))
+    wns_spl, C_meas_spl = spline(_wns, C_meas; xmax=_wns[searchsortedfirst(_wns, wmax)])
+    plot(
+        wns_big,
+        C * one.(wns_big);
+        color=color[1],
+        linestyle="--",
+        label="\$-\\frac{16}{3\\pi}(\\alpha r_s)^2\$",
+        # label="\$\\frac{16 \\sqrt{2}}{3\\pi}(\\alpha r_s)^2\$",
+        # label="RPA (exact)",
+        zorder=100,
+    )
+    # plot(_wns, C_meas; color=color[1], label="RPA", zorder=1000)
+    plot(wns_spl, C_meas_spl; color=color[1], label="RPA", zorder=1000)
+    if wmax > Euv
+        axvline(
+            Euv;
+            color=cdict["red"],
+            linestyle="-",
+            label="\$\\Lambda_{\\text{DLR}} = $(Int(Euv))\$",
+            zorder=-1,
+        )
+    end
+    # plot(
+    #     wns_big,
+    #     wns_big .* f2.(wns_big);
+    #     color=color[5],
+    #     label="\$f_2(i\\omega_n)\$",
+    #     # zorder=6,
+    # )
+    # plot(
+    #     wns_big,
+    #     wns_big .* fit_f3p.(wns_big);
+    #     color=color[2],
+    #     label="\$f^\\star_3(i\\omega_n)\$",
+    #     # zorder=5,
+    # )
+    # plot(
+    #     wns_big,
+    #     wns_big .* fit_g3p.(wns_big);
+    #     color=color[3],
+    #     label="\$g^\\star_3(i\\omega_n)\$",
+    #     # zorder=4,
+    # )
+    xlim(0, wmax)
+    ylim(nothing, 0.0)
+    # ylim(-0.5, nothing)
+    xlabel("\$\\omega_n\$")
     ylabel(
-        "\$-\\omega_n\\partial_{\\omega_n}\\mathrm{Im}\\,\\Sigma_\\mathrm{RPA}(k = 0, i\\omega_n)\$",
+        "\$C(r_s, i\\omega_n)\$",
+        # "\$-\\omega_n\\partial_{\\omega_n}\\mathrm{Im}\\,\\Sigma_\\mathrm{RPA}(k = 0, i\\omega_n)\$",
     )
     legend(; loc="best")
     plt.tight_layout()
-    savefig("results/self_energy_fits/wn_times_im_sigma_rpa_large.pdf")
-    # savefig("results/self_energy_fits/wn_times_im_sigma_rpa.pdf")
-    # savefig("results/self_energy_fits/ds_dw_converged.pdf")
+    # savefig("results/self_energy_fits/c_coefficient_rpa_large.pdf")
+    savefig("results/self_energy_fits/c_coefficient_rpa.pdf")
 
     # Plot the derivative of -ImΣ
     fig = figure(; figsize=(6, 4))
@@ -614,31 +727,30 @@ function main()
     __wns_fine, df2_dw = central_diff(f2.(wns_fine), wns_fine)
     __wns_fine, df3_dw = central_diff(fit_f3p.(wns_fine), wns_fine)
     __wns_fine, dg3_dw = central_diff(fit_g3p.(wns_fine), wns_fine)
-
     # iwlow = searchsortedfirst(wns, 0.25)
     iwlow = 1
     A_rel_err = 100 * abs((ds_dw[iwlow] - A) / A)
     println(
         "\nRelative error between the exact/measured low-frequency moment (w = $(wns[iwlow])): $A_rel_err",
     )
-
-    plot(_wns, ds_dw; color=color[1], label="Exact")
-    plot(_wns, A * one.(_wns); color=color[1], linestyle="--", label="\$A(r_s)\$")
+    plot(_wns, A * one.(_wns); color=color[1], linestyle="--", label="RPA (exact)")
+    plot(_wns, ds_dw; color=color[1], label="RPA (meas)")
     plot(
         __wns_fine,
         df2_dw;
         color=color[5],
         linestyle="-",
-        label="\$f^\\prime_2(i\\omega_n)\$",
+        label="\${f^\\star}^\\prime_2(i\\omega_n)\$",
     )
-    plot(__wns_fine, df3_dw; color=color[2], label="\$f^\\prime_3(i\\omega_n)\$")
-    plot(__wns_fine, dg3_dw; color=color[3], label="\$g^\\prime_3(i\\omega_n)\$")
+    plot(__wns_fine, df3_dw; color=color[2], label="\${f^\\star}^\\prime_3(i\\omega_n)\$")
+    plot(__wns_fine, dg3_dw; color=color[3], label="\${g^\\star}^\\prime_3(i\\omega_n)\$")
     xlim(0, 1)
-    ylim(-0.07, 1.1 * maximum([ds_dw; df2_dw; df3_dw; dg3_dw]))
+    ylim(-0.14, 1.1 * maximum([ds_dw; df2_dw; df3_dw; dg3_dw]))
     xlabel("\$\\omega_n\$")
-    ylabel(
-        "\$-\\partial_{\\omega_n}\\mathrm{Im}\\,\\Sigma_\\mathrm{RPA}(k = 0, i\\omega_n)\$",
-    )
+    ylabel("\$A(r_s, i\\omega_n)\$")
+    # ylabel(
+    #     "\$-\\partial_{\\omega_n}\\mathrm{Im}\\,\\Sigma_\\mathrm{RPA}(k = 0, i\\omega_n)\$",
+    # )
     legend(; loc="best")
     plt.tight_layout()
     savefig("results/self_energy_fits/ds_dw.pdf")
