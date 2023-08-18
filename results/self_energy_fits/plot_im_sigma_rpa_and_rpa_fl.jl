@@ -1,11 +1,14 @@
 using CodecZlib
+using CompositeGrids
 using DelimitedFiles
 using ElectronLiquid
 using ElectronGas
 using GreenFunc
 using Interpolations
+using Lehmann
 using JLD2
 using Measurements
+using Parameters
 using PyCall
 using SOSEM
 using LsqFit
@@ -20,7 +23,8 @@ const vzn_dir = "results/vzn_paper"
 # Small parameter of the UEG theory
 const α = (4 / 9π)^(1 / 3)
 
-const zfactor_rpa_benchmarks = Dict(
+# Benchmarks for Z(k_F)
+const zfactor_benchmarks = Dict(
     1.0 => 0.8601,
     2.0 => 0.7642,
     3.0 => 0.6927,
@@ -30,73 +34,70 @@ const zfactor_rpa_benchmarks = Dict(
 )
 
 """@ beta = 1000, small cutoffs"""
-const rpa_moments = Dict(
+# Nk, order = 11, 8
+const rpa_sosem = Dict(
     0.01 => 133629.31338476276,
     0.1 => 996.1421229225255,
     0.5 => 30.654593391597565,
     1.0 => 6.723994594646203,
     2.0 => 1.4584858366718452,
-    3.0 => 0.5936133107894049,
+    3.0 => 0.5936165034488587,
     4.0 => 0.3130605327419725,
     5.0 => 0.1903819378977648,
     7.5 => 0.07694747219230284,
     10.0 => 0.04040127700428145,
 )
-const rpa_fl_moments_ko_takada = Dict(
+const rpa_fl_sosem_ko_takada = Dict(
     0.01 => 113120.39532239494,
     0.1 => 794.082225081879,
     0.5 => 22.706255132471114,
     1.0 => 4.739085706326042,
     2.0 => 0.958442122563793,
-    3.0 => 0.37029855296213815,
+    3.0 => 0.3703011474216666,
     4.0 => 0.18744178767319505,
     5.0 => 0.11026002348040444,
     7.5 => 0.041904772294599595,
     10.0 => 0.02107009260794267,
 )
+# # Nk, order = 20, 12
+# const rpa_sosem = Dict(
+#     0.01 => 133629.5589712659,
+#     0.1 => 996.1453748797056,
+#     0.5 => 30.65472082096144,
+#     1.0 => 6.724025817780453,
+#     2.0 => 1.4584933290770838,
+#     3.0 => 0.5936165034488587,
+#     4.0 => 0.3130622525590106,
+#     5.0 => 0.19038299054878535,
+#     7.5 => 0.0769478880550561,
+#     10.0 => 0.0404014827795728,
+# )
+# const rpa_fl_sosem_ko_takada = Dict(
+#     0.01 => 113120.53305565231,
+#     0.1 => 794.0844302101557,
+#     0.5 => 22.706345661868387,
+#     1.0 => 4.739108972017714,
+#     2.0 => 0.9584480419440262,
+#     3.0 => 0.3703011474216666,
+#     4.0 => 0.18744320831614875,
+#     5.0 => 0.1102609051385906,
+#     7.5 => 0.04190513631989273,
+#     10.0 => 0.02107028506216691,
+# )
 
-"""@ beta = 1000, converged cutoffs"""
-const rpa_moments_converged = Dict(
-    0.1 => 1008.2063101513248,
-    0.5 => 31.137158213702797,
-    1.0 => 6.844635158665476,
-    2.0 => 1.4886456606863716,
-    3.0 => 0.6070175380088686,
-    4.0 => 0.3206003336440671,
-    5.0 => 0.19520736183070095,
-    7.5 => 0.07909205243614699,
-    10.0 => 0.04160757487540137,
-)
-const rpa_fl_moments_ko_takada_converged = Dict(
-    0.1 => 799.1121831657149,
-    0.5 => 22.86600392215787,
-    1.0 => 4.770690856098736,
-    2.0 => 0.9641346197840088,
-    3.0 => 0.37237151488395626,
-    4.0 => 0.18847524555192435,
-    5.0 => 0.11087443456532428,
-    7.5 => 0.042155695620371754,
-    10.0 => 0.021207322984162568,
-)
+"""Given sample y and x values, compute dy/dx using the forward difference method."""
+function forward_diff(ys, xs)
+    dy_dx = (ys[2:end] - ys[1:(end - 1)]) ./ (xs[2:end] - xs[1:(end - 1)])
+    _xs = xs[1:(end - 1)]
+    return _xs, dy_dx
+end
 
-# function limit_at_infinity(f; x0=x0, dx=dx, atol=1e-13, maxstep=1e9)
-#     x1 = x0 + dx
-#     f0 = f(x0)
-#     f1 = f(x1)
-#     step = 1
-#     while abs(f1 - f0) > atol
-#         if step > maxstep
-#             @warn "Requested atol was not obtainable within $maxstep steps!"
-#             break
-#         end
-#         step += 1
-#         x0 = x1
-#         f0 = f1
-#         x1 += dx
-#         f1 = f(x1)
-#     end
-#     return f1, x1, step
-# end
+"""Given sample y and x values, compute dy/dx using the central difference method."""
+function central_diff(ys, xs)
+    dy_dx = (ys[3:end] - ys[1:(end - 2)]) ./ (xs[3:end] - xs[1:(end - 2)])
+    _xs = xs[2:(end - 1)]
+    return _xs, dy_dx
+end
 
 function rsquared(xs, ys, yhats)
     ybar = sum(yhats) / length(yhats)
@@ -105,20 +106,34 @@ function rsquared(xs, ys, yhats)
     return 1 - ss_res / ss_tot
 end
 
-function get_Fs(rs)
-    return get_Fs_PW(rs)
-    # if rs < 1.0 || rs > 5.0
-    #     return get_Fs_DMC(rs)
-    # else
-    #     return get_Fs_PW(rs)
-    # end
+# function spline(x, y, e=one.(y); npts=1000)
+function spline(x, y; npts=1000, xmax=30.0)
+    interp = pyimport("scipy.interpolate")
+    _x = x[y .≥ 0]
+    _y = y[y .≥ 0]
+    _x = x[x .≤ xmax]
+    _y = y[x .≤ xmax]
+    # generate knots with spline without constraints
+    spl = interp.CubicSpline(_x, _y)
+    # spl = interp.CubicSpline(_x, _y)
+    __x = collect(LinRange(_x[1], _x[end], npts))
+    yfit = spl(__x)
+    return __x, yfit
 end
+
+# function get_Fs(rs)
+# if rs < 1.0 || rs > 5.0
+#     return get_Fs_DMC(rs)
+# else
+#     return get_Fs_PW(rs)
+# end
+# end
 
 """
 Get the symmetric l=0 Fermi-liquid parameter F⁰ₛ from DMC data of 
 Moroni, Ceperley & Senatore (1995) [Phys. Rev. Lett. 75, 689].
 """
-function get_Fs_DMC(rs)
+@inline function get_Fs_DMC(rs)
     SOSEM.@todo
 end
 
@@ -126,7 +141,7 @@ end
 Get the symmetric l=0 Fermi-liquid parameter F⁰ₛ via interpolation of the 
 compressibility ratio data of Perdew & Wang (1992) [Phys. Rev. B 45, 13244].
 """
-function get_Fs_PW(rs)
+@inline function get_Fs_PW(rs)
     # if rs < 1.0 || rs > 5.0
     #     @warn "The Perdew-Wang interpolation for Fs may " *
     #           "be inaccurate outside the metallic regime!"
@@ -136,46 +151,63 @@ function get_Fs_PW(rs)
     return kappa0_over_kappa - 1.0
 end
 
-function get_rpa_analytic_tail(wns, param::Parameter.Para)
-    rs = round(param.rs; sigdigits=13)
-    # VZN prefactor C
-    # prefactor = -16 * sqrt(2) * (α * rs)^2 / 3π
-    # -Im(1 / i^(3/2)) = 1/sqrt(2)
-    prefactor = -16 * sqrt(2) * (α * rs)^2 * (1 / sqrt(2)) / 3π
-    return @. -prefactor / wns^(3 / 2)
+"""
+Get the value of fₛ(q → ∞) for a given interaction type
+(either RPA, or RPA+FL using a constant or Takada ansatz for fₛ(q)).
+"""
+@inline function get_fs_infty(para::Parameter.Para, int_type=:rpa)
+    if int_type == :ko_const
+        # Get Fermi liquid parameter F⁰ₛ(rs) from Perdew-Wang fit
+        rs = round(para.rs; sigdigits=13)
+        Fs = get_Fs_PW(rs)
+        # Local-field factor at q=∞
+        # For :ko_const, fs_infty = Fs / NF
+        fs_infty = Fs / para.NF
+    elseif int_type == :ko
+        # For the Takada ansatz for fs(q), fs(∞) = 0,
+        # so the RPA+FL tail is the same as RPA
+        fs_infty = 0.0
+    elseif int_type == :rpa
+        fs_infty = 0.0
+    else
+        SOSEM.@todo
+    end
+    return fs_infty
 end
 
-function get_rpa_fl_analytic_tail(wns, param::Parameter.Para)
-    # Get Fermi liquid parameter F⁰ₛ(rs) from Perdew-Wang fit
-    rs = round(param.rs; sigdigits=13)
-    Fs = get_Fs(rs)
-
-    # Local-field factor fs = Fs / NF
-    fs = Fs / param.NF
-
-    # Note that our fs has an extra minus sign relative to VZN,
-    # so we have (1 - f) C / ω^(3/2) ↦ (1 - f) C / ω^(3/2)
-    rpa_tail = get_rpa_analytic_tail(wns, param)
-    return (1 + fs) * rpa_tail
+# RPA(+FL) analytic tail behavior C ωₙ^{3/2} with coefficient C = -c (1 + fs(∞))/ √2, where
+# c = 16 √2 (α rs)² / 3π is taken from the VZN paper
+@inline function C_coefficient(rs, fs_infty=0.0)
+    # return -16 * (1 + fs_infty) * (α * rs)^2 / 3π
+    return -16 * (1 - fs_infty) * (α * rs)^2 / 3π
 end
 
-function get_sigma_rpa_wn(param::Parameter.Para; ktarget=0.0, atol=1e-3)
+@inline function get_rpa_analytic_tail(wns, para::Parameter.Para, fs_infty=0.0)
+    rs = round(para.rs; sigdigits=13)
+    return @. C_coefficient(rs) / wns^(3 / 2)
+end
+
+@inline function get_rpa_fl_analytic_tail(wns, para::Parameter.Para, fs_infty=0.0)
+    # NOTE: Our fs(q) has an extra minus sign relative to VZN,
+    # so we have (1 + fs(∞)) C / ω^(3/2) ↦ (1 + fs(∞)) C / ω^(3/2)
+    rs = round(para.rs; sigdigits=13)
+    return @. C_coefficient(rs, fs_infty) / wns^(3 / 2)
+end
+
+function get_sigma_rpa_wn(para::Parameter.Para; ktarget=0.0, atol=1e-3, int_type=:rpa)
     # Make sure we are using parameters for the bare UEG theory
-    @assert param.Λs == param.Λa == 0.0
-
-    # # Converged params
-    # Euv, rtol = 10000 * param.EF, 1e-11
-    # maxK, minK = 1000param.kF, 1e-8param.kF
-    # Nk, order = 25, 20
+    @assert para.Λs == para.Λa == 0.0
 
     # Small params
-    Euv, rtol = 1000 * param.EF, 1e-11
-    maxK, minK = 30param.kF, 1e-8param.kF
+    Euv, rtol = 1000 * para.EF, 1e-11
+    maxK, minK = 30 * para.kF, 1e-8 * para.kF
     Nk, order = 11, 8
+    # Nk, order = 20, 12
 
     # Get RPA+FL self-energy
+    # sigma_tau_dynamic, sigma_tau_instant = SelfEnergy.G0W0(para; int_type=:rpa)
     sigma_tau_dynamic, sigma_tau_instant = SelfEnergy.G0W0(
-        param;
+        para;
         Euv=Euv,
         rtol=rtol,
         Nk=Nk,
@@ -212,15 +244,21 @@ function get_sigma_rpa_wn(param::Parameter.Para; ktarget=0.0, atol=1e-3)
     sigma_wn_dynamic_kval = sigma_wn_dynamic[:, ikval][dlr.ωn .≥ 0]
 
     # Z-factor for low-frequency parameterization
-    zfactor = SelfEnergy.zfactor(param, sigma_wn_dynamic)[1]
+    zfactor_m10 = SelfEnergy.zfactor(para, sigma_wn_dynamic; kamp=ktarget, ngrid=[-1, 0])[1]
+    zfactor_0p1 = SelfEnergy.zfactor(para, sigma_wn_dynamic; kamp=ktarget, ngrid=[0, 1])[1]
+    println("Z_RPA(k=$ktarget) (ngrid = [-1, 0]): ", zfactor_m10)
+    println("Z_RPA(k=$ktarget) (ngrid = [0, 1]): ", zfactor_0p1)
+    # zfactor = zfactor_m10
+    zfactor = zfactor_0p1
 
     # Check zfactor against benchmarks at β = 1000. 
-    # It should agree within a few percent (*up to finite-temperature effects).
+    # It should agree within a few percent (up to finite-temperature effects).
     # (see: https://numericaleft.github.io/ElectronGas.jl/dev/manual/quasiparticle/)
-    rs = round(param.rs; sigdigits=13)
-    if rs in keys(zfactor_rpa_benchmarks)
+    rs = round(para.rs; sigdigits=13)
+    if rs in keys(zfactor_benchmarks) && ktarget == para.kF
+        println("Z_RPA (benchmark): ", zfactor_benchmarks[round(para.rs; sigdigits=13)])
         println("Checking zfactor against zero-temperature benchmark...")
-        zfactor_zero_temp = zfactor_rpa_benchmarks[rs]
+        zfactor_zero_temp = zfactor_benchmarks[rs]
         percent_error = 100 * abs(zfactor - zfactor_zero_temp) / zfactor_zero_temp
         println("Percent error vs zero-temperature benchmark of Z_kF: $percent_error")
         @assert percent_error ≤ 5
@@ -228,36 +266,34 @@ function get_sigma_rpa_wn(param::Parameter.Para; ktarget=0.0, atol=1e-3)
         println("No zero-temperature benchmark available for rs = $(rs)!")
     end
 
-    return kval, wns, sigma_wn_static_kval, sigma_wn_dynamic_kval, zfactor
+    return dlr, kval, wns, sigma_wn_static_kval, sigma_wn_dynamic_kval, zfactor
 end
 
 function get_sigma_rpa_fl_wn(
-    param::Parameter.Para;
+    para::Parameter.Para;
     ktarget=0.0,
-    int_type=int_type,
     atol=1e-3,
+    int_type=int_type,
 )
     # Make sure we are using parameters for the bare UEG theory
-    @assert param.Λs == param.Λa == 0.0
+    @assert para.Λs == para.Λa == 0.0
 
     # Get Fermi liquid parameter F⁰ₛ(rs) from Perdew-Wang fit
-    rs = round(param.rs; sigdigits=13)
-    Fs = get_Fs(rs)
-    println("Fermi liquid parameter at rs = $(rs): Fs = $Fs")
-
-    # # Converged params
-    # Euv, rtol = 10000 * param.EF, 1e-11
-    # maxK, minK = 1000param.kF, 1e-8param.kF
-    # Nk, order = 25, 20
+    rs = round(para.rs; sigdigits=13)
+    Fs = get_Fs_PW(rs)
+    if int_type == :ko_const
+        println("Fermi liquid parameter at rs = $(rs): Fs = $Fs")
+    end
 
     # Small params
-    Euv, rtol = 1000 * param.EF, 1e-11
-    maxK, minK = 30param.kF, 1e-8param.kF
+    Euv, rtol = 1000 * para.EF, 1e-11
+    maxK, minK = 30 * para.kF, 1e-8 * para.kF
     Nk, order = 11, 8
+    # Nk, order = 20, 12
 
     # Get RPA+FL self-energy
     sigma_tau_dynamic, sigma_tau_instant = SelfEnergy.G0W0(
-        param;
+        para;
         Euv=Euv,
         rtol=rtol,
         Nk=Nk,
@@ -265,7 +301,7 @@ function get_sigma_rpa_fl_wn(
         maxK=maxK,
         order=order,
         int_type=int_type,
-        Fs=-Fs,  # NOTE: NEFT uses opposite sign convention (Fs > 0)!
+        # Fs=-Fs,  # NOTE: NEFT uses opposite sign convention (Fs > 0)!
     )
 
     # Get sigma in DLR basis
@@ -295,9 +331,123 @@ function get_sigma_rpa_fl_wn(
     sigma_wn_dynamic_kval = sigma_wn_dynamic[:, ikval][dlr.ωn .≥ 0]
 
     # Z-factor for low-frequency parameterization
-    zfactor = SelfEnergy.zfactor(param, sigma_wn_dynamic)[1]
+    zfactor_m10 = SelfEnergy.zfactor(para, sigma_wn_dynamic; kamp=ktarget, ngrid=[-1, 0])[1]
+    zfactor_0p1 = SelfEnergy.zfactor(para, sigma_wn_dynamic; kamp=ktarget, ngrid=[0, 1])[1]
+    println("Z_RPA(k=$ktarget) (ngrid = [-1, 0]): ", zfactor_m10)
+    println("Z_RPA(k=$ktarget) (ngrid = [0, 1]): ", zfactor_0p1)
+    # zfactor = zfactor_m10
+    zfactor = zfactor_0p1
 
-    return kval, wns, sigma_wn_static_kval, sigma_wn_dynamic_kval, zfactor
+    return dlr, kval, wns, sigma_wn_static_kval, sigma_wn_dynamic_kval, zfactor
+end
+
+function get_c1_rpa(para::Parameter.Para)
+    # Small params
+    kF = para.kF
+    Euv, rtol = 1000 * para.EF, 1e-11
+    maxK, minK = 30 * kF, 1e-8 * kF
+    # Nk, order = 20, 12
+    Nk, order = 11, 8
+
+    # qgrid for integration
+    qgrid =
+        CompositeGrid.LogDensedGrid(:gauss, [0.0, maxK], [0.0, 2.0 * kF], Nk, minK, order)
+
+    # RPA Wtilde0(q, iωₙ) / V(q)
+    wtilde_0_over_v_wn_q, _ = Interaction.RPAwrapped(Euv, rtol, qgrid.grid, para)
+    # Interaction.RPAwrapped(Euv, rtol, qgrid.grid, param; bugfix=true)
+    @assert maximum(imag(wtilde_0_over_v_wn_q[1, 1, :])) ≤ 1e-10
+
+    # Get Wtilde0(q, τ = 0) / V(q) from WtildeFs(q, iωₙ) / V(q)
+    wtilde_0_over_v_dlr_q = to_dlr(wtilde_0_over_v_wn_q)
+    wtilde_0_over_v_tau_q = to_imtime(wtilde_0_over_v_dlr_q)
+    # NOTE: Wtilde0 is spin-symmetric => idx1 = 1
+    wtilde_0_over_v_q_inst = real(wtilde_0_over_v_tau_q[1, 1, :])
+
+    # Integrate RPA(+FL) 4πe²(Wtilde(q, τ = 0) / V(q)) over q ∈ ℝ⁺
+    rpa_integrand = wtilde_0_over_v_q_inst
+    c1_rpa = -(2 * para.e0^2 / π) * CompositeGrids.Interp.integrate1D(rpa_integrand, qgrid)
+
+    # println("\nrs = $rs:" * "\nC⁽¹⁾_{RPA} = $c1_rpa")
+    return c1_rpa
+end
+
+function get_c1_rpa_fl(para::Parameter.Para; int_type=:ko)
+    # Small params
+    kF = para.kF
+    Euv, rtol = 1000 * para.EF, 1e-11
+    maxK, minK = 30 * kF, 1e-8 * kF
+    # Nk, order = 20, 12
+    Nk, order = 11, 8
+
+    if int_type != :ko
+        SOSEM.@todo
+    end
+    # # Get Landau parameter F⁰ₛ from Perdew & Wang compressibility fit
+    # Fs = get_Fs(rs)
+    #     println("rs = $rs, Fs = $Fs, fs = $(Fs / para.NF)")
+    # end
+
+    # Either use constant Fs from P&W, q-dependent Takada ansatz, or Corradini fit to Moroni DMC data
+    if int_type == :ko
+        landaufunc = Interaction.landauParameterTakada
+        # elseif int_type == :ko_const
+        #     landaufunc = Interaction.landauParameterConst
+        # elseif int_type == :ko_moroni
+        #     landaufunc = Interaction.landauParameterMoroni
+    end
+
+    # qgrid for integration
+    qgrid =
+        CompositeGrid.LogDensedGrid(:gauss, [0.0, maxK], [0.0, 2.0 * kF], Nk, minK, order)
+
+    # Get Wtilde_KO(q, iωₙ) / (V(q) - fs)
+    wtilde_KO_over_v_wn_q, _ = Interaction.KOwrapped(
+        Euv,
+        rtol,
+        qgrid.grid,
+        para;
+        regular=true,
+        int_type=:ko,
+        # int_type=int_type == :ko_const ? :ko_const : :ko,
+        landaufunc=landaufunc,
+        # Fs=-Fs,  # NOTE: NEFT uses opposite sign convention!
+        # bugfix=true,
+    )
+    @assert maximum(imag(wtilde_KO_over_v_wn_q[1, 1, :])) ≤ 1e-10
+
+    # Get Wtilde_KO(q, τ) / (V(q) - fs) from Wtilde_KO(q, iωₙ) / (V(q) - fs)
+    wtilde_KO_over_v_dlr_q = to_dlr(wtilde_KO_over_v_wn_q)
+    wtilde_KO_over_v_tau_q = to_imtime(wtilde_KO_over_v_dlr_q)
+
+    # Get Wtilde_KO_s(q, τ = 0) / (V(q) - fs), keeping only the
+    # spin-symmetric part of wtilde_KO (we define fa := 0)
+    wtilde_KO_s_over_v_q_f_inst = real(wtilde_KO_over_v_tau_q[1, 1, :])
+
+    local fs_int_type
+    if int_type == :ko
+        # NOTE: The Takada ansatz for fs is q-dependent!
+        fs_int_type = [Interaction.landauParameterTakada(q, 0, para)[1] for q in qgrid.grid]
+    elseif int_type == :ko_const
+        # fs = Fs / NF
+        fs_int_type = Fs / para.NF
+    else
+        error("Not yet implemented!")
+    end
+
+    # 1 / Vs(q)
+    Vinvs = [Interaction.coulombinv(q, para)[1] for q in qgrid.grid]
+
+    # Wtilde_KO_s / Vs = (Wtilde_KO_s / (Vs - fs)) * (1 - fs Vinvs) 
+    #                  = Wtilde_KO_s(...; regular=true) * (1 - fs Vinvs)
+    rpa_fl_integrand = @. wtilde_KO_s_over_v_q_f_inst * (1.0 - fs_int_type * Vinvs)
+
+    # Integrate RPA+FL 4πe²(Wtilde(q, τ = 0) / V(q)) over q ∈ ℝ⁺ (regular = true)
+    c1_rpa_fl =
+        -(2 * para.e0^2 / π) * CompositeGrids.Interp.integrate1D(rpa_fl_integrand, qgrid)
+
+    # println("rs = $rs:" * "\nC⁽¹⁾_{RPA+FL} = $c1_rpa_fl")
+    return c1_rpa_fl
 end
 
 function main()
@@ -308,28 +458,21 @@ function main()
         cd(ENV["SOSEM_HOME"])
     end
 
-    ktarget = 0.0  # k = kF
+    # Physical parameters
     beta = 1000.0
-    # beta = 40.0
-    # rslist = [1.0]
-    # rslist = [1 / α]  # Gives kF = EF = 1
-    rslist_small = [1.0, 5.0, 10.0]
-    # rslist_small = [1.0]
-    rslist = [0.01, 0.1, 0.5, 1.0, 2.0, 3.0, 4.0, 5.0, 7.5, 10.0]
-    # rslist = [0.1, 0.5, 1.0, 2.0, 3.0, 4.0, 5.0, 7.5, 10.0]
-    # rslist = rslist_small
+    # rslist = [0.01, 0.1, 0.5, 1.0, 2.0, 3.0, 4.0, 5.0, 7.5, 10.0]
+    rslist = LinRange(0.01, 10.0, 30)
 
-    # rslist = [1.0, 5.0, 10.0]
-    # rslist = [1.0, 1ℯ, 1ℯ^2]
-    # rsstrings = ["1", "e", "e^2"]
+    # We fit Σ_RPA(k = 0, iw)
+    ktarget = 0.0
+    # ktarget = para.kF
 
-    # The unit system to use for plotting
-    # units = :Rydberg
-    units = :EF
-    # units = :eTF
+    # Use LaTex fonts for plots
+    plt.rc("text"; usetex=true)
+    plt.rc("font"; family="serif")
 
+    # Which fs paramaterization to use
     int_type = :ko
-    # int_type = :ko_const
 
     rs_qmc = 1.0
     beta_qmc = 40.0
@@ -406,14 +549,14 @@ function main()
         # Get the G0W0 self-energy and corresponding DLR grid from the ElectronGas package
         # NOTE: Here we need to be careful to generate Σ_G0W0 for the *bare* theory, i.e.,
         #       to use an ElectronGas.Parameter object where Λs (mass2) is zero!
-        param = Parameter.rydbergUnit(1 / beta, rs, 3)
-        @assert param.Λs == param.Λa == 0.0
+        para = Parameter.rydbergUnit(1 / beta, rs, 3)
+        @assert para.Λs == para.Λa == 0.0
 
         # Get RPA and RPA+FL self-energies
-        kval, wns, sigma_rpa_wn_stat, sigma_rpa_wn_dyn, zfactor_rpa =
-            get_sigma_rpa_wn(param; ktarget=ktarget)
-        kval_fl, wns_fl, sigma_rpa_fl_wn_stat, sigma_rpa_fl_wn_dyn, zfactor_rpa_fl =
-            get_sigma_rpa_fl_wn(param; ktarget=ktarget, int_type=int_type)
+        dlr, kval, wns, sigma_rpa_wn_stat, sigma_rpa_wn_dyn, zfactor_rpa =
+            get_sigma_rpa_wn(para; ktarget=ktarget)
+        dlr, kval_fl, wns_fl, sigma_rpa_fl_wn_stat, sigma_rpa_fl_wn_dyn, zfactor_rpa_fl =
+            get_sigma_rpa_fl_wn(para; ktarget=ktarget, int_type=int_type)
 
         # The static parts do not contribute to ImΣ
         println(imag(sigma_rpa_wn_stat))
@@ -426,129 +569,62 @@ function main()
         @assert wns ≈ wns_fl
 
         # Energy units in Rydbergs for nondimensionalization of self-energy data
-        EF = param.EF
-        eTF = param.qTF^2 / (2 * param.me)
+        EF = para.EF
 
         # Nondimensionalize frequencies and self-energies by EF
         wns_over_EF = wns / EF
-        # Static part
-        sigma_rpa_wn_stat_over_EF = sigma_rpa_wn_stat / EF
-        sigma_rpa_fl_wn_stat_over_EF = sigma_rpa_fl_wn_stat / EF
+
+        # # Static part
+        # sigma_rpa_wn_stat_over_EF = sigma_rpa_wn_stat / EF
+        # sigma_rpa_fl_wn_stat_over_EF = sigma_rpa_fl_wn_stat / EF
+
         # Dynamic part
         sigma_rpa_wn_dyn_over_EF = sigma_rpa_wn_dyn / EF
         sigma_rpa_fl_wn_dyn_over_EF = sigma_rpa_fl_wn_dyn / EF
 
-        # Nondimensionalize frequencies and self-energies by eTF
-        wns_over_eTF = wns / eTF
-        # Static part
-        sigma_rpa_wn_stat_over_eTF = sigma_rpa_wn_stat / eTF
-        sigma_rpa_fl_wn_stat_over_eTF = sigma_rpa_fl_wn_stat / eTF
-        # Dynamic part
-        sigma_rpa_wn_dyn_over_eTF = sigma_rpa_wn_dyn / eTF
-        sigma_rpa_fl_wn_dyn_over_eTF = sigma_rpa_fl_wn_dyn / eTF
+        # # Get first-order RPA and RPA+FL moments at k = ktarget
+        # rpa_c1 = rpa_sosem[rs]
+        # # rpa_c1 = rpa_moments_converged[rs]
+        # if int_type == :ko
+        #     rpa_fl_c1 = rpa_fl_sosem_ko_takada[rs]
+        #     # rpa_fl_c1 = rpa_fl_moments_ko_takada_converged[rs]
+        # elseif int_type == :ko_const
+        #     SOSEM.@todo
+        #     # rpa_fl_c1 = rpa_fl_sosem_ko_const[rs]
+        # end
 
         # Get first-order RPA and RPA+FL moments at k = ktarget
-        rpa_c1 = rpa_moments[rs]
-        # rpa_c1 = rpa_moments_converged[rs]
-        if int_type == :ko
-            rpa_fl_c1 = rpa_fl_moments_ko_takada[rs]
-            # rpa_fl_c1 = rpa_fl_moments_ko_takada_converged[rs]
-        elseif int_type == :ko_const
-            rpa_fl_c1 = rpa_fl_moments_const[rs]
-        end
+        rpa_c1    = get_c1_rpa(para)
+        rpa_fl_c1 = get_c1_rpa_fl(para; int_type=int_type)
+
         push!(c1_rpas_over_EF2, rpa_c1 / EF^2)
         push!(c1_rpa_fls_over_EF2, rpa_fl_c1 / EF^2)
         println("First-order RPA moment (Rydberg): ", rpa_c1)
         println("First-order RPA+FL moment (Rydberg): ", rpa_fl_c1)
 
-        local wns_plot
-        local sigma_rpa_dyn_plot, sigma_rpa_fl_dyn_plot
-        local sigma_rpa_stat_plot, sigma_rpa_fl_stat_plot
-        # wns_plot = wns
-        if units == :Rydberg
-            wns_plot = wns
-            # Static part
-            sigma_rpa_stat_plot = sigma_rpa_wn_stat
-            sigma_rpa_fl_stat_plot = sigma_rpa_fl_wn_stat
-            # Dynamic part
-            sigma_rpa_dyn_plot = sigma_rpa_wn_dyn
-            sigma_rpa_fl_dyn_plot = sigma_rpa_fl_wn_dyn
-        elseif units == :EF
-            wns_plot = wns_over_EF
-            # Static part
-            sigma_rpa_stat_plot = sigma_rpa_wn_stat_over_EF
-            sigma_rpa_fl_stat_plot = sigma_rpa_fl_wn_stat_over_EF
-            # Dynamic part
-            sigma_rpa_dyn_plot = sigma_rpa_wn_dyn_over_EF
-            sigma_rpa_fl_dyn_plot = sigma_rpa_fl_wn_dyn_over_EF
-        else  # units == :eTF
-            wns_plot = wns_over_eTF
-            # Static part
-            sigma_rpa_stat_plot = sigma_rpa_wn_stat_over_eTF
-            sigma_rpa_fl_stat_plot = sigma_rpa_fl_wn_stat_over_eTF
-            # Dynamic part
-            sigma_rpa_dyn_plot = sigma_rpa_wn_dyn_over_eTF
-            sigma_rpa_fl_dyn_plot = sigma_rpa_fl_wn_dyn_over_eTF
-        end
-        println("(RPA) -ImΣ(0, 0) = ", -imag(sigma_rpa_dyn_plot[1]))
-        println("(RPA+FL) -ImΣ(0, 0) = ", -imag(sigma_rpa_fl_dyn_plot[1]))
+        println("(RPA) -ImΣ(0, 0) = ", -imag(sigma_rpa_wn_dyn_over_EF[1]))
+        println("(RPA+FL) -ImΣ(0, 0) = ", -imag(sigma_rpa_fl_wn_dyn_over_EF[1]))
 
         # # Plot of RPA(+FL) -ImΣs in chosen units
         # ax.plot(
         #     wns_over_EF,
-        #     -imag(sigma_rpa_dyn_plot),
+        #     -imag(sigma_rpa_wn_dyn_over_EF),
         #     "C$(i-1)";
         #     label="\$RPA\$ (\$r_s=$(rs)\$)",
         #     # label="\$RPA\$ (\$r_s=$(rsstrings[i])\$)",
         # )
         # ax.plot(
         #     wns_over_EF,
-        #     -imag(sigma_rpa_fl_dyn_plot),
+        #     -imag(sigma_rpa_fl_wn_dyn_over_EF),
         #     "$(darkcolors[i])";
         #     label="\$RPA+FL\$ (\$r_s=$(rs)\$)",
         #     # label="\$RPA+FL\$ (\$r_s=$(rsstrings[i])\$)",
         # )
 
-        if rs in rslist_small
-            idx = findfirst(rslist_small .== rs)
-            @assert idx in eachindex(rslist_small)
-            # Plot low-frequency behavior for RPA(+FL)
-            rpa_low_freq = (1 / zfactor_rpa - 1) .* wns
-            rpa_fl_low_freq = (1 / zfactor_rpa_fl - 1) .* wns
-            ax5.plot(
-                wns_over_EF,
-                rpa_low_freq / EF,
-                "--";
-                color="C$(idx-1)",
-                # label="\$RPA\$ (\$r_s=$(rs)\$)",
-            )
-            ax5.plot(
-                wns_over_EF,
-                rpa_fl_low_freq / EF,
-                "--";
-                color="$(darkcolors[idx])",
-                # label="\$RPA+FL\$ (\$r_s=$(rs)\$)",
-            )
-            ax5.plot(
-                wns_over_EF,
-                -imag(sigma_rpa_wn_dyn_over_EF);
-                # -imag(sigma_rpa_wn_dyn) / EF;
-                color="C$(idx-1)",
-                label="\$RPA\$ (\$r_s=$(rs)\$)",
-            )
-            ax5.plot(
-                wns_over_EF,
-                -imag(sigma_rpa_fl_wn_dyn_over_EF);
-                # -imag(sigma_rpa_fl_wn_dyn) / EF;
-                color="$(darkcolors[idx])",
-                label="\$RPA+FL\$ (\$r_s=$(rs)\$)",
-            )
-        end
-
         max_sigma = max(
             max_sigma,
-            maximum(-imag(sigma_rpa_dyn_plot)),
-            maximum(-imag(sigma_rpa_fl_dyn_plot)),
+            maximum(-imag(sigma_rpa_wn_dyn_over_EF)),
+            maximum(-imag(sigma_rpa_fl_wn_dyn_over_EF)),
         )
 
         # High- and low-frequency tails
@@ -570,423 +646,16 @@ function main()
         # Z-factors
         push!(zfactors_rpa, zfactor_rpa)
         push!(zfactors_rpa_fl, zfactor_rpa_fl)
-
-        # Low-high interpolation: s₂(w) = B / (iw + wₜ), w = ω / ϵ_F
-        function lo_hi_fit_rpa(w)
-            return (rpa_c1 / EF^2) / (im * w + w0_rpa / EF)
-        end
-        function lo_hi_fit_rpa_fl(w)
-            return (rpa_fl_c1 / EF^2) / (im * w + w0_rpa_fl / EF)
-        end
-
-        function lo_hi_fit_rpa_simple(w)
-            return 0.48w * rs^2 / (w^2 + 3.03rs)
-        end
-
-        # Low-middle-high interpolation: s₃(w) = B / (iw + a / (iw + b)), w = ω / ϵ_F
-        function lo_med_hi_fit_rpa(w; sa=+1, sb=+1)
-            # signs of c₁ and c₂
-            @assert sa ∈ [-1, +1] && sb ∈ [-1, +1]
-
-            # Dimensionless coefficients
-            B = rpa_c1 / EF^2
-            wt = w0_rpa / EF
-            wm = wns[argmax(-imag(sigma_rpa_wn_dyn))] / EF
-            fm = maximum(-imag(sigma_rpa_wn_dyn) / EF)
-
-            # Intermediate variables
-            c = wm * (B / fm - wm)
-            d = wm^2 / c
-            g = (1 / c - 1 / wt^2)
-
-            # Coefficients a and b
-            # Solved by enforcing the following constraints:
-            #  • C1: -Im(s₃(iw → 0)) ~ A w  , to leading order in w
-            #  • C2: -Im(s₃(iw → ∞)) ~ B / w, to leading order in (1 / w)
-            #  • C3: -Im(s₃(wₘ))     ≡ -Im(Σ(wₘ)) ≡ fₘ
-            a = (d - sa * sqrt(Complex(d^2 + 4g * wt^2))) / 2g
-            b = sb * sqrt(Complex(a + (a / wt)^2))
-            println("Real solution for a coeff? ", isreal(d^2 + 4g * wt^2), isreal(a))
-            println("Real solution for b coeff? ", isreal(a + (a / wt)^2), isreal(b))
-            println("Imaginary part of a: ", imag(a))
-            println("Imaginary part of b: ", imag(b))
-
-            # s₃(w) = B / (iw + c2 / (iw + c3))), w = ω / ϵ_F
-            return B / (im * w + a / (im * w + b))
-        end
-
-        # Plot -ImΣ, low and high frequency tails together at each rs
-        if rs in rslist_small
-            # # Get low-middle-high interpolation
-            # B = (rpa_c1 / EF^2)
-            # p = maximum(-imag(sigma_rpa_wn_dyn) / EF)
-            # wm = wns[argmax(-imag(sigma_rpa_wn_dyn))] / EF
-            # d = @. p * wm / B
-            # e = @. d / wm^2 - 2d
-            # function model_lo_med_hi(w, param)
-            #     c2 = param[1]
-            #     # This choice of c3 enforces the constraint: -Im(s₃(wₘₐₓ)) ≡ p(rₛ)
-            #     c3 = sqrt(Complex(c2 * (1 + c2 * e) / (1 - d) - wm^2))
-            #     # s₃(w) = B / (iw + c2 / (iw + c3))), w = ω / ϵ_F
-            #     return @. -imag(B / (im * w + c2 / (im * w + c3)))
-            # end
-            # # Get best LSQ fit of c2 to data at this rs for -Im(s₃(c2, c3(c2))) / ϵ_F
-            # fit_lmh = curve_fit(
-            #     model_lo_med_hi,
-            #     wns_over_EF,
-            #     -imag.(sigma_rpa_wn_dyn) / EF,
-            #     [1.0],
-            # )
-            # model_lmh(w) = model_lo_med_hi(w, fit_lmh.param)
-            # # Coefficients of determination (r²)
-            # r2_rpa = rsquared(
-            #     wns_over_EF,
-            #     -imag.(sigma_rpa_wn_dyn) / EF,
-            #     model_lmh.(wns_over_EF),
-            # )
-            # println("L-M-H RPA fit: ", fit_lmh.param, ", r² = $r2_rpa")
-            # # a_rpa = fit_lmh.param[1]
-
-            fig6, ax6 = plt.subplots()
-            ax6.axvline(
-                w0_rpa / EF;
-                color="gray",
-                linestyle="-",
-                label="\$\\Omega_t\$ (\$RPA\$)",
-            )
-            # ax6.axvline(
-            #     w0_rpa_fl / EF;
-            #     color="k",
-            #     linestyle="-",
-            #     label="\$\\Omega_t\$ (\$RPA+FL\$)",
-            # )
-            # Set the upper ylim as 10% larger than the tail intersection
-            max_tail_intersection = coeff_low_freq_rpa * w0_rpa / EF
-            # max_tail_intersection = max(
-            #     coeff_low_freq_rpa * w0_rpa / EF,
-            #     coeff_low_freq_rpa_fl * w0_rpa_fl / EF,
-            # )
-            # High-frequency behavior of -ImΣ
-            ax6.plot(
-                wns_over_EF,
-                coeff_high_freq_rpa ./ wns ./ EF;
-                color="C$(idx-1)",
-                linestyle="--",
-            )
-            # ax6.plot(
-            #     wns_over_EF,
-            #     coeff_high_freq_rpa_fl ./ wns ./ EF;
-            #     color="$(darkcolors[idx])",
-            #     linestyle="--",
-            # )
-            # Low-frequency behavior of -ImΣ
-            ax6.plot(
-                wns_over_EF,
-                coeff_low_freq_rpa .* wns_over_EF;
-                color="C$(idx-1)",
-                linestyle="--",
-            )
-            # ax6.plot(
-            #     wns_over_EF,
-            #     coeff_low_freq_rpa_fl .* wns_over_EF;
-            #     color="$(darkcolors[idx])",
-            #     linestyle="--",
-            # )
-            # Low-high interpolation -ImΣ ≈ -Im{f₂(ω)}
-            ax6.plot(
-                wns_over_EF,
-                -imag.(lo_hi_fit_rpa.(wns_over_EF));
-                color="C$(idx-1)",
-                # color="$(darkcolors[idx])",
-                # color="C$(idx)",
-                linestyle="-",
-                label="\$f_2(\\omega_n)\$ (\$RPA\$)",
-                # label="\$-\\mathrm{Im}\\left\\lbrace\\frac{B}{i\\omega_n + \\Omega_t}\\right\\rbrace\$ (\$RPA\$)",
-            )
-            # Simple low-high interpolation
-            ax6.plot(
-                wns_over_EF,
-                lo_hi_fit_rpa_simple.(wns_over_EF);
-                # color="C$(idx-1)",
-                color="$(darkcolors[idx])",
-                # color="C$(idx)",
-                linestyle="-",
-                label="\$\\frac{r^2_s \\omega_n}{2 \\omega^2_n + 6 r_s}\$ (\$RPA\$)",
-                # label="\$-\\mathrm{Im}\\left\\lbrace\\frac{B}{i\\omega_n + \\Omega_t}\\right\\rbrace\$ (\$RPA\$)",
-            )
-            # ax6.plot(
-            #     wns_over_EF,
-            #     -imag.(lo_hi_fit_rpa_fl.(wns_over_EF));
-            #     color="$(darkcolors[idx+1])",
-            #     linestyle="-",
-            #     label="\$f_2(\\omega_n)\$ (\$RPA+FL\$)",
-            #     # label="\$-\\mathrm{Im}\\left\\lbrace\\frac{B}{i\\omega_n + \\Omega_t}\\right\\rbrace\$ (\$RPA+FL\$)",
-            # )
-            # Low-med-high interpolation -ImΣ ≈ -Im{f₃(ω)}
-            # ax6.plot(
-            #     wns_over_EF,
-            #     -imag.(lo_med_hi_fit_rpa.(wns_over_EF; sa=-1, sb=-1));
-            #     color="$(darkcolors[idx])",
-            #     linestyle="-",
-            #     label="\$f_3(\\omega_n)\$ (\$RPA\$)",
-            #     # label="\$-\\mathrm{Im}\\left\\lbrace\\frac{B}{i\\omega_n + a / (i\\omega_n + b)}\\right\\rbrace\$ (\$RPA\$)",
-            # )
-            # ax6.plot(
-            #     wns_over_EF,
-            #     model_lmh.(wns_over_EF);
-            #     color="$(darkcolors[idx])",
-            #     linestyle="-",
-            #     label="\$f_3(\\omega_n)\$ (\$RPA\$)",
-            # )
-            # -ImΣ
-            ax6.plot(
-                wns_over_EF,
-                -imag(sigma_rpa_wn_dyn) / EF;
-                color="k",
-                # color="C$(idx-1)",
-                label="\$RPA\$ (\$r_s=$(rs)\$)",
-            )
-            # ax6.plot(
-            #     wns_over_EF,
-            #     -imag(sigma_rpa_fl_wn_dyn) / EF;
-            #     color="$(darkcolors[idx])",
-            #     label="\$RPA+FL\$ (\$r_s=$(rs)\$)",
-            # )
-            ax6.set_xlim(0, 20)
-            # ax6.set_xlim(0, 50)
-            ax6.set_ylim(0, 1.1 * max_tail_intersection)
-            ax6.set_xlabel("\$\\omega_n\$")
-            ax6.set_ylabel(
-                "\$-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n)\$",
-            )
-            ax6.legend(; loc="best")
-            plt.tight_layout()
-            fig6.savefig(
-                # "results/self_energy_fits/$(int_type)/im_sigma_and_tails_" *
-                "results/self_energy_fits/$(int_type)/im_sigma_and_tails_rpa_" *
-                "rs=$(rs)_beta_ef=$(beta)_k=$(ktarget)_EF_$(int_type).pdf",
-            )
-
-            # -ωₙImΣ one-by-one
-            peak_this_sigma = max(
-                maximum(-imag(sigma_rpa_wn_dyn_over_EF) .* wns_over_EF),
-                maximum(-imag(sigma_rpa_fl_wn_dyn_over_EF) .* wns_over_EF),
-            )
-            fig8, ax8 = plt.subplots()
-            ax8.plot(
-                wns_over_EF,
-                (rpa_c1 / EF^2) * one.(wns_over_EF),
-                # rpa_c1 * one.(wns_over_EF) / EF,
-                "C$(idx-1)";
-                linestyle="dashed",
-                label="\$B_{RPA}\$ (\$r_s=$rs\$)",
-                # label="\$C^{(1)}_{RPA} / \\epsilon^2_F\$ (\$r_s=$rs\$)",
-            )
-            ax8.plot(
-                wns_over_EF,
-                -imag(sigma_rpa_wn_dyn_over_EF) .* wns_over_EF,
-                "C$(idx-1)";
-                label="\$RPA\$ (\$r_s=$rs\$)",
-            )
-            ax8.plot(
-                wns_over_EF,
-                (rpa_fl_c1 / EF^2) * one.(wns_over_EF),
-                # rpa_fl_c1 * one.(wns_over_EF) / EF,
-                "$(darkcolors[idx])";
-                linestyle="dashed",
-                label="\$B_{RPA+FL}\$ (\$r_s=$rs\$)",
-                # label="\$C^{(1)}_{RPA+FL} / \\epsilon^2_F\$ (\$r_s=$rs\$)",
-            )
-            ax8.plot(
-                wns_over_EF,
-                -imag(sigma_rpa_fl_wn_dyn_over_EF) .* wns_over_EF,
-                "$(darkcolors[idx])";
-                label="\$RPA+FL\$ (\$r_s=$rs\$)",
-            )
-            ax8.set_xlim(0, wns_over_EF[end])
-            ax8.set_ylim(; bottom=0, top=1.1 * peak_this_sigma)
-            ax8.legend(; loc="best")
-            ax8.set_xlabel("\$\\omega_n\$")
-            ax8.set_ylabel(
-                "\$-\\omega_n \\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n)\$",
-                # "\$-\\widetilde{omega}_n \\mathrm{Im}\\Sigma(k = $ktarget, i\\widetilde{omega}_n)\$",
-            )
-            plt.tight_layout()
-            fig8.savefig(
-                "results/self_energy_fits/$(int_type)/wn_times_im_sigma_" *
-                "rs=$(rs)_beta_ef=$(beta)_k=$(ktarget)_EF_$(int_type).pdf",
-            )
-
-            # -ωₙImΣ one-by-one
-            peak_this_sigma = max(
-                maximum(-imag(sigma_rpa_wn_dyn_over_EF) .* wns_over_EF),
-                maximum(-imag(sigma_rpa_fl_wn_dyn_over_EF) .* wns_over_EF),
-            )
-            fig8, ax8 = plt.subplots()
-            ax8.plot(
-                wns_over_EF,
-                (rpa_c1 / EF^2) * one.(wns_over_EF),
-                # rpa_c1 * one.(wns_over_EF) / EF,
-                "C$(idx-1)";
-                linestyle="dashed",
-                label="\$B_{RPA}\$ (\$r_s=$rs\$)",
-                # label="\$C^{(1)}_{RPA} / \\epsilon^2_F\$ (\$r_s=$rs\$)",
-            )
-            ax8.plot(
-                wns_over_EF,
-                -imag(sigma_rpa_wn_dyn_over_EF) .* wns_over_EF,
-                "C$(idx-1)";
-                label="\$RPA\$ (\$r_s=$rs\$)",
-            )
-            ax8.plot(
-                wns_over_EF,
-                (rpa_fl_c1 / EF^2) * one.(wns_over_EF),
-                # rpa_fl_c1 * one.(wns_over_EF) / EF,
-                "$(darkcolors[idx])";
-                linestyle="dashed",
-                label="\$B_{RPA+FL}\$ (\$r_s=$rs\$)",
-                # label="\$C^{(1)}_{RPA+FL} / \\epsilon^2_F\$ (\$r_s=$rs\$)",
-            )
-            ax8.plot(
-                wns_over_EF,
-                -imag(sigma_rpa_fl_wn_dyn_over_EF) .* wns_over_EF,
-                "$(darkcolors[idx])";
-                label="\$RPA+FL\$ (\$r_s=$rs\$)",
-            )
-            ax8.set_xlim(0, wns_over_EF[end])
-            ax8.set_ylim(; bottom=0, top=1.1 * peak_this_sigma)
-            ax8.legend(; loc="best")
-            ax8.set_xlabel("\$\\omega_n\$")
-            ax8.set_ylabel(
-                "\$-\\omega_n \\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n)\$",
-                # "\$-\\widetilde{omega}_n \\mathrm{Im}\\Sigma(k = $ktarget, i\\widetilde{omega}_n)\$",
-            )
-            plt.tight_layout()
-            fig8.savefig(
-                "results/self_energy_fits/$(int_type)/wn_times_im_sigma_" *
-                "rs=$(rs)_beta_ef=$(beta)_k=$(ktarget)_EF_$(int_type).pdf",
-            )
-
-            # Estimate measured B ≈ -(ω_max / EF) (ImΣ(ω_max) / EF)
-            coeff_B_tail_rpa    = rpa_c1 / EF^2
-            coeff_B_tail_rpa_fl = rpa_fl_c1 / EF^2
-            coeff_B_meas_rpa    = -wns_over_EF[end] * imag(sigma_rpa_wn_dyn_over_EF[end])
-            coeff_B_meas_rpa_fl = -wns_over_EF[end] * imag(sigma_rpa_fl_wn_dyn_over_EF[end])
-            println(
-                "(RPA) Percent error in B: ",
-                100 * abs(coeff_B_meas_rpa - coeff_B_tail_rpa) / (coeff_B_tail_rpa),
-            )
-            println(
-                "(RPA+FL) Percent error in B: ",
-                100 * abs(coeff_B_meas_rpa_fl - coeff_B_tail_rpa_fl) /
-                (coeff_B_tail_rpa_fl),
-            )
-
-            # # Get the local-field factor fs = Fs / NF
-            # local fs_int_type
-            # if int_type == :ko
-            #     # NOTE: The Takada ansatz for fs is q-dependent!
-            #     # fs_int_type = Interaction.landauParameterTakada(ktarget, 0, param)[1]
-            #     fs_int_type = Interaction.landauParameterTakada(1e5, 0, param)[1]
-            # elseif int_type == :ko_const
-            #     # fs = Fs / NF
-            #     Fs = get_Fs(rs)
-            #     fs_int_type = Fs / param.NF
-            # else
-            #     error("Not yet implemented!")
-            # end
-
-            # Analytic coefficients D_{RPA(+FL)} from VZN paper
-            alpha = (4 / 9π)^(1 / 3)
-            coeff_D_rpa_exact = -(16 / 3π) * (alpha * rs)^2
-
-            # Plot isolated 1/ω^{3/2} dependence of -ImΣ
-            sigma_rpa_residual =
-                -wns_over_EF .* imag(sigma_rpa_wn_dyn_over_EF) .- coeff_B_meas_rpa
-            sigma_rpa_fl_residual =
-                -wns_over_EF .* imag(sigma_rpa_fl_wn_dyn_over_EF) .- coeff_B_meas_rpa_fl
-            @assert sigma_rpa_residual[end] == 0.0
-            @assert sigma_rpa_fl_residual[end] == 0.0
-            sigma_32_rpa = sigma_rpa_residual .* sqrt.(wns_over_EF)
-            sigma_32_rpa_fl = sigma_rpa_fl_residual .* sqrt.(wns_over_EF)
-            # The limiting values are D_{RPA(+FL)}
-            coeff_D_meas_rpa    = sigma_32_rpa[end]
-            coeff_D_meas_rpa_fl = sigma_32_rpa_fl[end]
-            # Check percent error of D coefficients
-            println(
-                "(RPA) Percent error in D: ",
-                100 * abs(coeff_D_meas_rpa - coeff_D_rpa_exact) / (coeff_D_rpa_exact),
-            )
-            # println(
-            #     "(RPA+FL) Percent error in D: ",
-            #     100 * abs(coeff_D_meas_rpa_fl - coeff_D_rpa_fl_exact) /
-            #     (coeff_D_rpa_fl_exact),
-            # )
-            # Plot the 1/ω^{3/2} dependence of -ImΣ
-            fig11, ax11 = plt.subplots()
-            ax11.axhline(
-                -coeff_D_rpa_exact;
-                color="k",
-                linestyle="--",
-                label="\$\\frac{16}{3\\pi}\\left(\\alpha r_s\\right)^2\$",
-            )
-            # ax11.axhline(
-            #     -coeff_D_meas_rpa;
-            #     color="C$(idx-1)",
-            #     linestyle="--",
-            #     label="\$D_{RPA}\$ (\$r_s=$rs\$)",
-            # )
-            ax11.plot(
-                wns_over_EF,
-                -sigma_32_rpa;
-                color="C$(idx-1)",
-                label="\$RPA\$ (\$r_s=$rs\$)",
-            )
-            # ax11.axhline(
-            #     -coeff_D_meas_rpa_fl;
-            #     color="$(darkcolors[idx])",
-            #     linestyle="--",
-            #     label="\$D_{RPA+FL}\$ (\$r_s=$rs\$)",
-            # )
-            ax11.plot(
-                wns_over_EF,
-                -sigma_32_rpa_fl;
-                color="$(darkcolors[idx])",
-                label="\$RPA+FL\$ (\$r_s=$rs\$)",
-            )
-            # ax11.set_xlim(0, wns_over_EF[end])
-            ax11.set_xlim(0, 50)
-            # ax11.set_ylim(; bottom=0, top=1.1 * maximum(sigma_32_rpa))
-            ax11.legend(; loc="best")
-            ax11.set_xlabel("\$\\omega_n\$")
-            ax11.set_ylabel(
-                "\$\\sqrt{\\omega_n} \\left(\\omega_n \\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n) - \\lim_{\\omega_n \\rightarrow \\infty}\\omega_n \\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n)\\right)\$",
-                # "\$-\\sqrt{\\widetilde{\\omega}_n} \\left(\\widetilde{\\omega}_n \\mathrm{Im}\\widetilde{\\Sigma}(k = $ktarget, i\\widetilde{\\omega}_n) - \\lim_{\\widetilde{\\omega}_n \\rightarrow \\infty}\\widetilde{\\omega}_n \\mathrm{Im}\\widetilde{\\Sigma}(k = $ktarget, i\\widetilde{\\omega}_n)\\right)\$",
-            )
-            plt.tight_layout()
-            fig11.savefig(
-                "results/self_energy_fits/$(int_type)/sigma_wn32_dependence_" *
-                "rs=$(rs)_beta_ef=$(beta)_k=$(ktarget)_EF_$(int_type).pdf",
-            )
-        end
     end
     # ax.set_xlim(0, 50)
     # ax.set_ylim(; bottom=0, top=1.1 * max_sigma)
     # ax.legend(; loc="best")
     # ax.set_xlabel("\$\\omega_n\$")
-    # if units == :Rydberg
-    #     ax.set_ylabel("\$-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n)\$")
-    # elseif units == :EF
-    #     ax.set_ylabel("\$-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n)\$")
-    # else  # units == :eTF
-    #     ax.set_ylabel(
-    #         "\$-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n) / \\epsilon_{\\mathrm{TF}}\$",
-    #     )
-    # end
+    # ax.set_ylabel("\$-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n)\$")
     # plt.tight_layout()
     # fig.savefig(
     #     "results/self_energy_fits/$(int_type)/im_sigma_" *
-    #     "rs=$(round.(rslist; sigdigits=3))_beta_ef=$(beta)_k=$(ktarget)_$(units)_$(int_type).pdf",
+    #     "rs=$(round.(rslist; sigdigits=3))_beta_ef=$(beta)_k=$(ktarget)_$(int_type).pdf",
     # )
     # plt.close("all")
 
@@ -1022,42 +691,48 @@ function main()
     # sgn_c_rpa_fl = c_rpa_fl ≥ 0 ? "+" : "-"
     # sgn_d_rpa = d_rpa ≥ 0 ? "+" : "-"
     # sgn_d_rpa_fl = d_rpa_fl ≥ 0 ? "+" : "-"
-    ax7.plot(rslist, w0_over_EF_rpas ./ sqrt.(rslist), "o-"; color="C0", label="\$RPA\$")
+    ax7.plot(rslist, w0_over_EF_rpas, "o-"; color="C0", label="\$RPA\$")
+    # ax7.plot(rslist, w0_over_EF_rpas ./ sqrt.(rslist), "o-"; color="C0", label="\$RPA\$")
     ax7.plot(
         rslist_big,
-        model_rpa7.(rslist_big) ./ sqrt.(rslist_big),
+        model_rpa7.(rslist_big),
+        # model_rpa7.(rslist_big) ./ sqrt.(rslist_big),
         "--";
         color="C0",
         # label="\$$(round(a_rpa; sigdigits=3)) $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) \\sqrt{r_s} $(sgn_c_rpa) $(round(abs(c_rpa); sigdigits=3)) r_s $(sgn_d_rpa) $(round(abs(d_rpa); sigdigits=3)) r_s \\sqrt{r_s}\$",
         # label="\$$(round(a_rpa; sigdigits=3)) $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) \\sqrt{\\log r_s} $(sgn_c_rpa) $(round(abs(c_rpa); sigdigits=3)) \\sqrt{r_s} $(sgn_d_rpa) $(round(abs(d_rpa); sigdigits=3)) \\sqrt{r_s}\$",
         # label="\$$(round(a_rpa; sigdigits=3)) $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) \\log r_s $(sgn_c_rpa) $(round(abs(c_rpa); sigdigits=3)) r_s $(sgn_d_rpa) $(round(abs(d_rpa); sigdigits=3)) r_s \\log r_s\$",
-        label="\$\\left($(round(a_rpa; sigdigits=3)) $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) \\log r_s\\right)\$",
-        # label="\$\\sqrt{r_s}\\left($(round(a_rpa; sigdigits=3)) $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) \\log r_s\\right)\$",
+        # label="\$\\left($(round(a_rpa; sigdigits=3)) $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) \\log r_s\\right)\$",
+        label="\$\\sqrt{r_s}\\left($(round(a_rpa; sigdigits=3)) $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) \\log r_s\\right)\$",
     )
     ax7.plot(
         rslist,
-        w0_over_EF_rpa_fls ./ sqrt.(rslist),
+        w0_over_EF_rpa_fls,
+        # w0_over_EF_rpa_fls ./ sqrt.(rslist),
         "o-";
         color="C1",
         label="\$RPA+FL\$",
     )
     ax7.plot(
         rslist_big,
-        model_rpa_fl7.(rslist_big) ./ sqrt.(rslist_big),
+        model_rpa_fl7.(rslist_big),
+        # model_rpa_fl7.(rslist_big) ./ sqrt.(rslist_big),
         "--";
         color="C1",
         # label="\$$(round(a_rpa_fl; sigdigits=3)) $(sgn_b_rpa_fl) $(round(abs(b_rpa_fl); sigdigits=3)) \\sqrt{r_s} $(sgn_c_rpa_fl) $(round(abs(c_rpa_fl); sigdigits=3)) r_s $(sgn_d_rpa_fl) $(round(abs(d_rpa_fl); sigdigits=3)) r_s \\sqrt{r_s}\$",
         # label="\$$(round(a_rpa_fl; sigdigits=3)) $(sgn_b_rpa_fl) $(round(abs(b_rpa_fl); sigdigits=3)) \\log r_s $(sgn_c_rpa_fl) $(round(abs(c_rpa_fl); sigdigits=3)) r_s $(sgn_d_rpa_fl) $(round(abs(d_rpa_fl); sigdigits=3)) r_s \\log r_s\$",
-        label="\$\\left($(round(a_rpa_fl; sigdigits=3)) $(sgn_b_rpa_fl) $(round(abs(b_rpa_fl); sigdigits=3)) \\log r_s\\right)\$",
-        # label="\$\\sqrt{r_s}\\left($(round(a_rpa_fl; sigdigits=3)) $(sgn_b_rpa_fl) $(round(abs(b_rpa_fl); sigdigits=3)) \\log r_s\\right)\$",
+        # label="\$\\left($(round(a_rpa_fl; sigdigits=3)) $(sgn_b_rpa_fl) $(round(abs(b_rpa_fl); sigdigits=3)) \\log r_s\\right)\$",
+        label="\$\\sqrt{r_s}\\left($(round(a_rpa_fl; sigdigits=3)) $(sgn_b_rpa_fl) $(round(abs(b_rpa_fl); sigdigits=3)) \\log r_s\\right)\$",
     )
     ax7.set_xlabel("\$r_s\$")
-    ax7.set_ylabel("\$\\Omega_t(r_s) / \\sqrt{r_s}\$")
+    ax7.set_ylabel("\$\\Omega_t(r_s)\$")
+    # ax7.set_ylabel("\$\\Omega_t(r_s) / \\sqrt{r_s}\$")
     # ax7.set_ylabel("\$\\Omega_t(r_s) / \\sqrt{r_s} = \\sqrt{B(r_s) / A(r_s)}\$")
     ax7.legend(; loc="best")
     plt.tight_layout()
     fig7.savefig(
-        "results/self_energy_fits/$(int_type)/low_high_turning_points_over_sqrt_rs_" *
+        "results/self_energy_fits/$(int_type)/low_high_turning_points_rs_" *
+        # "results/self_energy_fits/$(int_type)/low_high_turning_points_over_sqrt_rs_" *
         "rs=$(round.(rslist; sigdigits=3))_beta_ef=$(beta)_k=$(ktarget)_EF_$(int_type).pdf",
     )
 
@@ -1180,25 +855,11 @@ function main()
         # label="\$$(round(a_rpa_fl; sigdigits=3)) $(sgn_b_rpa_fl) $(round(abs(b_rpa_fl); sigdigits=3)) r_s $(sgn_c_rpa_fl) $(round(abs(c_rpa_fl); sigdigits=3)) r_s^2\$",
     )
     ax3.set_xlabel("\$r_s\$")
-    if units == :Rydberg
-        ax3.set_ylabel(
-            # "\${\\mathrm{max}}_{\\omega_n}\\left\\lbrace-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n)\\right\\rbrace / r^2_s\$",
-            # "\${\\mathrm{max}}_{\\omega_n}\\left\\lbrace-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n)\\right\\rbrace / r^{3/2}_s\$",
-            "\${\\mathrm{max}}_{\\omega_n}\\left\\lbrace-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n)\\right\\rbrace\$",
-        )
-    elseif units == :EF
-        ax3.set_ylabel(
-            # "\${\\mathrm{max}}_{\\omega_n}\\left\\lbrace-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n) \\right\\rbrace / r^2_s\$",
-            # "\${\\mathrm{max}}_{\\omega_n}\\left\\lbrace-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n) \\right\\rbrace / r^{3/2}_s\$",
-            "\${\\mathrm{max}}_{\\omega_n}\\left\\lbrace-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n) \\right\\rbrace\$",
-        )
-    else  # units == :eTF
-        ax3.set_ylabel(
-            # "\${\\mathrm{max}}_{\\omega_n}\\left\\lbrace-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n) \\right\\rbrace / \\epsilon_{\\mathrm{TF}} r^2_s\$",
-            # "\${\\mathrm{max}}_{\\omega_n}\\left\\lbrace-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n) \\right\\rbrace / \\epsilon_{\\mathrm{TF}} r^{3/2}_s\$",
-            "\${\\mathrm{max}}_{\\omega_n}\\left\\lbrace-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n) \\right\\rbrace / \\epsilon_{\\mathrm{TF}}\$",
-        )
-    end
+    ax3.set_ylabel(
+        # "\${\\mathrm{max}}_{\\omega_n}\\left\\lbrace-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n) \\right\\rbrace / r^2_s\$",
+        # "\${\\mathrm{max}}_{\\omega_n}\\left\\lbrace-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n) \\right\\rbrace / r^{3/2}_s\$",
+        "\${\\mathrm{max}}_{\\omega_n}\\left\\lbrace-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n) \\right\\rbrace\$",
+    )
     ax3.legend(; loc="best")
     plt.tight_layout()
     fig3.savefig(
@@ -1206,8 +867,8 @@ function main()
         # "results/self_energy_fits/$(int_type)/peak_values_over_rs2_" *
         # "results/self_energy_fits/$(int_type)/peak_values_over_rs32_" *
         "results/self_energy_fits/$(int_type)/peak_values_" *
-        "rs=$(round.(rslist; sigdigits=3))_beta_ef=$(beta)_k=$(ktarget)_$(units)_$(int_type).pdf",
-        # "rs=$(round.(rslist; sigdigits=3))_beta_ef=$(beta)_k=$(ktarget)_$(units)_$(int_type)_v3.pdf",
+        "rs=$(round.(rslist; sigdigits=3))_beta_ef=$(beta)_k=$(ktarget)_$(int_type).pdf",
+        # "rs=$(round.(rslist; sigdigits=3))_beta_ef=$(beta)_k=$(ktarget)_$(int_type)_v3.pdf",
     )
 
     # Same as above, but divided by the leading dependence rs^(3/2)
@@ -1317,24 +978,14 @@ function main()
     #     label="\$\\sqrt{r_s} \\left($(round(a_rpa_fl_v2; sigdigits=3)) $(sgn_b_rpa_fl_v2) $(round(abs(b_rpa_fl_v2); sigdigits=3)) \\log r_s $(sgn_c_rpa_fl_v2) $(round(abs(c_rpa_fl_v2); sigdigits=3)) r_s\\right)\$",
     # )
     ax3.set_xlabel("\$r_s\$")
-    if units == :Rydberg
-        ax3.set_ylabel(
-            "\${\\mathrm{max}}_{\\omega_n}\\left\\lbrace-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n)\\right\\rbrace / r^{3/2}_s\$",
-        )
-    elseif units == :EF
-        ax3.set_ylabel(
-            "\${\\mathrm{max}}_{\\omega_n}\\left\\lbrace-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n) \\right\\rbrace / r^{3/2}_s\$",
-        )
-    else  # units == :eTF
-        ax3.set_ylabel(
-            "\${\\mathrm{max}}_{\\omega_n}\\left\\lbrace-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n) \\right\\rbrace / \\epsilon_{\\mathrm{TF}} r^{3/2}_s\$",
-        )
-    end
+    ax3.set_ylabel(
+        "\${\\mathrm{max}}_{\\omega_n}\\left\\lbrace-\\mathrm{Im}\\Sigma(k = $ktarget, i\\omega_n) \\right\\rbrace / r^{3/2}_s\$",
+    )
     ax3.legend(; loc="best")
     plt.tight_layout()
     fig3.savefig(
         "results/self_energy_fits/$(int_type)/peak_values_over_rs32_" *
-        "rs=$(round.(rslist; sigdigits=3))_beta_ef=$(beta)_k=$(ktarget)_$(units)_$(int_type).pdf",
+        "rs=$(round.(rslist; sigdigits=3))_beta_ef=$(beta)_k=$(ktarget)_$(int_type).pdf",
     )
     fig3, ax3 = plt.subplots()
     ax3.plot(rslist, sigma_rpa_peaks_over_EF_over_rs32, "o-"; color="C0", label="\$RPA\$")
@@ -1385,7 +1036,7 @@ function main()
     plt.tight_layout()
     fig3.savefig(
         "results/self_energy_fits/$(int_type)/peak_values_over_rs32_" *
-        "rs=$(round.(rslist; sigdigits=3))_beta_ef=$(beta)_k=$(ktarget)_$(units)_$(int_type).pdf",
+        "rs=$(round.(rslist; sigdigits=3))_beta_ef=$(beta)_k=$(ktarget)_$(int_type).pdf",
     )
     # Multiply back the leading rs^(3/2) coefficient to fit the peak values
     fig3p, ax3p = plt.subplots()
@@ -1413,7 +1064,7 @@ function main()
     plt.tight_layout()
     fig3p.savefig(
         "results/self_energy_fits/$(int_type)/peak_values_" *
-        "rs=$(round.(rslist; sigdigits=3))_beta_ef=$(beta)_k=$(ktarget)_$(units)_$(int_type)_new.pdf",
+        "rs=$(round.(rslist; sigdigits=3))_beta_ef=$(beta)_k=$(ktarget)_$(int_type)_new.pdf",
     )
 
     # Plot Z-factors vs rs for RPA(+FL)
@@ -1504,35 +1155,40 @@ function main()
     # sgn_d_rpa = d_rpa ≥ 0 ? "+" : "-"
     # sgn_d_rpa_fl = d_rpa_fl ≥ 0 ? "+" : "-"
     fig10, ax10 = plt.subplots()
-    ax10.plot(rslist, A_rpa ./ rslist, "o-"; color="C0", label="\$RPA\$")
+    ax10.plot(rslist, A_rpa, "o-"; color="C0", label="\$RPA\$")
+    # ax10.plot(rslist, A_rpa ./ rslist, "o-"; color="C0", label="\$RPA\$")
     ax10.plot(
         rslist_big,
-        model_rpa10.(rslist_big) ./ rslist_big,
+        model_rpa10.(rslist_big),
+        # model_rpa10.(rslist_big) ./ rslist_big,
         "--";
         color="C0",
-        # label="\$r_s\\left($(round(a_rpa; sigdigits=3)) $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) r_s $(sgn_c_rpa) $(round(abs(c_rpa); sigdigits=3)) r^2_s\\right)\$",
-        label="\$\\left($(round(a_rpa; sigdigits=3)) $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) r_s $(sgn_c_rpa) $(round(abs(c_rpa); sigdigits=3)) r^2_s\\right)\$",
+        label="\$r_s\\left($(round(a_rpa; sigdigits=3)) $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) r_s $(sgn_c_rpa) $(round(abs(c_rpa); sigdigits=3)) r^2_s\\right)\$",
+        # label="\$\\left($(round(a_rpa; sigdigits=3)) $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) r_s $(sgn_c_rpa) $(round(abs(c_rpa); sigdigits=3)) r^2_s\\right)\$",
         # label="\$r_s\\left($(round(a_rpa; sigdigits=3)) $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) \\log r_s $(sgn_c_rpa) $(round(abs(c_rpa); sigdigits=3)) r_s\\right)\$",
         # label="\$$(round(a_rpa; sigdigits=3)) $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) \\log r_s $(sgn_c_rpa) $(round(abs(c_rpa); sigdigits=3)) r_s $(sgn_d_rpa) $(round(abs(d_rpa); sigdigits=3)) r_s \\log r_s\$",
     )
-    ax10.plot(rslist, A_rpa_fl ./ rslist, "o-"; color="C1", label="\$RPA+FL\$")
+    ax10.plot(rslist, A_rpa_fl, "o-"; color="C1", label="\$RPA+FL\$")
+    # ax10.plot(rslist, A_rpa_fl ./ rslist, "o-"; color="C1", label="\$RPA+FL\$")
     ax10.plot(
         rslist_big,
-        model_rpa_fl10.(rslist_big) ./ rslist_big,
+        model_rpa_fl10.(rslist_big),
+        # model_rpa_fl10.(rslist_big) ./ rslist_big,
         "--";
         color="C1",
-        # label="\$r_s\\left($(round(a_rpa_fl; sigdigits=3)) $(sgn_b_rpa_fl) $(round(abs(b_rpa_fl); sigdigits=3)) r_s $(sgn_c_rpa_fl) $(round(abs(c_rpa_fl); sigdigits=3)) r^2_s\\right)\$",
-        label="\$\\left($(round(a_rpa_fl; sigdigits=3)) $(sgn_b_rpa_fl) $(round(abs(b_rpa_fl); sigdigits=3)) r_s $(sgn_c_rpa_fl) $(round(abs(c_rpa_fl); sigdigits=3)) r^2_s\\right)\$",
+        label="\$r_s\\left($(round(a_rpa_fl; sigdigits=3)) $(sgn_b_rpa_fl) $(round(abs(b_rpa_fl); sigdigits=3)) r_s $(sgn_c_rpa_fl) $(round(abs(c_rpa_fl); sigdigits=3)) r^2_s\\right)\$",
+        # label="\$\\left($(round(a_rpa_fl; sigdigits=3)) $(sgn_b_rpa_fl) $(round(abs(b_rpa_fl); sigdigits=3)) r_s $(sgn_c_rpa_fl) $(round(abs(c_rpa_fl); sigdigits=3)) r^2_s\\right)\$",
         # label="\$r_s\\left($(round(a_rpa_fl; sigdigits=3)) $(sgn_b_rpa_fl) $(round(abs(b_rpa_fl); sigdigits=3)) \\log r_s $(sgn_c_rpa_fl) $(round(abs(c_rpa_fl); sigdigits=3)) r_s\\right)\$",
         # label="\$$(round(a_rpa_fl; sigdigits=3)) $(sgn_b_rpa_fl) $(round(abs(b_rpa_fl); sigdigits=3)) \\log r_s $(sgn_c_rpa_fl) $(round(abs(c_rpa_fl); sigdigits=3)) r_s $(sgn_d_rpa_fl) $(round(abs(d_rpa_fl); sigdigits=3)) r_s \\log r_s\$",
     )
     ax10.set_xlabel("\$r_s\$")
-    ax10.set_ylabel("\$A(r_s) / r_s\$")
-    # ax10.set_ylabel("\$A(r_s) = \\frac{1}{z(r_s)} - 1\$")
+    # ax10.set_ylabel("\$A(r_s) / r_s\$")
+    ax10.set_ylabel("\$A(r_s) = \\frac{1}{z(r_s)} - 1\$")
     ax10.legend(; loc="best")
     plt.tight_layout()
     fig10.savefig(
-        "results/self_energy_fits/$(int_type)/A_over_rs_" *
+        "results/self_energy_fits/$(int_type)/A_" *
+        # "results/self_energy_fits/$(int_type)/A_over_rs_" *
         "rs=$(round.(rslist; sigdigits=3))_beta_ef=$(beta)_$(int_type).pdf",
     )
 
@@ -1580,33 +1236,37 @@ function main()
     # sgn_c_rpa_fl = c_rpa_fl ≥ 0 ? "+" : "-"
     # sgn_d_rpa = d_rpa ≥ 0 ? "+" : "-"
     # sgn_d_rpa_fl = d_rpa_fl ≥ 0 ? "+" : "-"$(sgn_c_rpa_fl) $(round(abs(c_rpa_fl); sigdigits=3)) 
-    ax9.plot(rslist, c1_rpas_over_EF2 ./ rslist .^ 2, "o-"; color="C0", label="\$RPA\$")
+    ax9.plot(rslist, c1_rpas_over_EF2, "o-"; color="C0", label="\$RPA\$")
+    # ax9.plot(rslist, c1_rpas_over_EF2 ./ rslist .^ 2, "o-"; color="C0", label="\$RPA\$")
     ax9.plot(
         rslist_big,
-        model_rpa9.(rslist_big) ./ rslist_big .^ 2,
+        model_rpa9.(rslist_big),
+        # model_rpa9.(rslist_big) ./ rslist_big .^ 2,
         "--";
         color="C0",
         # label="\$\\frac{8}{\\pi}(\\alpha r_s)^2\\left($(round(a_rpa; sigdigits=3)) - \\frac{\\log r_s}{2\\pi}\\right)\$",
-        # label="\$r^2_s \\left($(round(a_rpa; sigdigits=3)) $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) \\log r_s\\right)\$",
-        label="\$\\left($(round(a_rpa; sigdigits=3)) $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) \\log r_s\\right)\$",
+        label="\$r^2_s \\left($(round(a_rpa; sigdigits=3)) $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) \\log r_s\\right)\$",
+        # label="\$\\left($(round(a_rpa; sigdigits=3)) $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) \\log r_s\\right)\$",
         # label="\$$(round(a_rpa; sigdigits=3)) $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) r_s $(sgn_c_rpa) $(round(abs(c_rpa); sigdigits=3)) r_s^2\$",
         # label = "\$$(round(a_rpa; sigdigits=3)) $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) \\log r_s $(sgn_c_rpa) $(round(abs(c_rpa); sigdigits=3)) r_s $(sgn_d_rpa) $(round(abs(d_rpa); sigdigits=3)) r_s \\log r_s $(sgn_e_rpa) $(round(abs(e_rpa); sigdigits=3)) r_s^2\$",
     )
     ax9.plot(
         rslist,
-        c1_rpa_fls_over_EF2 ./ rslist .^ 2,
+        c1_rpa_fls_over_EF2,
+        # c1_rpa_fls_over_EF2 ./ rslist .^ 2,
         "o-";
         color="C1",
         label="\$RPA+FL\$",
     )
     ax9.plot(
         rslist_big,
-        model_rpa_fl9.(rslist_big) ./ rslist_big .^ 2,
+        model_rpa_fl9.(rslist_big),
+        # model_rpa_fl9.(rslist_big) ./ rslist_big .^ 2,
         "--";
         color="C1",
         # label="\$\\frac{8}{\\pi}(\\alpha r_s)^2\\left($(round(a_rpa_fl; sigdigits=3)) - \\frac{\\log r_s}{2\\pi}\\right)\$",
-        # label="\$r^2_s \\left($(round(a_rpa_fl; sigdigits=3)) $(sgn_b_rpa_fl) $(round(abs(b_rpa_fl); sigdigits=3)) \\log r_s\\right)\$",
-        label="\$\\left($(round(a_rpa_fl; sigdigits=3)) $(sgn_b_rpa_fl) $(round(abs(b_rpa_fl); sigdigits=3)) \\log r_s\\right)\$",
+        label="\$r^2_s \\left($(round(a_rpa_fl; sigdigits=3)) $(sgn_b_rpa_fl) $(round(abs(b_rpa_fl); sigdigits=3)) \\log r_s\\right)\$",
+        # label="\$\\left($(round(a_rpa_fl; sigdigits=3)) $(sgn_b_rpa_fl) $(round(abs(b_rpa_fl); sigdigits=3)) \\log r_s\\right)\$",
         # label="\$$(round(a_rpa_fl; sigdigits=3)) $(sgn_b_rpa_fl) $(round(abs(b_rpa_fl); sigdigits=3)) r_s $(sgn_c_rpa_fl) $(round(abs(c_rpa_fl); sigdigits=3)) r_s^2\$",
         # label = "\$$(round(a_rpa_fl; sigdigits=3)) $(sgn_b_rpa_fl) $(round(abs(b_rpa_fl); sigdigits=3)) \\log r_s $(sgn_c_rpa_fl) $(round(abs(c_rpa_fl); sigdigits=3)) r_s $(sgn_d_rpa_fl) $(round(abs(d_rpa_fl); sigdigits=3)) r_s \\log r_s $(sgn_e_rpa_fl) $(round(abs(e_rpa_fl); sigdigits=3)) r_s^2\$",
     )
@@ -1618,11 +1278,13 @@ function main()
     #     "results/self_energy_fits/$(int_type)/second_order_moments_" *
     #     "rs=$(round.(rslist; sigdigits=3))_beta_ef=$(beta)_EF_$(int_type).pdf",
     #     )
-    ax9.set_ylabel("\$B(r_s) / r^2_s\$")
+    ax9.set_ylabel("\$B(r_s)\$")
+    # ax9.set_ylabel("\$B(r_s) / r^2_s\$")
     # ax9.set_ylabel("\$B(r_s) = C^{(1)}(r_s) / \\epsilon^2_{F}\$")
     plt.tight_layout()
     fig9.savefig(
-        "results/self_energy_fits/$(int_type)/B_over_rs2_" *
+        "results/self_energy_fits/$(int_type)/B_" *
+        # "results/self_energy_fits/$(int_type)/B_over_rs2_" *
         "rs=$(round.(rslist; sigdigits=3))_beta_ef=$(beta)_$(int_type).pdf",
     )
 
@@ -1635,7 +1297,7 @@ function main()
     plt.tight_layout()
     # fig5.savefig(
     #     "results/self_energy_fits/$(int_type)/im_sigma_low_freq_" *
-    #     "rs=$(round.(rslist_small; sigdigits=3))_beta_ef=$(beta)_k=$(ktarget)_$(units)_$(int_type).pdf",
+    #     "rs=$(round.(rslist_small; sigdigits=3))_beta_ef=$(beta)_k=$(ktarget)_$(int_type).pdf",
     # )
 
     return

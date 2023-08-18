@@ -69,8 +69,8 @@ function main()
 
     beta = 40.0
     solver = :mcmc
-    neval = 1e10
-    # neval4 = 1e11
+    # NOTE: neval4 = 1e11, neval5 = 1e10
+    neval = 1e11
 
     # # NOTE: neval ∈ {1e10, 5e10, or 1e11} and varies case-by-case => no longer track it in plots!
     # #       It is only important to display it for the final mass results.
@@ -92,15 +92,20 @@ function main()
     # # lambdas = [0.1, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
 
     ### rs = 3 ###
+    rs = 3.0
+    lambdas = [0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25, 1.5, 2.0]
+    lambdas5 = nothing
+
     # rs = 3.0
     # lambdas = [0.75, 0.875, 1.0, 1.125, 1.25, 1.5]
     # lambdas = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0]
     # lambdas = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 3.5, 4.0, 5.0, 6.0]
 
     ### rs = 4 ###
-    rs = 4.0
-    lambdas = [0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25, 1.5, 2.0]
-    lambdas5 = [0.875, 1.0, 1.125, 1.25, 1.5]
+    # rs = 4.0
+    # lambdas = [0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25, 1.5, 2.0]
+    # lambdas5 = [0.875, 1.0, 1.125, 1.25, 1.5]
+
     # lambdas5 = [0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25, 1.5, 2.0]
 
     # lambdas = [0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25, 1.5, 2.0]
@@ -120,13 +125,13 @@ function main()
     # lambdas = [0.1, 0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
 
     min_order = 0
-    # max_order = 4
-    max_order = 5
+    max_order = 4
+    # max_order = 5
 
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
     min_order_plot = 1
-    # max_order_plot = 4
-    max_order_plot = 5
+    max_order_plot = 4
+    # max_order_plot = 5
 
     # Distinguish results with fixed vs re-expanded bare interactions
     intn_str = ""
@@ -324,9 +329,11 @@ function main()
         xlim(0.45, 3.05)
         ylim(0.87, 1.0)
     elseif rs == 3.0
-        yloc = 1.0375
-        ydiv = -0.02
-        ylim(0.89, 1.06)
+        xloc = 0.6
+        yloc = 0.9875
+        ydiv = -0.01125
+        xlim(0.375, 2.0)
+        ylim(0.88, 1.0)
     elseif rs == 4.0
         xloc = 0.5
         # yloc = 0.99125
@@ -356,7 +363,12 @@ function main()
     elseif rs == 2.0
         # axvline(1.0; linestyle="--", color="dimgray", label="\$\\lambda^\\star = 1\$")
     elseif rs == 3.0
-        # axvline(1.0; linestyle="--", color="dimgray", label="\$\\lambda^\\star = 1\$")
+        opt2 = Measurements.value.(mass_ratios_N_vs_lambda[3])[lambdas .== 0.75]
+        opt3 = Measurements.value.(mass_ratios_N_vs_lambda[4])[lambdas .== 1.0]
+        opt4 = Measurements.value.(mass_ratios_N_vs_lambda[5])[lambdas .== 1.25]
+        scatter(0.75, opt2; s=80, color=color[2], marker="*", zorder=1)
+        scatter(1.0, opt3; s=80, color=color[3], marker="*", zorder=101)
+        scatter(1.25, opt4; s=80, color=color[4], marker="*", zorder=102)
     elseif rs == 4.0
         opt2 = Measurements.value.(mass_ratios_N_vs_lambda[3])[lambdas .== 0.625]
         opt3 = Measurements.value.(mass_ratios_N_vs_lambda[4])[lambdas .== 0.75]

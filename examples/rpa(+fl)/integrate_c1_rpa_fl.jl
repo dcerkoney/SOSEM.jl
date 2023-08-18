@@ -224,8 +224,8 @@ function main()
     for (i, rs) in enumerate(rslist)
         param = Parameter.rydbergUnit(1.0 / beta, rs)
         kF, β = param.kF, param.β
-        Euv, rtol = 10000 * param.EF, 1e-11
-        
+        # Euv, rtol = 10000 * param.EF, 1e-11
+
         # # Converged params
         # Euv, rtol = 10000 * param.EF, 1e-11
         # maxK, minK = 1000kF, 1e-8kF
@@ -233,7 +233,8 @@ function main()
 
         # Small params
         Euv, rtol = 1000 * param.EF, 1e-11
-        maxK, minK = 30kF, 1e-8kF
+        maxK, minK = 30 * kF, 1e-8 * kF
+        # Nk, order = 20, 12
         Nk, order = 11, 8
 
         # # NOTE: Insufficient maxK — W_dyn / V goes to zero very slowly!
@@ -300,8 +301,8 @@ function main()
             int_type=:ko,
             # int_type=int_type == :ko_const ? :ko_const : :ko,
             landaufunc=landaufunc,
-            Fs=-Fs,  # NOTE: NEFT uses opposite sign convention!
-            bugfix=true,
+            # Fs=-Fs,  # NOTE: NEFT uses opposite sign convention!
+            # bugfix=true,
         )
 
         # Get Wtilde_KO(q, τ) / (V(q) - fs) from Wtilde_KO(q, iωₙ) / (V(q) - fs)
@@ -327,26 +328,26 @@ function main()
         @assert maximum(imag(wtilde_0_over_v_wn_q[1, 1, :])) ≤ 1e-10
         @assert maximum(imag(wtilde_KO_over_v_wn_q[1, 1, :])) ≤ 1e-10
 
-        # # Get Wtilde_KO(q, iωₙ)
-        # wtilde_KO_wn_q, _ = Interaction.KOwrapped(
-        #     Euv,
-        #     rtol,
-        #     qgrid.grid,
-        #     param;
-        #     regular=false,
-        #     int_type=int_type,
-        #     landaufunc=landaufunc,
-        #     # Fs=-Fs,  # NOTE: NEFT uses opposite sign convention!
-        #     bugfix=true,
-        # )
+        # Get Wtilde_KO(q, iωₙ)
+        wtilde_KO_wn_q, _ = Interaction.KOwrapped(
+            Euv,
+            rtol,
+            qgrid.grid,
+            param;
+            regular=false,
+            int_type=int_type,
+            landaufunc=landaufunc,
+            # Fs=-Fs,  # NOTE: NEFT uses opposite sign convention!
+            # bugfix=true,
+        )
 
-        # # Get Wtilde_KO(q, τ) from Wtilde_KO(q, iωₙ)
-        # wtilde_KO_dlr_q = to_dlr(wtilde_KO_wn_q)
-        # wtilde_KO_tau_q = to_imtime(wtilde_KO_dlr_q)
+        # Get Wtilde_KO(q, τ) from Wtilde_KO(q, iωₙ)
+        wtilde_KO_dlr_q = to_dlr(wtilde_KO_wn_q)
+        wtilde_KO_tau_q = to_imtime(wtilde_KO_dlr_q)
 
-        # # Get Wtilde_KO_s(q, τ = 0), keeping only the
-        # # spin-symmetric part of wtilde_KO (we define fa := 0)
-        # wtilde_KO_s_q_inst = real(wtilde_KO_tau_q[1, 1, :])
+        # Get Wtilde_KO_s(q, τ = 0), keeping only the
+        # spin-symmetric part of wtilde_KO (we define fa := 0)
+        wtilde_KO_s_q_inst = real(wtilde_KO_tau_q[1, 1, :])
 
         # Big q window
         qwin = UnitRange(1, length(qgrid.grid))
@@ -437,15 +438,15 @@ function main()
             -(2 * param.e0^2 / π) *
             CompositeGrids.Interp.integrate1D(rpa_fl_integrand, qgrid)
 
-        # # Integrate RPA+FL q² Wtilde(q, τ = 0) over q ∈ ℝ⁺ (regular = false)
-        # c1_rpa_fl_v2 =
-        #     -(1 / 2π^2) *
-        #     CompositeGrids.Interp.integrate1D(wtilde_KO_s_q_inst .* qgrid .* qgrid, qgrid)
+        # Integrate RPA+FL q² Wtilde(q, τ = 0) over q ∈ ℝ⁺ (regular = false)
+        c1_rpa_fl_v2 =
+            -(1 / 2π^2) *
+            CompositeGrids.Interp.integrate1D(wtilde_KO_s_q_inst .* qgrid .* qgrid, qgrid)
 
         println(
-            "rs = $rs:" * "\nC⁽¹⁾_{RPA} = $c1_rpa" * "\nC⁽¹⁾_{RPA+FL} = $c1_rpa_fl",
+            "rs = $rs:" * "\nC⁽¹⁾_{RPA} = $c1_rpa" * "\nC⁽¹⁾_{RPA+FL} = $c1_rpa_fl"
+            * "\n(regular = false) C⁽¹⁾_{RPA+FL} = $c1_rpa_fl_v2",
             # # NOTE: Agrees with regular = true for int_type = :ko!
-            # * "\n(regular = false) C⁽¹⁾_{RPA+FL} = $c1_rpa_fl_v2",
         )
         println()
     end
