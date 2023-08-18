@@ -15,7 +15,7 @@ end
 
 function main()
     # Physical params matching data for SOSEM observables
-    order = [5]
+    order = [4]
     beta = [40.0]
 
     #rs = [1.0]
@@ -30,7 +30,8 @@ function main()
     #mass2 = [2.5, 3.0]
 
     rs = [3.0]
-    mass2 = [1.75, 2.0]
+    mass2 = [1.75]
+    #mass2 = [1.75, 2.0]
     #mass2 = [1.0, 1.125, 1.25, 1.5]
     #mass2 = [0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25, 1.5, 2.0]
 
