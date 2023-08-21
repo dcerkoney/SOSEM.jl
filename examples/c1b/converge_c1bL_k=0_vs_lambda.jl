@@ -45,8 +45,7 @@ function main()
     kgrid = [kval]
 
     # Scanning λ to check relative convergence wrt perturbation order
-    lambdas = [0.5]
-    # lambdas = [1.0, 1.25, 1.5, 1.75, 2.0, 3.0]
+    lambdas = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 3.0]
 
     # Settings
     rs = 1.0
@@ -56,7 +55,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 1e9
+    neval = 1e8
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
