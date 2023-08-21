@@ -30,8 +30,8 @@ function main()
         min_order=3,  # no (2,0,0) partition for this observable (Γⁱ₃ > Γ₀),
         max_order=5,
         verbosity=DiagGen.quiet,
-        expand_bare_interactions=1,  # testing single V[V_λ] scheme
-        # expand_bare_interactions=0,  # testing V, V scheme (no re-expand)
+        # expand_bare_interactions=1,  # testing single V[V_λ] scheme
+        expand_bare_interactions=0,  # testing V, V scheme (no re-expand)
         filter=[NoHartree],
         interaction=[FeynmanDiagram.Interaction(ChargeCharge, Instant)],  # Yukawa-type interaction
     )
@@ -55,7 +55,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 1e8
+    neval = 1e9
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -97,16 +97,14 @@ function main()
         )
         if !isnothing(res)
             # Convert result to dictionary
-            data = MeasType()
+            data = UEG_MC.MeasType{Any}()
             if length(partitions) == 1
                 avg, std = res.mean, res.stdev
-                data = measurement.(avg, std)
-                data[partitions[1]] = data
+                data[partitions[1]] = measurement.(avg, std)
             else
                 for o in eachindex(partitions)
                     avg, std = res.mean[o], res.stdev[o]
-                    data = measurement.(avg, std)
-                    data[partitions[o]] = data
+                    data[partitions[o]] = measurement.(avg, std)
                 end
             end
             push!(datalist, data)
