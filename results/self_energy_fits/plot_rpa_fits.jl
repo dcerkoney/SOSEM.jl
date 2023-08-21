@@ -387,6 +387,7 @@ function main()
 
     # Physical parameters
     rslist = [1.0]
+    # rslist = [1.0, 5.0, 10.0]
     beta = 1000.0
 
     # We fit Σ_RPA(k = 0, iw)
@@ -756,10 +757,28 @@ function main()
                 ylim(0.0, 0.006)
             elseif rs == 1.0
                 ylim(-0.01, 0.26)
+                text(
+                    3.875,
+                    0.2,
+                    "\$r_s = $(rs)\$";
+                    # "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
+                )
             elseif rs == 5.0
                 ylim(-0.1, 3.5)
+                text(
+                    6.25,
+                    2.5,
+                    "\$r_s = $(rs)\$";
+                    # "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
+                )
             elseif rs == 10.0
                 ylim(-0.5, 12.0)
+                text(
+                    3.75,
+                    10.0,
+                    "\$r_s = $(rs)\$";
+                    # "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
+                )
             end
             # ylim(0, 2.2 * max(maximum(-im_sigma_over_EF), maximum(f2.(wns_fine))))
             xlabel("\$\\omega_n\$")
@@ -814,10 +833,28 @@ function main()
             # ylim(0.025, 0.115)
             if rs == 1.0
                 ylim(0.025, 0.115)
+                text(
+                    0.7,
+                    0.095,
+                    "\$r_s = $(rs)\$";
+                    # "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
+                )
             elseif rs == 5.0
                 ylim(0.18, nothing)
+                text(
+                    0.7,
+                    0.25,
+                    "\$r_s = $(rs)\$";
+                    # "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
+                )
             elseif rs == 10.0
                 ylim(0.5, nothing)
+                text(
+                    0.7,
+                    0.65,
+                    "\$r_s = $(rs)\$";
+                    # "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
+                )
             end
             # ylim(
             #     0.9 * minimum([ds_dw; df2_dw; df3_dw; dg3_dw]),
@@ -833,8 +870,8 @@ function main()
 
             # Plot ωₙ|ImΣ|
             fig = figure(; figsize=(6, 4))
-            wmax_big = 15
-            # wmax_big = maximum(wns)
+            # wmax_big = 15
+            wmax_big = maximum(wns)
             wns_big = collect(LinRange(0, wmax_big, 1000))
             wns_big_spl, B_meas_big_spl =
                 spline(wns, B_meas; xmax=wns[searchsortedfirst(wns, wmax_big)])
@@ -859,10 +896,10 @@ function main()
                 zorder=100,
             )
             plot(
-                # wns,
-                # B_meas;
-                wns_big_spl,
-                B_meas_big_spl;
+                wns,
+                B_meas;
+                # wns_big_spl,
+                # B_meas_big_spl;
                 color=color[1],
                 label=modestring,
                 zorder=1000,
@@ -892,22 +929,50 @@ function main()
             xlim(0, maximum(wns_big))
             # ylim(-0.04, nothing)
             if rs == 1.0
-                # ylim(0.38, nothing)
-                ylim(-0.04, nothing)
-            elseif rs == 5.0
-                # ylim(0.38, nothing)
+                ylim(0.39, 0.51)
                 # ylim(-0.04, nothing)
-            elseif rs == 10.0
-                ylim(-6, nothing)
+                text(
+                    250,
+                    0.425,
+                    "\$r_s = $(rs)\$";
+                    # "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
+                )
             end
+            # if rs == 1.0
+            #     # ylim(0.38, nothing)
+            #     ylim(-0.04, nothing)
+            #     text(
+            #         2.5,
+            #         0.05,
+            #         "\$r_s = $(rs)\$";
+            #         # "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
+            #     )
+            # elseif rs == 5.0
+            #     # ylim(0.38, nothing)
+            #     # ylim(-0.04, nothing)
+            #     text(
+            #         3.75,
+            #         1.0,
+            #         "\$r_s = $(rs)\$";
+            #         # "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
+            #     )
+            # elseif rs == 10.0
+            #     ylim(-6, nothing)
+            #     text(
+            #         3.75,
+            #         0.0,
+            #         "\$r_s = $(rs)\$";
+            #         # "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
+            #     )
+            # end
             # ylim(0, 1.5 * maximum([ds_dw; df2_dw; df3_dw; dg3_dw]))
             xlabel("\$\\omega_n\$")
             ylabel("\$B(r_s, i\\omega_n)\$")
             legend(; loc="best")
             plt.tight_layout()
             savefig(
-                # "results/self_energy_fits/fits/$(lowercase(modestring))/B_coefficient_$(mode)_large_rs=$(rs).pdf",
-                "results/self_energy_fits/fits/$(lowercase(modestring))/B_coefficient_$(mode)_rs=$(rs).pdf",
+                "results/self_energy_fits/fits/$(lowercase(modestring))/B_coefficient_$(mode)_large_rs=$(rs).pdf",
+                # "results/self_energy_fits/fits/$(lowercase(modestring))/B_coefficient_$(mode)_rs=$(rs).pdf",
             )
 
             # Compare C_meas ≈ (sqrt(ωₙ ωₘₐₓ) / (sqrt(ωₘₐₓ) - sqrt(ωₙ))) * (ωₙ|ImΣ(iωₙ)| - B_meas)
@@ -939,6 +1004,28 @@ function main()
             end
             xlim(0, wmax)
             ylim(nothing, 0.0)
+            if rs == 1.0
+                text(
+                    2.5,
+                    -0.1,
+                    "\$r_s = $(rs)\$";
+                    # "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
+                )
+            elseif rs == 5.0
+                text(
+                    2.5,
+                    -2.5,
+                    "\$r_s = $(rs)\$";
+                    # "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
+                )
+            elseif rs == 10.0
+                text(
+                    2.5,
+                    -10.0,
+                    "\$r_s = $(rs)\$";
+                    # "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
+                )
+            end
             # ylim(-0.5, nothing)
             xlabel("\$\\omega_n\$")
             ylabel("\$C(r_s, i\\omega_n)\$")

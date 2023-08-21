@@ -93,8 +93,8 @@ function main()
 
     ### rs = 3 ###
     rs = 3.0
-    lambdas = [0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25, 1.5, 2.0]
-    lambdas5 = nothing
+    lambdas = [0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25, 1.5, 1.75, 2.0]
+    lambdas5 = [1.0, 1.125, 1.25, 1.5, 1.75, 2.0]
 
     # rs = 3.0
     # lambdas = [0.75, 0.875, 1.0, 1.125, 1.25, 1.5]
@@ -125,13 +125,13 @@ function main()
     # lambdas = [0.1, 0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
 
     min_order = 0
-    max_order = 4
-    # max_order = 5
+    # max_order = 4
+    max_order = 5
 
     # Plot total results for orders min_order_plot ≤ ξ ≤ max_order_plot
     min_order_plot = 1
-    max_order_plot = 4
-    # max_order_plot = 5
+    # max_order_plot = 4
+    max_order_plot = 5
 
     # Distinguish results with fixed vs re-expanded bare interactions
     intn_str = ""
@@ -366,9 +366,11 @@ function main()
         opt2 = Measurements.value.(mass_ratios_N_vs_lambda[3])[lambdas .== 0.75]
         opt3 = Measurements.value.(mass_ratios_N_vs_lambda[4])[lambdas .== 1.0]
         opt4 = Measurements.value.(mass_ratios_N_vs_lambda[5])[lambdas .== 1.25]
+        opt5 = Measurements.value.(mass_ratios_5_vs_lambda5)[lambdas5 .== 1.75]
         scatter(0.75, opt2; s=80, color=color[2], marker="*", zorder=1)
         scatter(1.0, opt3; s=80, color=color[3], marker="*", zorder=101)
         scatter(1.25, opt4; s=80, color=color[4], marker="*", zorder=102)
+        scatter(1.75, opt5; s=80, color=color[5], marker="*", zorder=103)
     elseif rs == 4.0
         opt2 = Measurements.value.(mass_ratios_N_vs_lambda[3])[lambdas .== 0.625]
         opt3 = Measurements.value.(mass_ratios_N_vs_lambda[4])[lambdas .== 0.75]

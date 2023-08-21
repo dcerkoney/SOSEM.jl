@@ -244,9 +244,9 @@ function get_sigma_rpa_wn(para::Parameter.Para; ktarget=0.0, atol=1e-3, int_type
     sigma_wn_dynamic_kval = sigma_wn_dynamic[:, ikval][dlr.ωn .≥ 0]
 
     # Z-factor for low-frequency parameterization
-    zfactor_m10 = SelfEnergy.zfactor(para, sigma_wn_dynamic; kamp=ktarget, ngrid=[-1, 0])[1]
+    # zfactor_m10 = SelfEnergy.zfactor(para, sigma_wn_dynamic; kamp=ktarget, ngrid=[-1, 0])[1]
     zfactor_0p1 = SelfEnergy.zfactor(para, sigma_wn_dynamic; kamp=ktarget, ngrid=[0, 1])[1]
-    println("Z_RPA(k=$ktarget) (ngrid = [-1, 0]): ", zfactor_m10)
+    # println("Z_RPA(k=$ktarget) (ngrid = [-1, 0]): ", zfactor_m10)
     println("Z_RPA(k=$ktarget) (ngrid = [0, 1]): ", zfactor_0p1)
     # zfactor = zfactor_m10
     zfactor = zfactor_0p1
@@ -331,9 +331,9 @@ function get_sigma_rpa_fl_wn(
     sigma_wn_dynamic_kval = sigma_wn_dynamic[:, ikval][dlr.ωn .≥ 0]
 
     # Z-factor for low-frequency parameterization
-    zfactor_m10 = SelfEnergy.zfactor(para, sigma_wn_dynamic; kamp=ktarget, ngrid=[-1, 0])[1]
+    # zfactor_m10 = SelfEnergy.zfactor(para, sigma_wn_dynamic; kamp=ktarget, ngrid=[-1, 0])[1]
     zfactor_0p1 = SelfEnergy.zfactor(para, sigma_wn_dynamic; kamp=ktarget, ngrid=[0, 1])[1]
-    println("Z_RPA(k=$ktarget) (ngrid = [-1, 0]): ", zfactor_m10)
+    # println("Z_RPA(k=$ktarget) (ngrid = [-1, 0]): ", zfactor_m10)
     println("Z_RPA(k=$ktarget) (ngrid = [0, 1]): ", zfactor_0p1)
     # zfactor = zfactor_m10
     zfactor = zfactor_0p1
@@ -661,6 +661,213 @@ function main()
 
     # Fine-grained rs list for models
     rslist_big = LinRange(1e-3, 10.0, 600)
+
+    # Plot A(rs) for RPA(+FL)
+    A_rpa = 1 ./ zfactors_rpa .- 1
+    A_rpa_fl = 1 ./ zfactors_rpa_fl .- 1
+    # Least-squares fit to Z-factors
+    # @. model10(rs, p) = rs * (p[1] + p[2] * log(rs) + p[3] * rs)
+    # @. model10(rs, p) = rs * (p[1] + p[2] * sqrt(rs) + p[3] * rs)
+    # @. model10(rs, p) = (p[1] + p[2] * rs + p[3] * rs^2)
+    @. model10(rs, p) = rs * (p[1] + p[2] * rs + p[3] * rs^2)
+    # fit_rpa = curve_fit(model10, rslist, A_rpa ./ rslist, [1.0, 1.0, 1.0])
+    # fit_rpa_fl = curve_fit(model10, rslist, A_rpa_fl ./ rslist, [1.0, 1.0, 1.0])
+    fit_rpa =
+        curve_fit(model10, rslist[rslist .≥ 1.0], A_rpa[rslist .≥ 1.0], [1.0, 1.0, 1.0])
+    fit_rpa_fl =
+        curve_fit(model10, rslist[rslist .≥ 1.0], A_rpa_fl[rslist .≥ 1.0], [1.0, 1.0, 1.0])
+    # @. model10(rs, p) = p[1] + p[2] * log(rs) + p[3] * rs + p[4] * rs * log(rs)
+    # fit_rpa = curve_fit(model10, rslist, A_rpa, [1.0, 1.0, 1.0, 1.0])
+    # fit_rpa_fl = curve_fit(model10, rslist, A_rpa_fl, [1.0, 1.0, 1.0, 1.0])
+    model_rpa10(rs) = model10(rs, fit_rpa.param)
+    model_rpa_fl10(rs) = model10(rs, fit_rpa_fl.param)
+    # Coefficients of determination (r²)
+    r2_rpa = rsquared(rslist, A_rpa, model_rpa10.(rslist))
+    r2_rpa_fl = rsquared(rslist, A_rpa_fl, model_rpa_fl10.(rslist))
+    println("RPA fit: ", fit_rpa.param, ", r² = $r2_rpa")
+    println("RPA+FL fit: ", fit_rpa_fl.param, ", r² = $r2_rpa_fl")
+    a_rpa, b_rpa, c_rpa = fit_rpa.param
+    a_rpa_fl, b_rpa_fl, c_rpa_fl = fit_rpa_fl.param
+    sgn_b_rpa = b_rpa ≥ 0 ? "+" : "-"
+    sgn_b_rpa_fl = b_rpa_fl ≥ 0 ? "+" : "-"
+    sgn_c_rpa = c_rpa ≥ 0 ? "+" : "-"
+    sgn_c_rpa_fl = c_rpa_fl ≥ 0 ? "+" : "-"
+    # sgn_d_rpa = d_rpa ≥ 0 ? "+" : "-"
+    # sgn_d_rpa_fl = d_rpa_fl ≥ 0 ? "+" : "-"
+    fig10, ax10 = plt.subplots()
+    # ax10.plot(rslist, A_rpa, "o-"; color="C0", label="\$RPA\$")
+    ax10.plot(rslist, A_rpa ./ rslist, "o-"; color="C0", label="\$RPA\$")
+    ax10.plot(
+        rslist_big,
+        # model_rpa10.(rslist_big),
+        model_rpa10.(rslist_big) ./ rslist_big,
+        "--";
+        color="C0",
+        # label="\$r_s\\left($(round(a_rpa; sigdigits=3)) $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) r_s $(sgn_c_rpa) $(round(abs(c_rpa); sigdigits=3)) r^2_s\\right)\$",
+        label="\$\\left($(round(a_rpa; sigdigits=3)) $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) r_s $(sgn_c_rpa) $(round(abs(c_rpa); sigdigits=3)) r^2_s\\right)\$",
+        # label="\$r_s\\left($(round(a_rpa; sigdigits=3)) $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) \\log r_s $(sgn_c_rpa) $(round(abs(c_rpa); sigdigits=3)) r_s\\right)\$",
+        # label="\$$(round(a_rpa; sigdigits=3)) $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) \\log r_s $(sgn_c_rpa) $(round(abs(c_rpa); sigdigits=3)) r_s $(sgn_d_rpa) $(round(abs(d_rpa); sigdigits=3)) r_s \\log r_s\$",
+    )
+    # ax10.plot(rslist, A_rpa_fl, "o-"; color="C1", label="\$RPA+FL\$")
+    ax10.plot(rslist, A_rpa_fl ./ rslist, "o-"; color="C1", label="\$RPA+FL\$")
+    ax10.plot(
+        rslist_big,
+        # model_rpa_fl10.(rslist_big),
+        model_rpa_fl10.(rslist_big) ./ rslist_big,
+        "--";
+        color="C1",
+        # label="\$r_s\\left($(round(a_rpa_fl; sigdigits=3)) $(sgn_b_rpa_fl) $(round(abs(b_rpa_fl); sigdigits=3)) r_s $(sgn_c_rpa_fl) $(round(abs(c_rpa_fl); sigdigits=3)) r^2_s\\right)\$",
+        label="\$\\left($(round(a_rpa_fl; sigdigits=3)) $(sgn_b_rpa_fl) $(round(abs(b_rpa_fl); sigdigits=3)) r_s $(sgn_c_rpa_fl) $(round(abs(c_rpa_fl); sigdigits=3)) r^2_s\\right)\$",
+        # label="\$r_s\\left($(round(a_rpa_fl; sigdigits=3)) $(sgn_b_rpa_fl) $(round(abs(b_rpa_fl); sigdigits=3)) \\log r_s $(sgn_c_rpa_fl) $(round(abs(c_rpa_fl); sigdigits=3)) r_s\\right)\$",
+        # label="\$$(round(a_rpa_fl; sigdigits=3)) $(sgn_b_rpa_fl) $(round(abs(b_rpa_fl); sigdigits=3)) \\log r_s $(sgn_c_rpa_fl) $(round(abs(c_rpa_fl); sigdigits=3)) r_s $(sgn_d_rpa_fl) $(round(abs(d_rpa_fl); sigdigits=3)) r_s \\log r_s\$",
+    )
+    ax10.set_xlabel("\$r_s\$")
+    # ax10.set_ylabel("\$A(r_s)\$")
+    ax10.set_ylabel("\$A(r_s) / r_s\$")
+    # ax10.set_ylabel("\$A(r_s) = \\frac{1}{z(r_s)} - 1\$")
+    ax10.legend(; loc="best")
+    plt.tight_layout()
+    fig10.savefig(
+        # "results/self_energy_fits/$(int_type)/A_" *
+        "results/self_energy_fits/$(int_type)/A_over_rs_" *
+        "rs=$(round.(rslist; sigdigits=3))_beta_ef=$(beta)_$(int_type).pdf",
+    )
+    return
+
+    # Plot low/high-frequency turning points vs rs
+    fig7, ax7 = plt.subplots()
+    # Least-squares fit to low-frequency turning points
+    # @. model7(rs, p) = p[1] + p[2] * sqrt(abs(log(rs))) + p[3] * sqrt(rs) + p[4] * sqrt(rs * abs(log(rs)))
+    # @. model7(rs, p) = p[1] + p[2] * log(rs) + p[3] * rs + p[4] * rs * log(rs)
+    # fit_rpa = curve_fit(model7, rslist, w0_over_EF_rpas, [1.5, 1.5, 1.5, 1.5])
+    # fit_rpa_fl = curve_fit(model7, rslist, w0_over_EF_rpa_fls, [1.5, 1.5, 1.5, 1.5])
+    @. model7(rs, p) = sqrt(rs) * (p[1] + p[2] * log(rs))
+    fit_rpa = curve_fit(model7, rslist, w0_over_EF_rpas, [1.5, 1.5])
+    fit_rpa_fl = curve_fit(model7, rslist, w0_over_EF_rpa_fls, [1.5, 1.5])
+    # fit_rpa = curve_fit(model7, rslist, w0_over_EF_rpas, [1.5, 0.5, 0.5, 0.25])
+    # fit_rpa_fl = curve_fit(model7, rslist, w0_over_EF_rpa_fls, [1.5, 0.5, 0.5, 0.25])
+    model_rpa7(rs) = model7(rs, fit_rpa.param)
+    model_rpa_fl7(rs) = model7(rs, fit_rpa_fl.param)
+    # Coefficients of determination (r²)
+    r2_rpa = rsquared(rslist, w0_over_EF_rpas, model_rpa7.(rslist))
+    r2_rpa_fl = rsquared(rslist, w0_over_EF_rpa_fls, model_rpa_fl7.(rslist))
+    println("RPA fit: ", fit_rpa.param, ", r² = $r2_rpa")
+    println("RPA+FL fit: ", fit_rpa_fl.param, ", r² = $r2_rpa_fl")
+    # a_rpa, b_rpa, c_rpa, d_rpa = fit_rpa.param
+    # a_rpa_fl, b_rpa_fl, c_rpa_fl, d_rpa_fl = fit_rpa_fl.param
+    a_rpa, b_rpa = fit_rpa.param
+    a_rpa_fl, b_rpa_fl = fit_rpa_fl.param
+    sgn_b_rpa = b_rpa ≥ 0 ? "+" : "-"
+    sgn_b_rpa_fl = b_rpa_fl ≥ 0 ? "+" : "-"
+    # sgn_c_rpa = c_rpa ≥ 0 ? "+" : "-"
+    # sgn_c_rpa_fl = c_rpa_fl ≥ 0 ? "+" : "-"
+    # sgn_d_rpa = d_rpa ≥ 0 ? "+" : "-"
+    # sgn_d_rpa_fl = d_rpa_fl ≥ 0 ? "+" : "-"
+    # ax7.plot(rslist, w0_over_EF_rpas, "o-"; color="C0", label="\$RPA\$")
+    ax7.plot(rslist, w0_over_EF_rpas ./ sqrt.(rslist), "o-"; color="C0", label="\$RPA\$")
+    ax7.plot(
+        rslist_big,
+        # model_rpa7.(rslist_big),
+        model_rpa7.(rslist_big) ./ sqrt.(rslist_big),
+        "--";
+        color="C0",
+        # label="\$$(round(a_rpa; sigdigits=3)) $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) \\sqrt{r_s} $(sgn_c_rpa) $(round(abs(c_rpa); sigdigits=3)) r_s $(sgn_d_rpa) $(round(abs(d_rpa); sigdigits=3)) r_s \\sqrt{r_s}\$",
+        # label="\$$(round(a_rpa; sigdigits=3)) $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) \\sqrt{\\log r_s} $(sgn_c_rpa) $(round(abs(c_rpa); sigdigits=3)) \\sqrt{r_s} $(sgn_d_rpa) $(round(abs(d_rpa); sigdigits=3)) \\sqrt{r_s}\$",
+        # label="\$$(round(a_rpa; sigdigits=3)) $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) \\log r_s $(sgn_c_rpa) $(round(abs(c_rpa); sigdigits=3)) r_s $(sgn_d_rpa) $(round(abs(d_rpa); sigdigits=3)) r_s \\log r_s\$",
+        label="\$\\left($(round(a_rpa; sigdigits=3)) $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) \\log r_s\\right)\$",
+        # label="\$\\sqrt{r_s}\\left($(round(a_rpa; sigdigits=3)) $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) \\log r_s\\right)\$",
+    )
+    ax7.plot(
+        rslist,
+        # w0_over_EF_rpa_fls,
+        w0_over_EF_rpa_fls ./ sqrt.(rslist),
+        "o-";
+        color="C1",
+        label="\$RPA+FL\$",
+    )
+    ax7.plot(
+        rslist_big,
+        # model_rpa_fl7.(rslist_big),
+        model_rpa_fl7.(rslist_big) ./ sqrt.(rslist_big),
+        "--";
+        color="C1",
+        # label="\$$(round(a_rpa_fl; sigdigits=3)) $(sgn_b_rpa_fl) $(round(abs(b_rpa_fl); sigdigits=3)) \\sqrt{r_s} $(sgn_c_rpa_fl) $(round(abs(c_rpa_fl); sigdigits=3)) r_s $(sgn_d_rpa_fl) $(round(abs(d_rpa_fl); sigdigits=3)) r_s \\sqrt{r_s}\$",
+        # label="\$$(round(a_rpa_fl; sigdigits=3)) $(sgn_b_rpa_fl) $(round(abs(b_rpa_fl); sigdigits=3)) \\log r_s $(sgn_c_rpa_fl) $(round(abs(c_rpa_fl); sigdigits=3)) r_s $(sgn_d_rpa_fl) $(round(abs(d_rpa_fl); sigdigits=3)) r_s \\log r_s\$",
+        label="\$\\left($(round(a_rpa_fl; sigdigits=3)) $(sgn_b_rpa_fl) $(round(abs(b_rpa_fl); sigdigits=3)) \\log r_s\\right)\$",
+        # label="\$\\sqrt{r_s}\\left($(round(a_rpa_fl; sigdigits=3)) $(sgn_b_rpa_fl) $(round(abs(b_rpa_fl); sigdigits=3)) \\log r_s\\right)\$",
+    )
+    ax7.set_ylim(1.0, 3.5)
+    ax7.set_xlabel("\$r_s\$")
+    # ax7.set_ylabel("\$\\Omega_t(r_s)\$")
+    ax7.set_ylabel("\$\\Omega_t(r_s) / \\sqrt{r_s}\$")
+    # ax7.set_ylabel("\$\\Omega_t(r_s) / \\sqrt{r_s} = \\sqrt{B(r_s) / A(r_s)}\$")
+    ax7.legend(; loc="best")
+    plt.tight_layout()
+    fig7.savefig(
+        # "results/self_energy_fits/$(int_type)/low_high_turning_points_rs_" *
+        "results/self_energy_fits/$(int_type)/low_high_turning_points_over_sqrt_rs_" *
+        "rs=$(round.(rslist; sigdigits=3))_beta_ef=$(beta)_k=$(ktarget)_EF_$(int_type).pdf",
+    )
+
+    # Plot Z-factors vs rs for RPA(+FL)
+    println("\nZ_RPA:\n", zfactors_rpa)
+    println("Z_RPA+FL:\n", zfactors_rpa_fl)
+    # Least-squares fit to Z-factors
+    # @. model4(rs, p) = 1 + p[1] * log(rs) + p[2] * rs + p[3] * rs * log(rs)
+    @. model4(rs, p) = 1 + p[1] * rs + p[2] * rs^2 + p[3] * rs^3
+    fit_rpa = curve_fit(model4, rslist, zfactors_rpa, [1.0, 1.0, 1.0])
+    fit_rpa_fl = curve_fit(model4, rslist, zfactors_rpa_fl, [1.0, 1.0, 1.0])
+    # @. model4(rs, p) = 1 / (1 + rs)^p[1]
+    # fit_rpa = curve_fit(model4, rslist, zfactors_rpa, [0.5])
+    # fit_rpa_fl = curve_fit(model4, rslist, zfactors_rpa_fl, [0.5])
+    model_rpa4(rs) = model4(rs, fit_rpa.param)
+    model_rpa_fl4(rs) = model4(rs, fit_rpa_fl.param)
+    # Coefficients of determination (r²)
+    r2_rpa = rsquared(rslist, zfactors_rpa, model_rpa4.(rslist))
+    r2_rpa_fl = rsquared(rslist, zfactors_rpa_fl, model_rpa_fl4.(rslist))
+    println("RPA fit: ", fit_rpa.param, ", r² = $r2_rpa")
+    println("RPA+FL fit: ", fit_rpa_fl.param, ", r² = $r2_rpa_fl")
+    # a_rpa = fit_rpa.param[1]
+    # a_rpa_fl = fit_rpa_fl.param[1]
+    a_rpa, b_rpa, c_rpa = fit_rpa.param
+    a_rpa_fl, b_rpa_fl, c_rpa_fl = fit_rpa_fl.param
+    sgn_a_rpa = a_rpa ≥ 0 ? "+" : "-"
+    sgn_a_rpa_fl = a_rpa_fl ≥ 0 ? "+" : "-"
+    sgn_b_rpa = b_rpa ≥ 0 ? "+" : "-"
+    sgn_b_rpa_fl = b_rpa_fl ≥ 0 ? "+" : "-"
+    sgn_c_rpa = c_rpa ≥ 0 ? "+" : "-"
+    sgn_c_rpa_fl = c_rpa_fl ≥ 0 ? "+" : "-"
+    fig4, ax4 = plt.subplots()
+    ax4.plot(rslist, zfactors_rpa, "o-"; color="C0", label="\$RPA\$")
+    ax4.plot(
+        rslist_big,
+        model_rpa4.(rslist_big),
+        "--";
+        color="C0",
+        # label="\$$(round(a_rpa; sigdigits=3)) $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) \\log r_s $(sgn_c_rpa) $(round(abs(c_rpa); sigdigits=3)) r_s\$",
+        label="\$1 $(sgn_a_rpa) $(round(abs(a_rpa); sigdigits=3)) r_s $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) r^2_s $(sgn_c_rpa) $(round(abs(c_rpa); sigdigits=3)) r^3_s\$",
+        # label="\$(1 + r_s)^{-$(round(a_rpa; sigdigits=3))}\$",
+    )
+    ax4.plot(rslist, zfactors_rpa_fl, "o-"; color="C1", label="\$RPA+FL\$")
+    ax4.plot(
+        rslist_big,
+        model_rpa_fl4.(rslist_big),
+        "--";
+        color="C1",
+        # label="\$$(round(a_rpa_fl; sigdigits=3)) $(sgn_b_rpa_fl) $(round(abs(b_rpa_fl); sigdigits=3)) \\log r_s $(sgn_c_rpa_fl) $(round(abs(c_rpa_fl); sigdigits=3)) r_s\$",
+        label="\$1 $(sgn_a_rpa_fl) $(round(abs(a_rpa_fl); sigdigits=3)) r_s $(sgn_b_rpa_fl) $(round(abs(b_rpa_fl); sigdigits=3)) r^2_s $(sgn_c_rpa_fl) $(round(abs(c_rpa_fl); sigdigits=3)) r^3_s\$",
+        # label="\$(1 + r_s)^{-$(round(a_rpa_fl; sigdigits=3))}\$",
+    )
+    ax4.set_xlabel("\$r_s\$")
+    ax4.set_ylabel("\$Z(k = $(ktarget))\$")
+    # ax4.set_ylabel("\$Z_{k_F}\$")
+    ax4.legend(; loc="best")
+    plt.tight_layout()
+    fig4.savefig(
+        "results/self_energy_fits/$(int_type)/zfactor_k=$(ktarget)_" *
+        # "results/self_energy_fits/$(int_type)/zfactor_k=kF_" *
+        "rs=$(round.(rslist; sigdigits=3))_beta_ef=$(beta)_$(int_type).pdf",
+    )
 
     # Plot low/high-frequency turning points vs rs
     fig7, ax7 = plt.subplots()
@@ -1065,131 +1272,6 @@ function main()
     fig3p.savefig(
         "results/self_energy_fits/$(int_type)/peak_values_" *
         "rs=$(round.(rslist; sigdigits=3))_beta_ef=$(beta)_k=$(ktarget)_$(int_type)_new.pdf",
-    )
-
-    # Plot Z-factors vs rs for RPA(+FL)
-    println("\nZ_RPA:\n", zfactors_rpa)
-    println("Z_RPA+FL:\n", zfactors_rpa_fl)
-    # Least-squares fit to Z-factors
-    # @. model4(rs, p) = 1 + p[1] * log(rs) + p[2] * rs + p[3] * rs * log(rs)
-    @. model4(rs, p) = 1 + p[1] * rs + p[2] * rs^2 + p[3] * rs^3
-    fit_rpa = curve_fit(model4, rslist, zfactors_rpa, [1.0, 1.0, 1.0])
-    fit_rpa_fl = curve_fit(model4, rslist, zfactors_rpa_fl, [1.0, 1.0, 1.0])
-    # @. model4(rs, p) = 1 / (1 + rs)^p[1]
-    # fit_rpa = curve_fit(model4, rslist, zfactors_rpa, [0.5])
-    # fit_rpa_fl = curve_fit(model4, rslist, zfactors_rpa_fl, [0.5])
-    model_rpa4(rs) = model4(rs, fit_rpa.param)
-    model_rpa_fl4(rs) = model4(rs, fit_rpa_fl.param)
-    # Coefficients of determination (r²)
-    r2_rpa = rsquared(rslist, zfactors_rpa, model_rpa4.(rslist))
-    r2_rpa_fl = rsquared(rslist, zfactors_rpa_fl, model_rpa_fl4.(rslist))
-    println("RPA fit: ", fit_rpa.param, ", r² = $r2_rpa")
-    println("RPA+FL fit: ", fit_rpa_fl.param, ", r² = $r2_rpa_fl")
-    # a_rpa = fit_rpa.param[1]
-    # a_rpa_fl = fit_rpa_fl.param[1]
-    a_rpa, b_rpa, c_rpa = fit_rpa.param
-    a_rpa_fl, b_rpa_fl, c_rpa_fl = fit_rpa_fl.param
-    sgn_a_rpa = a_rpa ≥ 0 ? "+" : "-"
-    sgn_a_rpa_fl = a_rpa_fl ≥ 0 ? "+" : "-"
-    sgn_b_rpa = b_rpa ≥ 0 ? "+" : "-"
-    sgn_b_rpa_fl = b_rpa_fl ≥ 0 ? "+" : "-"
-    sgn_c_rpa = c_rpa ≥ 0 ? "+" : "-"
-    sgn_c_rpa_fl = c_rpa_fl ≥ 0 ? "+" : "-"
-    fig4, ax4 = plt.subplots()
-    ax4.plot(rslist, zfactors_rpa, "o-"; color="C0", label="\$RPA\$")
-    ax4.plot(
-        rslist_big,
-        model_rpa4.(rslist_big),
-        "--";
-        color="C0",
-        # label="\$$(round(a_rpa; sigdigits=3)) $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) \\log r_s $(sgn_c_rpa) $(round(abs(c_rpa); sigdigits=3)) r_s\$",
-        label="\$1 $(sgn_a_rpa) $(round(abs(a_rpa); sigdigits=3)) r_s $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) r^2_s $(sgn_c_rpa) $(round(abs(c_rpa); sigdigits=3)) r^3_s\$",
-        # label="\$(1 + r_s)^{-$(round(a_rpa; sigdigits=3))}\$",
-    )
-    ax4.plot(rslist, zfactors_rpa_fl, "o-"; color="C1", label="\$RPA+FL\$")
-    ax4.plot(
-        rslist_big,
-        model_rpa_fl4.(rslist_big),
-        "--";
-        color="C1",
-        # label="\$$(round(a_rpa_fl; sigdigits=3)) $(sgn_b_rpa_fl) $(round(abs(b_rpa_fl); sigdigits=3)) \\log r_s $(sgn_c_rpa_fl) $(round(abs(c_rpa_fl); sigdigits=3)) r_s\$",
-        label="\$1 $(sgn_a_rpa_fl) $(round(abs(a_rpa_fl); sigdigits=3)) r_s $(sgn_b_rpa_fl) $(round(abs(b_rpa_fl); sigdigits=3)) r^2_s $(sgn_c_rpa_fl) $(round(abs(c_rpa_fl); sigdigits=3)) r^3_s\$",
-        # label="\$(1 + r_s)^{-$(round(a_rpa_fl; sigdigits=3))}\$",
-    )
-    ax4.set_xlabel("\$r_s\$")
-    ax4.set_ylabel("\$Z_{k_F}\$")
-    ax4.legend(; loc="best")
-    plt.tight_layout()
-    fig4.savefig(
-        "results/self_energy_fits/$(int_type)/zfactor_k=kF_" *
-        "rs=$(round.(rslist; sigdigits=3))_beta_ef=$(beta)_$(int_type).pdf",
-    )
-
-    # Plot A(rs) for RPA(+FL)
-    A_rpa = 1 ./ zfactors_rpa .- 1
-    A_rpa_fl = 1 ./ zfactors_rpa_fl .- 1
-    # Least-squares fit to Z-factors
-    # @. model10(rs, p) = rs * (p[1] + p[2] * log(rs) + p[3] * rs)
-    # @. model10(rs, p) = rs * (p[1] + p[2] * sqrt(rs) + p[3] * rs)
-    @. model10(rs, p) = rs * (p[1] + p[2] * rs + p[3] * rs^2)
-    fit_rpa = curve_fit(model10, rslist, A_rpa, [1.0, 1.0, 1.0])
-    fit_rpa_fl = curve_fit(model10, rslist, A_rpa_fl, [1.0, 1.0, 1.0])
-    # fit_rpa = curve_fit(model10, rslist, A_rpa, [1.0, 1.0, 1.0])
-    # fit_rpa_fl = curve_fit(model10, rslist, A_rpa_fl, [1.0, 1.0, 1.0])
-    # @. model10(rs, p) = p[1] + p[2] * log(rs) + p[3] * rs + p[4] * rs * log(rs)
-    # fit_rpa = curve_fit(model10, rslist, A_rpa, [1.0, 1.0, 1.0, 1.0])
-    # fit_rpa_fl = curve_fit(model10, rslist, A_rpa_fl, [1.0, 1.0, 1.0, 1.0])
-    model_rpa10(rs) = model10(rs, fit_rpa.param)
-    model_rpa_fl10(rs) = model10(rs, fit_rpa_fl.param)
-    # Coefficients of determination (r²)
-    r2_rpa = rsquared(rslist, A_rpa, model_rpa10.(rslist))
-    r2_rpa_fl = rsquared(rslist, A_rpa_fl, model_rpa_fl10.(rslist))
-    println("RPA fit: ", fit_rpa.param, ", r² = $r2_rpa")
-    println("RPA+FL fit: ", fit_rpa_fl.param, ", r² = $r2_rpa_fl")
-    a_rpa, b_rpa, c_rpa = fit_rpa.param
-    a_rpa_fl, b_rpa_fl, c_rpa_fl = fit_rpa_fl.param
-    sgn_b_rpa = b_rpa ≥ 0 ? "+" : "-"
-    sgn_b_rpa_fl = b_rpa_fl ≥ 0 ? "+" : "-"
-    sgn_c_rpa = c_rpa ≥ 0 ? "+" : "-"
-    sgn_c_rpa_fl = c_rpa_fl ≥ 0 ? "+" : "-"
-    # sgn_d_rpa = d_rpa ≥ 0 ? "+" : "-"
-    # sgn_d_rpa_fl = d_rpa_fl ≥ 0 ? "+" : "-"
-    fig10, ax10 = plt.subplots()
-    ax10.plot(rslist, A_rpa, "o-"; color="C0", label="\$RPA\$")
-    # ax10.plot(rslist, A_rpa ./ rslist, "o-"; color="C0", label="\$RPA\$")
-    ax10.plot(
-        rslist_big,
-        model_rpa10.(rslist_big),
-        # model_rpa10.(rslist_big) ./ rslist_big,
-        "--";
-        color="C0",
-        label="\$r_s\\left($(round(a_rpa; sigdigits=3)) $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) r_s $(sgn_c_rpa) $(round(abs(c_rpa); sigdigits=3)) r^2_s\\right)\$",
-        # label="\$\\left($(round(a_rpa; sigdigits=3)) $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) r_s $(sgn_c_rpa) $(round(abs(c_rpa); sigdigits=3)) r^2_s\\right)\$",
-        # label="\$r_s\\left($(round(a_rpa; sigdigits=3)) $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) \\log r_s $(sgn_c_rpa) $(round(abs(c_rpa); sigdigits=3)) r_s\\right)\$",
-        # label="\$$(round(a_rpa; sigdigits=3)) $(sgn_b_rpa) $(round(abs(b_rpa); sigdigits=3)) \\log r_s $(sgn_c_rpa) $(round(abs(c_rpa); sigdigits=3)) r_s $(sgn_d_rpa) $(round(abs(d_rpa); sigdigits=3)) r_s \\log r_s\$",
-    )
-    ax10.plot(rslist, A_rpa_fl, "o-"; color="C1", label="\$RPA+FL\$")
-    # ax10.plot(rslist, A_rpa_fl ./ rslist, "o-"; color="C1", label="\$RPA+FL\$")
-    ax10.plot(
-        rslist_big,
-        model_rpa_fl10.(rslist_big),
-        # model_rpa_fl10.(rslist_big) ./ rslist_big,
-        "--";
-        color="C1",
-        label="\$r_s\\left($(round(a_rpa_fl; sigdigits=3)) $(sgn_b_rpa_fl) $(round(abs(b_rpa_fl); sigdigits=3)) r_s $(sgn_c_rpa_fl) $(round(abs(c_rpa_fl); sigdigits=3)) r^2_s\\right)\$",
-        # label="\$\\left($(round(a_rpa_fl; sigdigits=3)) $(sgn_b_rpa_fl) $(round(abs(b_rpa_fl); sigdigits=3)) r_s $(sgn_c_rpa_fl) $(round(abs(c_rpa_fl); sigdigits=3)) r^2_s\\right)\$",
-        # label="\$r_s\\left($(round(a_rpa_fl; sigdigits=3)) $(sgn_b_rpa_fl) $(round(abs(b_rpa_fl); sigdigits=3)) \\log r_s $(sgn_c_rpa_fl) $(round(abs(c_rpa_fl); sigdigits=3)) r_s\\right)\$",
-        # label="\$$(round(a_rpa_fl; sigdigits=3)) $(sgn_b_rpa_fl) $(round(abs(b_rpa_fl); sigdigits=3)) \\log r_s $(sgn_c_rpa_fl) $(round(abs(c_rpa_fl); sigdigits=3)) r_s $(sgn_d_rpa_fl) $(round(abs(d_rpa_fl); sigdigits=3)) r_s \\log r_s\$",
-    )
-    ax10.set_xlabel("\$r_s\$")
-    # ax10.set_ylabel("\$A(r_s) / r_s\$")
-    ax10.set_ylabel("\$A(r_s) = \\frac{1}{z(r_s)} - 1\$")
-    ax10.legend(; loc="best")
-    plt.tight_layout()
-    fig10.savefig(
-        "results/self_energy_fits/$(int_type)/A_" *
-        # "results/self_energy_fits/$(int_type)/A_over_rs_" *
-        "rs=$(round.(rslist; sigdigits=3))_beta_ef=$(beta)_$(int_type).pdf",
     )
 
     # Plot second-order moments vs rs for RPA(+FL)
