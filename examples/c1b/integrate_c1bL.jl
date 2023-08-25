@@ -43,7 +43,7 @@ function main()
         ParaMC(; order=settings.max_order, rs=1.0, beta=40.0, mass2=1.0, isDynamic=false)
     @debug "β * EF = $(param.beta), β = $(param.β), EF = $(param.EF)"
 
-    println("lambda = $(param.mass2)")
+    # println("lambda = $(param.mass2)")
 
     # K-mesh for measurement
     minK = 0.2 * param.kF
@@ -65,7 +65,7 @@ function main()
     solver = :vegasmc
 
     # Number of evals below and above kF
-    neval = 5e10
+    neval = 5e5
 
     # Enable/disable interaction and chemical potential counterterms
     renorm_mu = true
@@ -122,39 +122,51 @@ function main()
 
     # Save to JLD2 on main thread
     if !isnothing(res)
+        # Convert result to dictionary
+        data = UEG_MC.MeasType{Any}()
+        if length(partitions) == 1
+            avg, std = res.mean, res.stdev
+            data[partitions[1]] = measurement.(avg, std)
+        else
+            for o in eachindex(partitions)
+                avg, std = res.mean[o], res.stdev[o]
+                data[partitions[o]] = measurement.(avg, std)
+            end
+        end
         savename =
-            "results/data/c1bL_$(kgrid_string)n=$(param.order)_rs=$(param.rs)_" *
+            "results/data/c1bL/c1bL_$(kgrid_string)n=$(param.order)_rs=$(param.rs)_" *
             "beta_ef=$(param.beta)_lambda=$(param.mass2)_" *
             "neval=$(neval)_$(intn_str)$(solver)$(ct_string)"
         jldopen("$savename.jld2", "a+"; compress=true) do f
-            key = "$(short(param))"
+            key = short(param)
             if haskey(f, key)
                 @warn("replacing existing data for $key")
                 delete!(f, key)
             end
-            return f[key] = (settings, param, kgrid, partitions, res)
+            return f[key] = (settings, kgrid, partitions, data)
+            # return f[key] = (settings, param, kgrid, partitions, res)
         end
     end
 
-    # Save to JLD2 on main thread using new format
-    if !isnothing(res)
-        savename =
-            "results/data/rs=$(param.rs)_beta_ef=$(param.beta)_" *
-            "lambda=$(param.mass2)_$(intn_str)$(solver)$(ct_string)"
-        jldopen("$savename.jld2", "a+"; compress=true) do f
-            key = "c1bL_$(kgrid_string)n_min=$(settings.min_order)_n_max=$(settings.max_order)_neval=$(neval)"
-            if haskey(f, key)
-                @warn("replacing existing data for $key")
-                delete!(f, key)
-            end
-            f["$key/res"] = res
-            f["$key/settings"] = settings
-            f["$key/param"] = param
-            f["$key/kgrid"] = kgrid
-            f["$key/partitions"] = partitions
-            return
-        end
-    end
+    # # Save to JLD2 on main thread using new format
+    # if !isnothing(res)
+    #     savename =
+    #         "results/data/rs=$(param.rs)_beta_ef=$(param.beta)_" *
+    #         "lambda=$(param.mass2)_$(intn_str)$(solver)$(ct_string)"
+    #     jldopen("$savename.jld2", "a+"; compress=true) do f
+    #         key = "c1bL_$(kgrid_string)n_min=$(settings.min_order)_n_max=$(settings.max_order)_neval=$(neval)"
+    #         if haskey(f, key)
+    #             @warn("replacing existing data for $key")
+    #             delete!(f, key)
+    #         end
+    #         f["$key/res"] = res
+    #         f["$key/settings"] = settings
+    #         f["$key/param"] = param
+    #         f["$key/kgrid"] = kgrid
+    #         f["$key/partitions"] = partitions
+    #         return
+    #     end
+    # end
 end
 
 main()
