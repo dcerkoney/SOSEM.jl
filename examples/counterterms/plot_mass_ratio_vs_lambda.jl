@@ -92,9 +92,9 @@ function main()
     # # lambdas = [0.1, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
 
     ### rs = 3 ###
-    rs = 3.0
-    lambdas = [0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25, 1.5, 1.75, 2.0]
-    lambdas5 = [1.0, 1.125, 1.25, 1.5, 1.75, 2.0]
+    # rs = 3.0
+    # lambdas = [0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25, 1.5, 1.75, 2.0]
+    # lambdas5 = [1.0, 1.125, 1.25, 1.5, 1.75, 2.0]
 
     # rs = 3.0
     # lambdas = [0.75, 0.875, 1.0, 1.125, 1.25, 1.5]
@@ -102,9 +102,9 @@ function main()
     # lambdas = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 3.5, 4.0, 5.0, 6.0]
 
     ### rs = 4 ###
-    # rs = 4.0
-    # lambdas = [0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25, 1.5, 2.0]
-    # lambdas5 = [0.875, 1.0, 1.125, 1.25, 1.5]
+    rs = 4.0
+    lambdas = [0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25, 1.5, 2.0]
+    lambdas5 = [0.875, 1.0, 1.125, 1.25, 1.5]
 
     # lambdas5 = [0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25, 1.5, 2.0]
 
@@ -116,10 +116,11 @@ function main()
 
     ### rs = 5 ###
     # rs = 5.0
-    # lambda = [0.1, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25, 1.5]
-    # lambdas = [0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25, 1.5]
+    # lambdas = [0.375, 0.5, 0.625, 0.75, 1.0, 1.125, 1.25, 1.5]
     # lambdas5 = [0.8125, 0.875, 0.9375]
-    #
+
+    # lambdas = [0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25, 1.5]
+
     # lambdas = [0.25, 0.5, 0.75, 1.0, 2.0, 3.0]
     # lambdas = [0.1, 0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 3.25, 3.5, 3.75, 4.0, 4.5, 5.0, 5.5, 6.0]
     # lambdas = [0.1, 0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
@@ -383,12 +384,12 @@ function main()
     elseif rs == 5.0
         opt2 = Measurements.value.(mass_ratios_N_vs_lambda[3])[lambdas .== 0.5]
         opt3 = Measurements.value.(mass_ratios_N_vs_lambda[4])[lambdas .== 0.625]
-        opt4 = Measurements.value.(mass_ratios_N_vs_lambda[5])[lambdas .== 0.875]
-        opt5 = Measurements.value.(mass_ratios_N_vs_lambda[6])[lambdas .== 1.0]
+        # opt4 = Measurements.value.(mass_ratios_N_vs_lambda[5])[lambdas .== 0.875]
+        # opt5 = Measurements.value.(mass_ratios_5_vs_lambda5)[lambdas .== 1.0]
         scatter(0.5, opt2; s=80, color=color[2], marker="*", zorder=100)
         scatter(0.625, opt3; s=80, color=color[3], marker="*", zorder=101)
-        scatter(0.875, opt4; s=80, color=color[4], marker="*", zorder=102)
-        scatter(1.0, opt5; s=80, color=color[5], marker="*", zorder=103)
+        # scatter(0.875, opt4; s=80, color=color[4], marker="*", zorder=102)
+        # scatter(1.0, opt5; s=80, color=color[5], marker="*", zorder=103)
     end
     legend(; loc="lower right")
     xlabel("\$\\lambda\$ (Ry)")
