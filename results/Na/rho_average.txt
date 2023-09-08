@@ -1,4 +1,0 @@
-Ecut = 100: Average density ̄ρ = 0.03524153354507559
-Ecut = 75:  Average density ̄ρ = 0.03524153354550551
-Ecut = 50:  Average density ̄ρ = 0.03524153354586805
-Ecut = 25:  Average density ̄ρ = 0.03524153354994843

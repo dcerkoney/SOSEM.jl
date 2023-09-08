@@ -1,6 +1,7 @@
 using ASEconvert
 using Brillouin: Brillouin
 import Brillouin.KPaths: KPath, KPathInterpolant, irrfbz_path
+import Contour: contours, levels, level, lines, coordinates
 using DFTK
 using Interpolations
 using LazyArtifacts
@@ -19,6 +20,61 @@ const cdict = Dict([
     "teal" => "#009988",
     "grey" => "#BBBBBB",
 ]);
+
+function plot_implicit(
+    F,
+    c=1;
+    xlim=(0.0, 1.0),
+    ylim=xlim,
+    zlim=xlim,
+    nlevels=50,         # number of levels in a direction
+    # slices=Dict(:z => cdict["blue"]), # which directions and color
+    slices=Dict(:x => cdict["blue"], :z => cdict["blue"]), # which directions and color
+    # slices=Dict(:x => cdict["blue"], :y => cdict["cyan"], :z => cdict["teal"]), # which directions and color
+    # slices=Dict(:x => :blue, :y => :red, :z => :green), # which directions and color
+    kwargs...,          # passed to initial `plot` call
+)
+    _linspace(rng, n=150) = range(rng[1]; stop=rng[2], length=n)
+
+    X1, Y1, Z1 = _linspace(xlim), _linspace(ylim), _linspace(zlim)
+
+    p = Plots.plot(; legend=false, kwargs...)
+
+    if :x ∈ keys(slices)
+        for x in _linspace(xlim, nlevels)
+            local X1 = [F(x, y, z) for y in Y1, z in Z1]
+            cnt = contours(Y1, Z1, X1, [c])
+            for line in lines(levels(cnt)[1])
+                ys, zs = coordinates(line) # coordinates of this line segment
+                plot!(p, x .+ 0 * ys, ys, zs; color=slices[:x])
+            end
+        end
+    end
+
+    if :y ∈ keys(slices)
+        for y in _linspace(ylim, nlevels)
+            local Y1 = [F(x, y, z) for x in X1, z in Z1]
+            cnt = contours(Z1, X1, Y1, [c])
+            for line in lines(levels(cnt)[1])
+                xs, zs = coordinates(line) # coordinates of this line segment
+                plot!(p, xs, y .+ 0 * xs, zs; color=slices[:y])
+            end
+        end
+    end
+
+    if :z ∈ keys(slices)
+        for z in _linspace(zlim, nlevels)
+            local Z1 = [F(x, y, z) for x in X1, y in Y1]
+            cnt = contours(X1, Y1, Z1, [c])
+            for line in lines(levels(cnt)[1])
+                xs, ys = coordinates(line) # coordinates of this line segment
+                plot!(p, xs, ys, z .+ 0 * xs; color=slices[:z])
+            end
+        end
+    end
+
+    return p
+end
 
 function run_lda(
     psp_name;
@@ -54,9 +110,9 @@ function run_lda(
     if plots
         bandplot = plot_bandstructure(scfres)
         dosplot  = plot_dos(scfres)
-        return (; scfres, bandplot, dosplot)
+        return (; scfres, model, basis, bandplot, dosplot)
     end
-    return (; scfres)
+    return (; scfres, model, basis)
 end
 
 function run_lda_comparison(psp_names, labels=string.(eachindex(psp_names)))
@@ -82,9 +138,7 @@ function run_lda_comparison(psp_names, labels=string.(eachindex(psp_names)))
     return lda_results
 end
 
-function plot_rho(scfres, Ecut)
-    println("Cartesian forces: $(compute_forces_cart(scfres))")
-    println("Average density ̄ρ = $(sum(scfres.ρ) / length(scfres.ρ))")
+function plot_rho(scfres, Ecut, rho_avg)
 
     # Get basis vectors along Cartesian axes x, y, z
     rvecs = collect(r_vectors(scfres.basis))
@@ -108,11 +162,28 @@ function plot_rho(scfres, Ecut)
         legendfontsize=16,
     )
 
+    # 3D plot of ρ in the unit cell
+    interp_rho_xyz(x, y, z) = interp_rho(x % 1, y % 1, z % 1) / rho_avg
+    plot_implicit(
+        interp_rho_xyz;
+        c=1.0,
+        title="\$\\rho(\\mathbf{r}) = \\overline{\\rho}\$",
+        size=(600, 400),
+    )
+    xlabel!("\$x / a\$")
+    ylabel!("\$y / a\$")
+    zlabel!("\$z / a\$")
+    xticks!([0.0, 0.5, 1.0])
+    yticks!([0.0, 0.5, 1.0])
+    zticks!([0.0, 0.5, 1.0])
+    savefig("results/Na/Na_rho_x-y-z_Ecut=$Ecut.pdf")
+
     push!(xs, 1.0)
     push!(ys, 1.0)
+    push!(zs, 1.0)
 
     # Contour plot of ρ in the x-y plane (z = 0)
-    interp_rho_xy0(x, y) = interp_rho(x % 1, y % 1, 0)
+    interp_rho_xy0(x, y) = interp_rho(x % 1, y % 1, 0) / rho_avg
     contourf(
         xs,
         ys,
@@ -120,15 +191,27 @@ function plot_rho(scfres, Ecut)
         levels=10,
         color=:turbo,
         linewidth=0.5,
-        title="\$\\rho(x, y, 0)\$",
+        title="\$\\rho(x, y, 0) / \\overline{\\rho}\$",
         right_margin=20px,
+        size=(600, 400),
     )
+    contour!(
+        xs,
+        ys,
+        interp_rho_xy0.(xs', ys);
+        levels=[1.0],
+        color=cdict["grey"],
+        linewidth=2,
+        size=(600, 400),
+    )
+    # xticks!([0.0, 0.25, 0.5, 0.75, 1.0])
+    # yticks!([0.0, 0.25, 0.5, 0.75, 1.0])
     xlabel!("\$x / a\$")
     ylabel!("\$y / a\$")
     savefig("results/Na/Na_rho_x-y-0_Ecut=$Ecut.pdf")
 
     # Contour plot of ρ in the x-y-1/2 plane (z = 1/2)
-    interp_rho_xyzhalf(x, y) = interp_rho(x % 1, y % 1, 0.5)
+    interp_rho_xyzhalf(x, y) = interp_rho(x % 1, y % 1, 0.5) / rho_avg
     contourf(
         xs,
         ys,
@@ -136,9 +219,21 @@ function plot_rho(scfres, Ecut)
         levels=10,
         color=:turbo,
         linewidth=0.5,
-        title="\$\\rho(x, y, a / 2)\$",
-        right_margin=55px,
+        title="\$\\rho(x, y, a / 2) / \\overline{\\rho}\$",
+        right_margin=20px,
+        size=(600, 400),
     )
+    contour!(
+        xs,
+        ys,
+        interp_rho_xyzhalf.(xs', ys);
+        levels=[1.0],
+        color=cdict["grey"],
+        linewidth=2,
+        size=(600, 400),
+    )
+    # xticks!([0.0, 0.25, 0.5, 0.75, 1.0])
+    # yticks!([0.0, 0.25, 0.5, 0.75, 1.0])
     xlabel!("\$x / a\$")
     ylabel!("\$y / a\$")
     savefig("results/Na/Na_rho_x-y-0.5_Ecut=$Ecut.pdf")
@@ -259,6 +354,10 @@ function plot_bandstructure_custom(
     )
 end
 
+function get_rs(rho)
+    return (3 / (4π * rho))^(1 / 3)
+end
+
 function main()
     # Change to project directory
     if haskey(ENV, "SOSEM_CEPH")
@@ -272,13 +371,28 @@ function main()
         println(pseudopotential)
     end
 
+    # Ecuts = [75]
+    Ecuts = [25, 50, 75]
+    kgrid = [9, 9, 9]
+
     # Plot LDA bands for hardest HGH pseudopotential (n_valence = 9)
-    Ecuts = [75]
-    # Ecuts = [25, 50]
     for Ecut in Ecuts
-        lda_results = run_lda("hgh/lda/na-q9.hgh"; Ecut=Ecut)
-        plot_bandstructure_custom(lda_results.scfres, Ecut)
-        plot_rho(lda_results.scfres, Ecut)
+        # lda_results = run_lda("hgh/lda/na-q9.hgh"; Ecut=15, kgrid=[4, 4, 4])
+        # lda_results = run_lda("hgh/lda/na-q1.hgh"; Ecut=15, kgrid=[4, 4, 4])
+
+        lda_results = run_lda("hgh/lda/na-q1.hgh"; Ecut=Ecut, kgrid=kgrid)
+        # lda_results = run_lda("hgh/lda/na-q9.hgh"; Ecut=Ecut, kgrid=kgrid)
+        scfres = lda_results.scfres
+
+        # Simple real-space integration of ρ(r) on r-vector mesh: sum(ρ) / N³ ~ <ρ(r)> = ∫ρ(r) dr / Ω
+        rho_avg = sum(scfres.ρ) / length(scfres.ρ)
+
+        println("Average density (semi-core + valence) ̄ρ = $rho_avg")
+        println("UEG rₛ(̄ρ) = $(get_rs(rho_avg))")
+        println("Cartesian forces: $(compute_forces_cart(scfres))")
+
+        # plot_bandstructure_custom(scfres, Ecut)
+        # plot_rho(scfres, Ecut, rho_avg)
     end
     return
 
