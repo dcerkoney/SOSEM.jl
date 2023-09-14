@@ -1,0 +1,11 @@
+Ecut = 25:
+Average density (semi-core + valence) ̄ρ = 0.03524153338692972
+UEG rₛ(̄ρ) = 1.8921353433771357
+
+Ecut = 50:
+Average density (semi-core + valence) ̄ρ = 0.035241533373010996
+UEG rₛ(̄ρ) = 1.8921353436262367
+
+Ecut = 75:
+Average density (semi-core + valence) ̄ρ = 0.03524153337376787
+UEG rₛ(̄ρ) = 1.892135343612691

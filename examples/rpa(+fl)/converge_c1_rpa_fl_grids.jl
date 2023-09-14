@@ -280,7 +280,7 @@ function main()
             regular=true,
             int_type=int_type,
             landaufunc=landaufunc,
-            Fs=Fs,
+            Fs=-Fs,  # NOTE: landauParameterConst uses opposite sign convention!
         )
 
         # Get KO_dyn(q, τ = 0) / V(q) from KO_dyn(q, iωₙ) / V(q)

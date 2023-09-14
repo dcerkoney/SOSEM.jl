@@ -15,16 +15,17 @@ elseif haskey(ENV, "SOSEM_HOME")
 end
 
 const lambda_opt = Dict(
-    1.0 => [2.0,   2.0,   2.0,  2.0,  2.0],
-    2.0 => [1.75,  1.75,  1.75, 1.75, 1.75],
-    4.0 => [0.625, 0.625, 0.75, 1.0,  1.125],
+    1.0 => [2.0, 2.0, 2.0, 2.0, 2.0],
+    2.0 => [1.75, 1.75, 1.75, 1.75, 1.75],
+    3.0 => [0.75, 0.75, 1.0, 1.25, 1.75],
+    4.0 => [0.625, 0.625, 0.75, 1.0, 1.125],
 )
 
 function main()
     # Physical params matching data for SOSEM observables
     max_orders = [2, 3, 4, 5] # calculate orders 1 & 2 together, and run the rest separately
     beta = 40.0
-    rs = 4.0
+    rs = 3.0
 
     # Total number of MCMC evaluations
     neval = 1e11

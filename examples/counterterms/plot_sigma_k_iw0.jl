@@ -12,7 +12,8 @@ using SOSEM
 @pyimport scienceplots
 
 # Physical parameters
-const rs = 4.0
+const rs = 3.0
+# const rs = 4.0
 const Fs = -0.0
 const beta = 40.0
 const max_order_plot = 5
@@ -27,12 +28,16 @@ const parafilename = "data/para.csv"
 const lambda_opt = Dict(
     1.0 => [2.0, 2.0, 2.0, 2.0, 2.0],
     2.0 => [1.75, 1.75, 1.75, 1.75, 1.75],
+    3.0 => [1.75, 1.75, 1.75, 1.75, 1.75],
+    # 3.0 => [0.75, 0.75, 1.0, 1.25, 1.75],
     4.0 => [0.625, 0.625, 0.75, 1.0, 1.125],
     #
 )
 const max_orders = Dict(
     1.0 => [5, 5, 5, 5, 5],
     2.0 => [5, 5, 5, 5, 5],
+    3.0 => [5, 5, 5, 5, 5],
+    # 3.0 => [2, 2, 3, 4, 5],
     4.0 => [2, 2, 3, 4, 5],
     #
 )
@@ -243,6 +248,12 @@ function plotS_k(paralist::Vector{ParaMC}, rSw_ks, iSw_ks, kgrid; Zrenorm=true)
         else
             ylim([nothing, 1.35])
         end
+    elseif para.rs == 3.0
+        if Zrenorm
+            ylim([nothing, 1.15])
+        else
+            ylim([0.98, 1.32])
+        end
     elseif para.rs == 4.0
         # ylim([-0.07, 0.25])
         # ylim([nothing, 0.3])
@@ -333,6 +344,13 @@ function plotS_k(paralist::Vector{ParaMC}, rSw_ks, iSw_ks, kgrid; Zrenorm=true)
             ylim([0.9175, 1.1])
         else
             ylim([0.99, 1.21])
+            # ylim([0.79, 1.01])
+        end
+    elseif para.rs == 3.0
+        if Zrenorm
+            ylim([0.9375, 1.075])
+        else
+            ylim([0.99, 1.16])
             # ylim([0.79, 1.01])
         end
     elseif para.rs == 4.0
@@ -635,7 +653,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         push!(rSw_ks, rSw_k)
         push!(iSw_ks, iSw_k)
     end
-    plotS_k(paralist, rSw_ks, iSw_ks, kgrid; Zrenorm=Zrenorm)
+    # plotS_k(paralist, rSw_ks, iSw_ks, kgrid; Zrenorm=Zrenorm)
     
     ### Using fixed lambda = λ*₅ for all orders ###
     # rs = 1
@@ -644,6 +662,10 @@ if abspath(PROGRAM_FILE) == @__FILE__
     plotS_k(para, rSw_k, iSw_k, kgrid; Zrenorm=Zrenorm)
     # rs = 2
     para = ParaMC(; rs=2.0, beta=40.0, Fs=-0.0, order=5, mass2=1.75, isDynamic=false)
+    rSw_k, iSw_k, kgrid, ngrid = process(para, Zrenorm)
+    plotS_k(para, rSw_k, iSw_k, kgrid; Zrenorm=Zrenorm)
+    # rs = 3
+    para = ParaMC(; rs=3.0, beta=40.0, Fs=-0.0, order=5, mass2=1.75, isDynamic=false)
     rSw_k, iSw_k, kgrid, ngrid = process(para, Zrenorm)
     plotS_k(para, rSw_k, iSw_k, kgrid; Zrenorm=Zrenorm)
     # rs = 4

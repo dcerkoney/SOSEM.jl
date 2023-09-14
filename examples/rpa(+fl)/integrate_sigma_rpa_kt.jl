@@ -57,7 +57,7 @@ end
 Get the symmetric l=0 Fermi-liquid parameter F⁰ₛ via interpolation of the 
 compressibility ratio data of Perdew & Wang (1992) [Phys. Rev. B 45, 13244].
 """
-function get_Fs_PW(rs)
+@inline function get_Fs_PW(rs)
     # if rs < 1.0 || rs > 5.0
     #     @warn "The Perdew-Wang interpolation for Fs may " *
     #           "be inaccurate outside the metallic regime!"
