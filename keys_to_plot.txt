@@ -1,0 +1,13 @@
+c1bL_n=5_rs=1.0_beta_ef=40.0_lambda=1.0_neval=5.0e10_one_bare_vegasmc_with_ct_mu_lambda.jld2:
+
+ - "Fa_-0.0_Fs_-0.0_beta_40.0_dim_3_isDynamic_false_isFock_false_mass2_1.0_massratio_1.0_order_5_rs_1.0_spin_2"
+
+rs=1.0_beta_ef=40.0_lambda=1.0_vegasmc_with_ct_mu_lambda_archive1_processed_data.jld2:
+
+ - c1d/N=5/neval=5.0e10/meas
+ - c1c/N=5/neval=5.0e10/meas
+ - c1b/N=5/neval=5.0e10/meas
+ - c1b0/N=5/neval=5.0e10/meas
+ - c1l/N=5/neval=1.0e10/meas
+
+ Compare c1nl5 above from (V,V) with c1b -> 2c1bL_(V,Vlambda).

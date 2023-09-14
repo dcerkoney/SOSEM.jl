@@ -103,6 +103,18 @@ const rpa_fl_sosem_ko_takada = Dict(
     7.5 => 0.04190513631989273,
     10.0 => 0.02107028506216691,
 )
+# const rpa_fl_sosem_ko_moroni = Dict(
+#     0.01 => 113120.53305565231,
+#     0.1 => 794.0844302101557,
+#     0.5 => 22.706345661868387,
+#     1.0 => 4.739108972017714,
+#     2.0 => 0.9584480419440262,
+#     3.0 => 0.3703011474216666,
+#     4.0 => 0.18744320831614875,
+#     5.0 => 0.1102609051385906,
+#     7.5 => 0.04190513631989273,
+#     10.0 => 0.02107028506216691,
+# )
 
 """Given sample y and x values, compute dy/dx using the forward difference method."""
 function forward_diff(ys, xs)
@@ -172,7 +184,7 @@ end
 
 """
 Get the value of fₛ(q → ∞) for a given interaction type
-(either RPA, or RPA+FL using a constant or Takada ansatz for fₛ(q)).
+(either RPA, or RPA+FL using constant/Takada/Moroni fₛ(q)).
 """
 @inline function get_fs_infty(para::Parameter.Para, int_type=:rpa)
     if int_type == :ko_const
@@ -307,7 +319,6 @@ function get_sigma_rpa_fl_wn(
     if int_type == :ko_const
         println("Fermi liquid parameter at rs = $(rs): Fs = $Fs")
     end
-    @assert Fs ≤ 0
 
     # Small params
     Euv, rtol = 1000 * para.EF, 1e-11
@@ -399,10 +410,15 @@ function main()
     ktarget = 0.0
 
     # Which fs paramaterization to use
-    int_type = :ko
+    int_type = :ko_moroni
+    # int_type = :ko_takada
+    # int_type = :ko_const
+
     # The data for B_{RPA+FL} depends on int_type
     local rpa_fl_sosem
-    if int_type == :ko
+    if int_type == :ko_moroni
+        rpa_fl_sosem = rpa_fl_sosem_ko_moroni
+    elseif int_type == :ko_takada
         rpa_fl_sosem = rpa_fl_sosem_ko_takada
     elseif int_type == :ko_const
         rpa_fl_sosem = rpa_fl_sosem_ko_const

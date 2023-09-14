@@ -27,7 +27,7 @@ end
 Get the symmetric l=0 Fermi-liquid parameter F⁰ₛ via interpolation of the 
 compressibility ratio data of Perdew & Wang (1992) [Phys. Rev. B 45, 13244].
 """
-function get_Fs_PW(rs)
+@inline function get_Fs_PW(rs)
     # if rs < 1.0 || rs > 5.0
     #     @warn "The Perdew-Wang interpolation for Fs may " *
     #           "be inaccurate outside the metallic regime!"
@@ -38,7 +38,7 @@ function get_Fs_PW(rs)
 end
 
 """
-    function testchargereg(V::Float64, F::Float64, Π::Float64)
+    function TTreg(V::Float64, F::Float64, Π::Float64)
 
 Return V Π / (1 - (V - F)Π), which is the dynamic part of the test-charge test-charge interaction W_f divided by V.
 
@@ -47,7 +47,7 @@ Return V Π / (1 - (V - F)Π), which is the dynamic part of the test-charge test
 - F: Landau parameter
 - Π: polarization
 """
-function testchargereg(Vinv::Float64, F::Float64, Π::Float64)
+function TTreg(Vinv::Float64, F::Float64, Π::Float64)
     # (V - F) Π / (1 - (V - F)Π) * (V / (V - F))
     K = 0
     if Vinv ≈ Inf
@@ -61,7 +61,7 @@ function testchargereg(Vinv::Float64, F::Float64, Π::Float64)
 end
 
 """
-    function testcharge(V::Float64, F::Float64, Π::Float64)
+    function TT(V::Float64, F::Float64, Π::Float64)
 
 Return V^2 Π / (1 - (V - F)Π), which is the dynamic part of the test-charge test-charge interaction W_f.
 
@@ -70,7 +70,7 @@ Return V^2 Π / (1 - (V - F)Π), which is the dynamic part of the test-charge te
 - F: Landau parameter
 - Π: polarization
 """
-function testcharge(Vinv::Float64, F::Float64, Π::Float64)
+function TT(Vinv::Float64, F::Float64, Π::Float64)
     K = 0
     if Vinv ≈ Inf
         K = 0
@@ -81,7 +81,7 @@ function testcharge(Vinv::Float64, F::Float64, Π::Float64)
     return K
 end
 
-function testchargecorrection(
+function TTcorrection(
     q::Float64,
     n::Int,
     param;
@@ -102,7 +102,7 @@ function testchargecorrection(
     end
 
     Πs::Float64 = spin * pifunc(q, n, param; kwargs...) * massratio
-    Ks = regular ? testchargereg(Vinvs, Fs, Πs) : testcharge(Vinvs, Fs, Πs)
+    Ks = regular ? TTreg(Vinvs, Fs, Πs) : TT(Vinvs, Fs, Πs)
     return Ks
 end
 
@@ -140,7 +140,7 @@ function WtildeFs(
     regular=false,
     kwargs...,
 )
-    return testchargecorrection(
+    return TTcorrection(
         q,
         n,
         param;
@@ -288,7 +288,6 @@ function main()
         #     int_type=int_type,
         #     landaufunc=landaufunc,
         #     Fs=-Fs,  # NOTE: NEFT uses opposite sign convention!
-        #     bugfix=true,
         # )
 
         # Get Wtilde_KO(q, iωₙ) / (V(q) - fs)
@@ -302,7 +301,6 @@ function main()
             # int_type=int_type == :ko_const ? :ko_const : :ko,
             landaufunc=landaufunc,
             # Fs=-Fs,  # NOTE: NEFT uses opposite sign convention!
-            # bugfix=true,
         )
 
         # Get Wtilde_KO(q, τ) / (V(q) - fs) from Wtilde_KO(q, iωₙ) / (V(q) - fs)
@@ -338,7 +336,6 @@ function main()
             int_type=int_type,
             landaufunc=landaufunc,
             # Fs=-Fs,  # NOTE: NEFT uses opposite sign convention!
-            # bugfix=true,
         )
 
         # Get Wtilde_KO(q, τ) from Wtilde_KO(q, iωₙ)
@@ -415,13 +412,17 @@ function main()
             -(2 * param.e0^2 / π) * CompositeGrids.Interp.integrate1D(rpa_integrand, qgrid)
 
         local fs_int_type
-        if int_type == :ko
+        if int_type == :ko_moroni
+            # NOTE: The Moroni DMC data for fs is q-dependent!
+            fs_int_type =
+                [Interaction.landauParameterMoroni(q, 0, para)[1] for q in qgrid.grid]
+        elseif int_type == :ko_takada
             # NOTE: The Takada ansatz for fs is q-dependent!
             fs_int_type =
-                [Interaction.landauParameterTakada(q, 0, param)[1] for q in qgrid.grid]
+                [Interaction.landauParameterTakada(q, 0, para)[1] for q in qgrid.grid]
         elseif int_type == :ko_const
-            # fs = Fs / NF
-            fs_int_type = Fs / param.NF
+            # fs = -Fs / NF
+            fs_int_type = -Fs / para.NF
         else
             error("Not yet implemented!")
         end

@@ -163,10 +163,14 @@ Get the value of fₛ(q → ∞) for a given interaction type
         # Local-field factor at q=∞
         # For :ko_const, fs_infty = Fs / NF
         fs_infty = Fs / para.NF
-    elseif int_type == :ko
+    elseif int_type == :ko_takada
         # For the Takada ansatz for fs(q), fs(∞) = 0,
         # so the RPA+FL tail is the same as RPA
+        @assert abs(Interaction.landauParameterTakada(1e10, 0, para)) < 1e-13
         fs_infty = 0.0
+    elseif int_type == :ko_moroni
+        # The exact (and hence DMC) value for fs(∞) is finite
+        fs_infty = Interaction.landauParameterMoroni(1e10, 0, para)
     elseif int_type == :rpa
         fs_infty = 0.0
     else
@@ -301,7 +305,7 @@ function get_sigma_rpa_fl_wn(
         maxK=maxK,
         order=order,
         int_type=int_type,
-        # Fs=-Fs,  # NOTE: NEFT uses opposite sign convention (Fs > 0)!
+        Fs=-Fs,  # NOTE: landauParameterConst uses opposite sign convention!
     )
 
     # Get sigma in DLR basis
