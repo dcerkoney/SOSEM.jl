@@ -2,6 +2,7 @@ using ASEconvert
 using Brillouin: Brillouin
 import Brillouin.KPaths: KPath, KPathInterpolant, irrfbz_path
 import Contour: contours, levels, level, lines, coordinates
+using DelimitedFiles
 using DFTK
 using Interpolations
 using LazyArtifacts
@@ -138,8 +139,35 @@ function run_lda_comparison(psp_names, labels=string.(eachindex(psp_names)))
     return lda_results
 end
 
-function plot_rho(scfres, Ecut, rho_avg)
+function save_rho2d(scfres, Ecut, rho_avg)
+    # Get basis vectors along Cartesian axes x, y, z
+    rvecs = collect(r_vectors(scfres.basis))
+    xvecs = rvecs[:, 1, 1]  # slice along the x axis
+    yvecs = rvecs[1, :, 1]  # slice along the y axis
+    zvecs = rvecs[1, 1, :]  # slice along the z axis
+    xs = [xvec[1] for xvec in xvecs]
+    ys = [yvec[2] for yvec in yvecs]
+    zs = [zvec[3] for zvec in zvecs]
 
+    # Build linear interpolator for ρ 
+    rho_xyz = scfres.ρ[:, :, :, 1]  # ρ for spin up (wlog)
+    interp_rho = linear_interpolation((xs, ys, zs), rho_xyz; extrapolation_bc=Line())
+
+    push!(xs, 1.0)
+    push!(ys, 1.0)
+    interp_rho_xy0(x, y) = interp_rho(x % 1, y % 1, 0) / rho_avg
+
+    yvals = [0.0, 0.125, 0.25, 0.375, 0.5]
+    open("results/Na/Na_rho_x-0-0_Ecut=$Ecut.dat", "w") do io
+        writedlm(io, [xs'])
+        for (i, yval) in enumerate(yvals)
+            fs = [interp_rho_xy0(x, yval) for x in xs]
+            writedlm(io, [yval; fs]')
+        end
+    end
+end
+
+function plot_rho3d(scfres, Ecut, rho_avg)
     # Get basis vectors along Cartesian axes x, y, z
     rvecs = collect(r_vectors(scfres.basis))
     xvecs = rvecs[:, 1, 1]  # slice along the x axis
@@ -371,8 +399,8 @@ function main()
         println(pseudopotential)
     end
 
-    # Ecuts = [75]
-    Ecuts = [25, 50, 75]
+    Ecuts = [75]
+    # Ecuts = [25, 50, 75]
     kgrid = [9, 9, 9]
 
     # Plot LDA bands for hardest HGH pseudopotential (n_valence = 9)
@@ -391,8 +419,9 @@ function main()
         println("UEG rₛ(̄ρ) = $(get_rs(rho_avg))")
         println("Cartesian forces: $(compute_forces_cart(scfres))")
 
+        save_rho2d(scfres, Ecut, rho_avg)
+        # plot_rho3d(scfres, Ecut, rho_avg)
         # plot_bandstructure_custom(scfres, Ecut)
-        # plot_rho(scfres, Ecut, rho_avg)
     end
     return
 
