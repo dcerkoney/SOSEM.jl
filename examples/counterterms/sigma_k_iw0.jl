@@ -20,17 +20,17 @@ function main()
     order = [5]
     beta = [40.0]
 
-    rs = [1.0]
-    mass2 = [1.75]
+    #rs = [1.0]
+    #mass2 = [1.75]
     # mass2 = [1.0, 1.75]
     # mass2 = [3.5]
 
-    # rs = [2.0]
-    # mass2 = [2.0]
-    # # mass2 = [1.75, 2.5]
+    rs = [2.0]
+    mass2 = [2.0]
+    # mass2 = [1.75, 2.5]
 
     # Total number of MCMC evaluations
-    neval = 1e11
+    neval = 1e10
 
     # diagtype = :GV
     diagtype = :Parquet

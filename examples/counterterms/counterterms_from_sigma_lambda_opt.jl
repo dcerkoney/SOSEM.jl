@@ -16,8 +16,14 @@ end
 function main()
     # Physical params matching data for SOSEM observables
     dim = 3
-    order = [5]
+    order = [4]
     beta = [40.0]
+
+    rs = [1.0]
+    mass2 = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 3.5, 4.0]
+
+    # rs = [2.0]
+    # mass2 = [0.5, 0.75, 1.0, 1.25, 1.5, 1.625, 1.75, 1.875, 2.0, 2.5, 3.0]
 
     #rs = [1.0]
     #mass2 = [1.5, 1.75, 2.0, 3.0, 3.5]
@@ -48,8 +54,9 @@ function main()
     # mass2 = [0.25, 0.5, 0.75, 1.0, 1.25]
     # mass2 = [0.375, 0.625, 0.875, 1.125]
 
-    rs = [5.0]
-    mass2 = [0.8125, 0.875, 0.9375, 1.0, 1.125, 1.25]
+    #rs = [5.0]
+    #mass2 = [1.0, 1.125, 1.25]
+    #mass2 = [0.8125, 0.875, 0.9375, 1.0, 1.125, 1.25]
 
     # mass2 = [3.0, 3.25, 3.5, 3.75, 7.0, 8.0]
     # mass2 = [4.0, 4.5, 5.0, 5.5, 6.0]
@@ -62,17 +69,17 @@ function main()
     # mass2 = [1.0]
 
     # Total number of MCMC evaluations
-    neval = 1e11
+    neval = 1e10
 
-    # diagtype = :GV
-    diagtype = :Parquet
-    filename = "data/data_Z_$(diagtype).jld2"
+    diagtype = :GV
+    # diagtype = :Parquet
+    filename = "data/data_Z_$(diagtype)_spin_polarized.jld2"
 
     # Remove Fock insertions?
     isFock = false
 
     # spin-polarization parameter (n_up - n_down) / (n_up + n_down) ∈ [0,1]
-    spinPolarPara = 0.0
+    spinPolarPara = 1.0
 
     # Get self-energy data needed for the chemical potential and Z-factor measurements
     for (_rs, _mass2, _beta, _order) in Iterators.product(rs, mass2, beta, order)

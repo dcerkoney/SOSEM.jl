@@ -29,7 +29,7 @@ function main()
     rs = 3.0
 
     # Total number of MCMC evaluations
-    neval = 1e11
+    neval = 1e10
 
     # diagtype = :GV
     diagtype = :Parquet
