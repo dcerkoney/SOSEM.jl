@@ -31,8 +31,8 @@ function main()
     # Total number of MCMC evaluations
     neval = 1e11
 
-    diagtype = :GV
-    # diagtype = :Parquet
+    # diagtype = :GV
+    diagtype = :Parquet
     filename = "data/data_K_$(diagtype).jld2"
 
     # Remove Fock insertions?
