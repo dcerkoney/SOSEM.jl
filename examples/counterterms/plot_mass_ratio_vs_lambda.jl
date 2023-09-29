@@ -12,10 +12,6 @@ using SOSEM
 # For style "science"
 @pyimport scienceplots
 
-# For saving/loading numpy data
-@pyimport numpy as np
-@pyimport scipy.interpolate as interp
-
 # @pyimport matplotlib.pyplot as plt
 # @pyimport mpl_toolkits.axes_grid1.inset_locator as il
 
@@ -79,9 +75,9 @@ function main()
     # neval = 1e11    # rs=2, 3, 4, and N=4, rs=5
 
     ### rs = 1 ###
-    # rs = 1.0
-    # lambdas = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 3.5, 4.0]
-    # lambdas5 = nothing
+    rs = 1.0
+    lambdas = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 3.5, 4.0]
+    lambdas5 = [1.5, 1.75, 2.0, 3.0, 3.5]
     #lambdas = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
 
     ### rs = 2 ###
@@ -102,9 +98,9 @@ function main()
     # lambdas = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 3.5, 4.0, 5.0, 6.0]
 
     ### rs = 4 ###
-    rs = 4.0
-    lambdas = [0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25, 1.5, 2.0]
-    lambdas5 = [0.875, 1.0, 1.125, 1.25, 1.5]
+    # rs = 4.0
+    # lambdas = [0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25, 1.5, 2.0]
+    # lambdas5 = [0.875, 1.0, 1.125, 1.25, 1.5]
 
     # lambdas5 = [0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25, 1.5, 2.0]
 
@@ -313,14 +309,11 @@ function main()
     xloc = 1.25
     xlim(minimum(lambdas), maximum(lambdas))
     if rs == 1.0
-        xloc = 1.35
-        yloc = 0.9775
+        xloc = 2.0
+        yloc = 0.971
         ydiv = -0.0125
-        # xlim(0.48, 2.0)
-        # xlim(0.75, 2.0)
-        # ylim(0.87, 0.99)
         xlim(0.75, 4.0)
-        ylim(0.87, 0.99)
+        ylim(0.865, 0.985)
     elseif rs == 2.0
         xloc = 1.35
         yloc = 0.93
@@ -360,7 +353,13 @@ function main()
         ylim(0.85, 1.06)
     end
     if rs == 1.0
-        # axvline(1.0; linestyle="--", color="dimgray", label="\$\\lambda^\\star = 1\$")
+        lambda_opt = 1.75
+        axvline(
+            lambda_opt;
+            linestyle="--",
+            color="dimgray",
+            label="\$\\lambda^\\star = $(lambda_opt)\$",
+        )
     elseif rs == 2.0
         # axvline(1.0; linestyle="--", color="dimgray", label="\$\\lambda^\\star = 1\$")
     elseif rs == 3.0
@@ -399,10 +398,11 @@ function main()
     text(
         xloc,
         yloc,
-        # "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta),\$";
-        "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta), \\delta K = $(dk) k_F\$";
-        fontsize=12,
+        "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta)\$";
+        # "\$r_s = $(rs),\\, \\beta \\hspace{0.1em} \\epsilon_F = $(beta), \\delta K = $(dk) k_F\$";
+        fontsize=16,
     )
+    text(1.875, 0.89, "\$\\delta K = $(dk) k_F\$"; fontsize=16)
     # text(
     #     xloc,
     #     yloc + ydiv,
@@ -410,7 +410,7 @@ function main()
     #     "\$N_{\\mathrm{eval}} = \\mathrm{$(neval)}, \\delta K = $(dk) k_F\$";
     #     fontsize=14,
     # )
-    plt.tight_layout()
+    # plt.tight_layout()
     savefig(
         "../../results/effective_mass_ratio/effective_mass_ratio_rs=$(param.rs)_" *
         "beta_ef=$(param.beta)_$(intn_str)$(solver)_$(ct_string)_deltaK=$(dk)kF_vs_lambda.pdf",

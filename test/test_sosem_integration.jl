@@ -48,7 +48,8 @@ function bare_integral_k0(;
     exact = get_exact_k0(observable)
 
     # Test standard score (z-score) of the measurement
-    meas = measurement(res.mean[1], res.stdev[1])
+    meas = measurement(res.mean, res.stdev)
+    # meas = measurement(res.mean[1], res.stdev[1])
     score = stdscore(meas, exact)
     obsstring = get_bare_string(observable)
 
