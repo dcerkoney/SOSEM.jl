@@ -12,13 +12,15 @@ elseif haskey(ENV, "SOSEM_HOME")
     cd("$(ENV["SOSEM_HOME"])/examples/counterterms")
 end
 
-order = [5]
 # order = [4]
+order = [5]
 beta = [40.0]
 
 ### rs = 1 ###
-# rs = [1.0]
-# mass2 = [2.0]
+rs = [1.0]
+mass2 = [1.5, 1.75, 2.0, 3.0, 3.5]
+# mass2 = [2.0, 3.5]
+
 # mass2 = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 3.5, 4.0]
 # mass2 = [3.5]
 # mass2 = [2.5, 3.0, 3.5, 4.0]

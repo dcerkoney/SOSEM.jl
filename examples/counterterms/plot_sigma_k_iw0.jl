@@ -26,20 +26,18 @@ const parafilename = "data/para.csv"
 
 # Calculated lambda optima and associated max run orders for each calculation
 const lambda_opt = Dict(
-    1.0 => [2.0, 2.0, 2.0, 2.0, 2.0],
-    2.0 => [1.75, 1.75, 1.75, 1.75, 1.75],
-    3.0 => [1.75, 1.75, 1.75, 1.75, 1.75],
-    # 3.0 => [0.75, 0.75, 1.0, 1.25, 1.75],
+    1.0 => [1.75, 1.75, 1.75, 1.75, 1.75],
+    2.0 => [2.0, 2.0, 2.0, 2.0, 2.0],
+    3.0 => [0.75, 0.75, 1.0, 1.25, 1.75],
     4.0 => [0.625, 0.625, 0.75, 1.0, 1.125],
-    #
+    5.0 => [0.5, 0.5, 0.625, 0.875, 0.875],
 )
 const max_orders = Dict(
     1.0 => [5, 5, 5, 5, 5],
     2.0 => [5, 5, 5, 5, 5],
-    3.0 => [5, 5, 5, 5, 5],
-    # 3.0 => [2, 2, 3, 4, 5],
+    3.0 => [2, 2, 3, 4, 5],
     4.0 => [2, 2, 3, 4, 5],
-    #
+    5.0 => [2, 2, 3, 4, 5],
 )
 
 # Vibrant qualitative colour scheme from https://personal.sron.nl/~pault/
@@ -122,8 +120,8 @@ end
 function ds_dk(sigma, order, kgrid)
     # derivative ds/dk from non-uniform first-order central difference method
     dsdk = [
-        (sigma[o][1, 3:end] - sigma[o][1, 1:(end - 1)]) /
-        (kgrid[3:end] - kgrid[1:(end - 1)]) for o in 1:order
+        (sigma[o][1, 3:end] - sigma[o][1, 1:(end-1)]) /
+        (kgrid[3:end] - kgrid[1:(end-1)]) for o in 1:order
     ]
     return kgrid[2:end], sum(dsdk)
 end
@@ -225,7 +223,7 @@ function plotS_k(paralist::Vector{ParaMC}, rSw_ks, iSw_ks, kgrid; Zrenorm=true)
             fmt="o",
             markerfacecolor="none",
             label="\$N = $o\$",
-            zorder=10 * o + 3,
+            zorder=10 * o + 3
         )
 
         _x, _y = spline_k(_kgrid / kF, y, e)
@@ -325,7 +323,7 @@ function plotS_k(paralist::Vector{ParaMC}, rSw_ks, iSw_ks, kgrid; Zrenorm=true)
             fmt="o",
             markerfacecolor="none",
             label="\$N = $o\$",
-            zorder=10 * o + 3,
+            zorder=10 * o + 3
         )
 
         _x, _y = spline_k(_kgrid / kF, y, e)
@@ -498,16 +496,16 @@ function plotS_k0(paralist; Zrenorm=true, ktarget=0.5)
             orders,
             y;
             yerr=e,
-            color=color[i + 1],
+            color=color[i+1],
             capsize=4,
             # markersize=4,
             fmt="o",
             markerfacecolor="none",
             label="\$\\lambda = $lambda\$",
-            zorder=10 * i + 3,
+            zorder=10 * i + 3
         )
         _x, _y = spline_orders(orders, y, e)
-        plot(_x, _y; color=color[i + 1], linestyle="--")
+        plot(_x, _y; color=color[i+1], linestyle="--")
     end
     # xlim([kgrid[1] / kF, 2.0])
     if para.rs == 1.0
@@ -526,7 +524,7 @@ function plotS_k0(paralist; Zrenorm=true, ktarget=0.5)
         # textcoords="offset points",
         fontsize=14.0,
         ha="right",
-        va="bottom",
+        va="bottom"
     )
     if Zrenorm
         ylabel(
@@ -561,16 +559,16 @@ function plotS_k0(paralist; Zrenorm=true, ktarget=0.5)
             orders,
             y;
             yerr=e,
-            color=color[i + 1],
+            color=color[i+1],
             capsize=4,
             # markersize=4,
             fmt="o",
             markerfacecolor="none",
             label="\$\\lambda = $lambda\$",
-            zorder=10 * i + 3,
+            zorder=10 * i + 3
         )
         _x, _y = spline_orders(orders, y, e)
-        plot(_x, _y; color=color[i + 1], linestyle="--")
+        plot(_x, _y; color=color[i+1], linestyle="--")
     end
     # xlim([kgrid[1] / kF, 2.0])
     if para.rs == 1.0
@@ -607,7 +605,7 @@ function plotS_k0(paralist; Zrenorm=true, ktarget=0.5)
             # textcoords="offset points",
             fontsize=14.0,
             ha="left",
-            va="top",
+            va="top"
         )
     else
         annotate(
@@ -619,7 +617,7 @@ function plotS_k0(paralist; Zrenorm=true, ktarget=0.5)
             # textcoords="offset points",
             fontsize=14.0,
             ha="left",
-            va="top",
+            va="top"
         )
     end
     legend(; ncol=2, loc="best")
@@ -654,7 +652,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         push!(iSw_ks, iSw_k)
     end
     # plotS_k(paralist, rSw_ks, iSw_ks, kgrid; Zrenorm=Zrenorm)
-    
+
     ### Using fixed lambda = λ*₅ for all orders ###
     # rs = 1
     para = ParaMC(; rs=1.0, beta=40.0, Fs=-0.0, order=5, mass2=2.0, isDynamic=false)
